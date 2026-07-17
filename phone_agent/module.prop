@@ -1,0 +1,6 @@
+id=pikmin_scanner_agent
+name=Pikmin Scanner Agent
+version=v1.0
+versionCode=1
+author=Ody
+description=Outbound HTTPS agent for Pikmin scanner; no ADB required after installation

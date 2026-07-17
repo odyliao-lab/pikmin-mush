@@ -1,0 +1,35 @@
+# Pikmin Scanner Agent authentication secret
+scanner/agent_token.txt
+
+# Local credentials and environment
+github_info.txt
+**/.env
+**/.env.local
+**/.env.*.local
+!**/.env.example
+
+# Scanner runtime state
+scanner/*.db
+scanner/*.db-*
+scanner/*.log
+scanner/scan_checkpoint.json
+scanner/scanner_gui_state.json
+**/__pycache__/
+*.py[cod]
+
+# Web dependencies and build output
+**/node_modules/
+**/node_modules.broken-*/
+site/.next/
+site/.vinext/
+site/.wrangler/
+site/dist/
+site/.sites-dev.*.log
+site/.git-site-backup/
+
+# Native build and reverse-engineering inputs
+build_zygisk/
+reference/dump.cs
+
+# Local agent/workspace metadata
+.agents/

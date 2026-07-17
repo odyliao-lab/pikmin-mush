@@ -1,0 +1,1 @@
+「讀 Pikmin_Dev/README.md → DEV_HISTORY.md,理解現況後,照 DESIGN_autoscan.md 實作『全自動瞬移掃描』,先解規格書 §6 的三個開放問題。」

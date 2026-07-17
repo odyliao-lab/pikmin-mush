@@ -1,0 +1,4 @@
+# 部署程式會建立 config，不要把正式 token 寫入版本庫。
+SERVER_URL='https://mush.odyliao.cc'
+TOKEN=''
+POLL_SECONDS='2'

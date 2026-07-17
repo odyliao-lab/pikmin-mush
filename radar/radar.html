@@ -1,0 +1,85 @@
+<!doctype html>
+<html lang="zh-Hant">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Pikmin 蘑菇雷達</title>
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<style>
+  html,body{margin:0;height:100%;font-family:system-ui,"Microsoft JhengHei",sans-serif}
+  #map{height:100%}
+  #hud{position:absolute;z-index:1000;top:10px;left:60px;background:rgba(20,20,25,.82);
+       color:#fff;padding:8px 12px;border-radius:8px;font-size:14px;line-height:1.5}
+  #hud b{color:#7CFC98;font-size:18px}
+  .mush{filter:drop-shadow(0 1px 2px rgba(0,0,0,.5))}
+</style>
+</head>
+<body>
+<div id="hud">🍄 蘑菇雷達　<b id="count">0</b> 個<br><span id="upd" style="opacity:.7">等待資料…</span></div>
+<div id="legend" style="position:absolute;z-index:1000;bottom:14px;left:14px;background:rgba(20,20,25,.82);
+  color:#fff;padding:8px 12px;border-radius:8px;font-size:13px;line-height:1.7">等級
+  <span style="color:#7CFC98">●</span>1-5
+  <span style="color:#FFD84D">●</span>6-10
+  <span style="color:#FF9F40">●</span>11-15
+  <span style="color:#FF5A5A">●</span>16-20
+  <span style="color:#C86BFF">●</span>21+</div>
+<div id="map"></div>
+<script>
+const map = L.map('map').setView([25.04, 121.51], 14);
+L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',
+  {maxZoom:19, attribution:'© OpenStreetMap'}).addTo(map);
+
+function levelColor(lv){
+  if(lv>=21) return '#C86BFF';
+  if(lv>=16) return '#FF5A5A';
+  if(lv>=11) return '#FF9F40';
+  if(lv>=6)  return '#FFD84D';
+  if(lv>=1)  return '#7CFC98';
+  return '#9aa0a6';
+}
+function mushIconFor(lv){
+  const c = levelColor(lv);
+  return L.divIcon({className:'', iconSize:[26,26], iconAnchor:[13,13],
+    html:`<div class="mush" style="position:relative;font-size:22px">🍄`
+      + `<span style="position:absolute;right:-6px;top:-6px;background:${c};color:#111;`
+      + `font-size:11px;font-weight:700;border-radius:8px;padding:0 4px">${lv||'?'}</span></div>`});
+}
+
+const markers = {};      // id -> marker
+let fitted = false;
+
+async function refresh(){
+  try{
+    const r = await fetch('mushrooms.json?_=' + Date.now());
+    const d = await r.json();
+    document.getElementById('count').textContent = d.count;
+    document.getElementById('upd').textContent =
+      '更新: ' + new Date(d.updated*1000).toLocaleTimeString();
+    const bounds = [];
+    for(const m of d.mushrooms){
+      bounds.push([m.lat, m.lng]);
+      if(markers[m.id]) continue;
+      const dot = m.id.lastIndexOf('.');
+      const poiId = dot>0 ? m.id.slice(0,dot) : m.id;   // POI 識別
+      const mk = L.marker([m.lat, m.lng], {icon:mushIconFor(m.level)}).addTo(map);
+      const cd = m.cooldown>0 ? `冷卻 ${m.cooldown}s` : '可攻擊';
+      const fin = m.finish>0 ? new Date(m.finish).toLocaleString() : '—';
+      mk.bindPopup(`<b>🍄 蘑菇　Lv.${m.level||'?'}</b>`
+        + `<br>POI: <code>${poiId}</code>`
+        + (m.cluster?`<br>cluster: <code>${m.cluster}</code>`:'')
+        + `<br>type: ${m.type}`
+        + `<br>座標: ${m.lat.toFixed(6)}, ${m.lng.toFixed(6)}`
+        + `<br>狀態: ${cd}`
+        + `<br>結束時間: ${fin}`
+        + `<br><a href="https://maps.google.com/?q=${m.lat},${m.lng}" target="_blank">Google 地圖</a>`);
+      markers[m.id] = mk;
+    }
+    if(!fitted && bounds.length){ map.fitBounds(bounds, {padding:[40,40]}); fitted = true; }
+  }catch(e){ document.getElementById('upd').textContent = '讀取失敗(radar.py 有在跑嗎?)'; }
+}
+refresh();
+setInterval(refresh, 4000);
+</script>
+</body>
+</html>
