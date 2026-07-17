@@ -1,4 +1,4 @@
-import { integer, real, sqliteTable, text } from "drizzle-orm/sqlite-core";
+import { index, integer, real, sqliteTable, text } from "drizzle-orm/sqlite-core";
 
 export const mushrooms = sqliteTable("mushrooms", {
   id: text("id").primaryKey(),
@@ -15,7 +15,9 @@ export const mushrooms = sqliteTable("mushrooms", {
   challengerCapacity: integer("challenger_capacity").notNull().default(0),
   totalPower: real("total_power").notNull().default(0),
   startMs: integer("start_ms").notNull().default(0),
-});
+}, (table) => [
+  index("mushrooms_finish_ms_idx").on(table.finishMs),
+]);
 
 export const agentState = sqliteTable("agent_state", {
   id: integer("id").primaryKey(),

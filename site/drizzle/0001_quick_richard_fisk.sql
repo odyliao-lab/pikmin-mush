@@ -1,0 +1,1 @@
+CREATE INDEX `mushrooms_finish_ms_idx` ON `mushrooms` (`finish_ms`);

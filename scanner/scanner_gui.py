@@ -167,7 +167,7 @@ def save_gui_config():
         "country_packs":[k for k,v in country_pack_vars.items() if v.get()],
         "pack_radius":pack_radius.get(),"entries":{k:v.get() for k,v in entries.items()},
         "loop_scan":loop_scan.get(),"resume_scan":resume_scan.get(),
-        "device_backend":device_backend.get(),
+        "device_backend":device_backend.get(),"cloud_url":cloud_url.get().strip(),
     }
     try:
         with open(GUI_CONFIG_PATH,"w",encoding="utf-8") as f:
@@ -181,6 +181,8 @@ def start():
         args=[sys.executable,"-u",SCRIPT,"--device-backend",device_backend.get(),
               "--grid-step-m",str(val("grid")),"--dwell-s",str(val("dwell")),
               "--hop-delay-s",str(val("delay"))]
+        if device_backend.get()=="agent" and cloud_url.get().strip():
+            args += ["--cloud-api-url",cloud_url.get().strip()]
         if auto_mode.get():
             regions=selected_regions()
             if not regions: raise ValueError("全自動模式至少要選擇一座城市")
@@ -208,6 +210,9 @@ def stop():
     global proc
     if proc and proc.poll() is None:proc.terminate();status.set("已送出停止指令")
     else:status.set("目前沒有由此面板啟動的掃描器")
+def open_map():
+    target=cloud_url.get().strip() if device_backend.get()=="agent" else ""
+    webbrowser.open(target or "http://localhost:8787/")
 def toggle_mode():
     state="disabled" if auto_mode.get() else "normal"
     for key in ("lat_min","lat_max","lng_min","lng_max"):entries[key].configure(state=state)
@@ -238,7 +243,7 @@ def update_estimate(*_):
         estimate_text.set(f"預估：{len(regions)} 城市・{points:,} 點・單輪約 {seconds/3600:.1f} 小時{mode}")
     except (ValueError,tk.TclError): estimate_text.set("預估：請確認參數")
 
-root=tk.Tk();root.title("Pikmin 蘑菇雷達控制面板");root.geometry("620x900");root.resizable(False,False)
+root=tk.Tk();root.title("Pikmin 蘑菇雷達控制面板");root.geometry("620x950");root.resizable(False,False)
 ttk.Label(root,text="🍄 Pikmin 蘑菇雷達",font=("Segoe UI",16,"bold")).pack(pady=(12,2))
 auto_mode=tk.BooleanVar(value=bool(SAVED_GUI.get("auto_mode",False)));ttk.Checkbutton(root,text="全自動世界城市巡迴模式",variable=auto_mode,command=toggle_mode).pack(anchor="w",padx=22,pady=5)
 city_box=ttk.LabelFrame(root,text="主要城市（可複選）",padding=8);city_box.pack(fill="x",padx=18)
@@ -268,13 +273,18 @@ for i,(key,label,default) in enumerate((("grid","網格間距（公尺）","500"
 ttk.Label(opts,text="全自動模式會偵測『速度太快』提示並自動按確定。",foreground="#555").grid(row=4,column=0,columnspan=2,sticky="w",pady=(6,0))
 loop_scan=tk.BooleanVar(value=bool(SAVED_GUI.get("loop_scan",True)));resume_scan=tk.BooleanVar(value=bool(SAVED_GUI.get("resume_scan",True)))
 device_backend=tk.StringVar(value=SAVED_GUI.get("device_backend","agent"))
+cloud_url=tk.StringVar(value=SAVED_GUI.get("cloud_url","https://mush.odyliao.cc"))
+cloud_box=ttk.LabelFrame(root,text="Codex Sites 雲端中樞",padding=6);cloud_box.pack(fill="x",padx=18,pady=(6,0))
+ttk.Label(cloud_box,text="網址",width=8).grid(row=0,column=0,sticky="w",padx=4)
+ttk.Entry(cloud_box,textvariable=cloud_url,width=56).grid(row=0,column=1,sticky="ew",padx=4)
+ttk.Label(cloud_box,text="手機 Agent 模式會經此網址下命令、上傳資料並顯示雲端地圖。",foreground="#555").grid(row=1,column=0,columnspan=2,sticky="w",padx=4,pady=(4,0))
 flags=ttk.LabelFrame(root,text="執行模式",padding=6);flags.pack(fill="x",padx=18,pady=6)
 ttk.Radiobutton(flags,text="手機 Agent（免 ADB）",variable=device_backend,value="agent").grid(row=0,column=0,sticky="w",padx=4)
 ttk.Radiobutton(flags,text="ADB 相容模式",variable=device_backend,value="adb").grid(row=0,column=1,sticky="w",padx=14)
 ttk.Checkbutton(flags,text="持續循環（最後一城後回第一城）",variable=loop_scan,command=update_estimate).grid(row=1,column=0,sticky="w",padx=4,pady=(5,0))
 ttk.Checkbutton(flags,text="從上次城市進度繼續",variable=resume_scan).grid(row=1,column=1,sticky="w",padx=14,pady=(5,0))
 estimate_text=tk.StringVar(value="預估：—");ttk.Label(root,textvariable=estimate_text,foreground="#7a4b10",font=("Segoe UI",10,"bold")).pack(anchor="w",padx=25)
-buttons=ttk.Frame(root);buttons.pack(pady=10);ttk.Button(buttons,text="開始掃描",command=start).grid(row=0,column=0,padx=5);ttk.Button(buttons,text="停止掃描",command=stop).grid(row=0,column=1,padx=5);ttk.Button(buttons,text="開啟地圖",command=lambda:webbrowser.open("http://localhost:8787/")).grid(row=0,column=2,padx=5)
+buttons=ttk.Frame(root);buttons.pack(pady=10);ttk.Button(buttons,text="開始掃描",command=start).grid(row=0,column=0,padx=5);ttk.Button(buttons,text="停止掃描",command=stop).grid(row=0,column=1,padx=5);ttk.Button(buttons,text="開啟地圖",command=open_map).grid(row=0,column=2,padx=5)
 status=tk.StringVar(value="尚未啟動");ttk.Label(root,textvariable=status,foreground="#365a7a").pack(pady=4)
 ttk.Label(root,text="遊戲仍需保持在地圖前景。跨城市跳躍可能觸發伺服器冷卻；自動確認只處理含速度警告文字的對話框。",wraplength=570).pack(padx=20,pady=5)
 for e in entries.values(): e.bind("<KeyRelease>",update_estimate)
