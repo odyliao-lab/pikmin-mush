@@ -26,6 +26,7 @@ site/.wrangler/
 site/dist/
 site/.sites-dev.*.log
 site/.git-site-backup/
+site-deploy.tar.gz
 
 # Native build and reverse-engineering inputs
 build_zygisk/

@@ -77,7 +77,15 @@ def cloud_request(path, method="GET", payload=None, timeout=30):
     if not CLOUD_API_URL:
         raise RuntimeError("尚未設定 Codex Sites 雲端中樞網址")
     body = None if payload is None else json.dumps(payload, ensure_ascii=False).encode("utf-8")
-    headers = {"Authorization": f"Bearer {AGENT_TOKEN}", "Accept": "application/json"}
+    headers = {
+        "Authorization": f"Bearer {AGENT_TOKEN}",
+        "Accept": "application/json",
+        # Codex Sites 的 Cloudflare 邊緣會封鎖 Python urllib 預設指紋
+        # （HTTP 403 / Error 1010）。使用固定、可辨識的桌面客戶端 UA。
+        "User-Agent": ("Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
+                       "AppleWebKit/537.36 (KHTML, like Gecko) "
+                       "Chrome/126.0 Safari/537.36 PikminScanner/1.0"),
+    }
     if body is not None:
         headers["Content-Type"] = "application/json; charset=utf-8"
     request = Request(CLOUD_API_URL + path, data=body, headers=headers, method=method)
