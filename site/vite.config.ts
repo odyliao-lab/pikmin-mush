@@ -16,6 +16,7 @@ const localBindingConfig = {
   compatibility_flags: ["nodejs_compat"],
   vars: {
     AGENT_TOKEN: process.env.AGENT_TOKEN ?? "",
+    ADMIN_EMAILS: process.env.ADMIN_EMAILS ?? "",
   },
   d1_databases: d1
     ? [

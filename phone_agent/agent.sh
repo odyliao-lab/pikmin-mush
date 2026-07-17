@@ -9,6 +9,7 @@ OFFSET_FILE="$MODDIR/upload.offset"
 SEQ_FILE="$MODDIR/last.seq"
 CHUNK="$MODDIR/upload.chunk"
 RESPONSE="$MODDIR/curl.response"
+SCAN_PENDING="$MODDIR/scan.pending"
 
 if [ ! -f "$CONFIG" ]; then
   echo "[agent] missing $CONFIG"
@@ -80,6 +81,135 @@ ensure_game_running() {
     sleep 25
     su -Z u:r:shell:s0 2000 -c "input keyevent KEYCODE_ENTER"
     su -Z u:r:shell:s0 2000 -c "input keyevent KEYCODE_DPAD_CENTER"
+    return
+  fi
+  TOP="$(su -Z u:r:shell:s0 2000 -c "dumpsys activity activities" 2>/dev/null |
+    grep mResumedActivity | head -n 1)"
+  case "$TOP" in
+    *"$PKG"*) ;;
+    *)
+      su -Z u:r:shell:s0 2000 -c \
+        "monkey -p $PKG -c android.intent.category.LAUNCHER 1" >/dev/null 2>&1
+      sleep 8
+      ;;
+  esac
+}
+
+number_or_zero() {
+  case "$1" in ''|*[!0-9]*) echo 0 ;; *) echo "$1" ;; esac
+}
+
+file_size() {
+  SIZE_NOW="$(stat -c %s "$TSV" 2>/dev/null)"
+  number_or_zero "$SIZE_NOW"
+}
+
+line_count() {
+  LINES_NOW="$(wc -l <"$TSV" 2>/dev/null)"
+  LINES_NOW="$(echo "$LINES_NOW" | tr -d ' ')"
+  number_or_zero "$LINES_NOW"
+}
+
+scan_control() {
+  auth_curl "$SERVER_URL/api/agent/scan-control?job_id=$1" 2>/dev/null
+}
+
+interruptible_wait() {
+  WAIT_LEFT="$(number_or_zero "$1")"
+  WAIT_JOB="$2"
+  while [ "$WAIT_LEFT" -gt 0 ]; do
+    WAIT_STEP=5
+    [ "$WAIT_LEFT" -lt 5 ] && WAIT_STEP="$WAIT_LEFT"
+    sleep "$WAIT_STEP"
+    WAIT_LEFT=$((WAIT_LEFT - WAIT_STEP))
+    CONTROL="$(scan_control "$WAIT_JOB")"
+    case "$CONTROL" in
+      pause|stop) return 2 ;;
+    esac
+  done
+  return 0
+}
+
+send_scan_ack() {
+  ACK_JOB="$1"
+  ACK_INDEX="$2"
+  ACK_CYCLE="$3"
+  ACK_ROWS="$4"
+  ACK_BYTES="$5"
+  ACK_OK="$6"
+  auth_curl -X POST --data-binary '' \
+    "$SERVER_URL/api/agent/scan-ack?job_id=$ACK_JOB&index=$ACK_INDEX&cycle=$ACK_CYCLE&ok=$ACK_OK&rows=$ACK_ROWS&bytes=$ACK_BYTES" \
+    >/dev/null 2>&1
+}
+
+retry_scan_ack() {
+  [ -s "$SCAN_PENDING" ] || return 0
+  PENDING="$(cat "$SCAN_PENDING" 2>/dev/null)"
+  OLD_IFS="$IFS"
+  IFS="$(printf '\t')"
+  set -- $PENDING
+  IFS="$OLD_IFS"
+  if send_scan_ack "$1" "$2" "$3" "$4" "$5" 1; then
+    rm -f "$SCAN_PENDING"
+    echo "[scan] pending ACK completed job=$1 point=$2"
+    return 0
+  fi
+  if [ "$(scan_control "$1")" = "stop" ]; then
+    rm -f "$SCAN_PENDING"
+    echo "[scan] discarded pending ACK for stopped job=$1"
+    return 0
+  fi
+  return 1
+}
+
+execute_scan_task() {
+  JOB_ID="$1"
+  TASK_INDEX="$2"
+  TASK_TOTAL="$3"
+  TASK_LAT="$4"
+  TASK_LNG="$5"
+  TASK_DWELL="$6"
+  TASK_DELAY="$7"
+  TASK_COOLDOWN="$8"
+  TASK_CYCLE="$9"
+  shift 9
+  TASK_COUNTRY="$1"
+  TASK_CITY="$2"
+  [ "$TASK_COUNTRY" = "-" ] && TASK_COUNTRY=""
+
+  ensure_game_running
+  BEFORE_SIZE="$(file_size)"
+  BEFORE_LINES="$(line_count)"
+  echo "$TASK_LAT,$TASK_LNG" >"$TELEPORT"
+  if [ "$(cat "$TELEPORT" 2>/dev/null)" != "$TASK_LAT,$TASK_LNG" ]; then
+    echo "[scan] GPS write failed job=$JOB_ID point=$TASK_INDEX"
+    send_scan_ack "$JOB_ID" "$TASK_INDEX" "$TASK_CYCLE" 0 0 0
+    return
+  fi
+  echo "[scan] $TASK_COUNTRY-$TASK_CITY $((TASK_INDEX + 1))/$TASK_TOTAL GPS=$TASK_LAT,$TASK_LNG"
+  sleep 3
+  su -Z u:r:shell:s0 2000 -c "input keyevent KEYCODE_ENTER" >/dev/null 2>&1
+  su -Z u:r:shell:s0 2000 -c "input keyevent KEYCODE_DPAD_CENTER" >/dev/null 2>&1
+  if [ "$TASK_COOLDOWN" -gt 0 ]; then
+    echo "[scan] cross-city cooldown ${TASK_COOLDOWN}s"
+    interruptible_wait "$TASK_COOLDOWN" "$JOB_ID" || return
+  fi
+  interruptible_wait "$TASK_DWELL" "$JOB_ID" || return
+  upload_new
+  AFTER_SIZE="$(file_size)"
+  AFTER_LINES="$(line_count)"
+  NEW_BYTES=$((AFTER_SIZE - BEFORE_SIZE))
+  NEW_ROWS=$((AFTER_LINES - BEFORE_LINES))
+  [ "$NEW_BYTES" -lt 0 ] && NEW_BYTES=0
+  [ "$NEW_ROWS" -lt 0 ] && NEW_ROWS=0
+  interruptible_wait "$TASK_DELAY" "$JOB_ID" || return
+  printf '%s\t%s\t%s\t%s\t%s\n' \
+    "$JOB_ID" "$TASK_INDEX" "$TASK_CYCLE" "$NEW_ROWS" "$NEW_BYTES" >"$SCAN_PENDING"
+  if send_scan_ack "$JOB_ID" "$TASK_INDEX" "$TASK_CYCLE" "$NEW_ROWS" "$NEW_BYTES" 1; then
+    rm -f "$SCAN_PENDING"
+    echo "[scan] completed point=$((TASK_INDEX + 1)) rows=+$NEW_ROWS bytes=+$NEW_BYTES"
+  else
+    echo "[scan] ACK pending job=$JOB_ID point=$TASK_INDEX"
   fi
 }
 
@@ -162,6 +292,23 @@ while true; do
     set -- $COMMAND
     IFS="$OLD_IFS"
     execute_command "$1" "$2" "$3" "$4"
+  fi
+  if retry_scan_ack; then
+    TASK="$(auth_curl "$SERVER_URL/api/agent/scan-task" 2>/dev/null)"
+    if [ -n "$TASK" ]; then
+      OLD_IFS="$IFS"
+      IFS="$(printf '\t')"
+      set -- $TASK
+      IFS="$OLD_IFS"
+      case "$2" in
+        target)
+          execute_scan_task "$1" "$3" "$4" "$5" "$6" "$7" "$8" "$9" \
+            "${10}" "${11}" "${12}"
+          ;;
+        pause|wait|'') ;;
+        error) echo "[scan] cloud scan plan error job=$1" ;;
+      esac
+    fi
   fi
   sleep "$POLL_SECONDS"
 done

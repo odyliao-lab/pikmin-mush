@@ -15,6 +15,13 @@
       "when": 1784305252923,
       "tag": "0001_quick_richard_fisk",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "6",
+      "when": 1784320188642,
+      "tag": "0002_closed_deadpool",
+      "breakpoints": true
     }
   ]
 }

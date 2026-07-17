@@ -18,6 +18,7 @@ export type MushroomRow = {
 type RuntimeEnv = {
   DB: D1Database;
   AGENT_TOKEN?: string;
+  ADMIN_EMAILS?: string;
 };
 
 export function runtime(): RuntimeEnv {
@@ -66,6 +67,40 @@ export async function ensureSchema() {
       status_json TEXT NOT NULL DEFAULT '{}',
       updated_at INTEGER NOT NULL DEFAULT 0
     )`),
+    db.prepare(`CREATE TABLE IF NOT EXISTS scan_jobs (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      status TEXT NOT NULL DEFAULT 'queued',
+      config_json TEXT NOT NULL,
+      plan_json TEXT NOT NULL,
+      total_points INTEGER NOT NULL,
+      current_index INTEGER NOT NULL DEFAULT 0,
+      cycle INTEGER NOT NULL DEFAULT 0,
+      loop INTEGER NOT NULL DEFAULT 0,
+      captured_rows INTEGER NOT NULL DEFAULT 0,
+      captured_bytes INTEGER NOT NULL DEFAULT 0,
+      current_country TEXT NOT NULL DEFAULT '',
+      current_city TEXT NOT NULL DEFAULT '',
+      current_lat REAL,
+      current_lng REAL,
+      message TEXT NOT NULL DEFAULT '',
+      created_at INTEGER NOT NULL,
+      updated_at INTEGER NOT NULL,
+      started_at INTEGER NOT NULL DEFAULT 0,
+      finished_at INTEGER NOT NULL DEFAULT 0
+    )`),
+    db.prepare(`CREATE INDEX IF NOT EXISTS scan_jobs_status_idx
+      ON scan_jobs (status)`),
+    db.prepare(`CREATE INDEX IF NOT EXISTS scan_jobs_updated_at_idx
+      ON scan_jobs (updated_at)`),
+    db.prepare(`CREATE TABLE IF NOT EXISTS scan_logs (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      job_id INTEGER NOT NULL,
+      at INTEGER NOT NULL,
+      level TEXT NOT NULL DEFAULT 'info',
+      message TEXT NOT NULL
+    )`),
+    db.prepare(`CREATE INDEX IF NOT EXISTS scan_logs_job_at_idx
+      ON scan_logs (job_id, at)`),
   ]);
   await db.batch([
     db.prepare("INSERT OR IGNORE INTO agent_state (id) VALUES (1)"),
@@ -86,6 +121,26 @@ export function authorized(request: Request) {
   const token = runtime().AGENT_TOKEN ?? "";
   return token.length >= 32 &&
     safeEqual(request.headers.get("authorization") ?? "", `Bearer ${token}`);
+}
+
+export function adminEmails() {
+  return new Set((runtime().ADMIN_EMAILS ?? "")
+    .split(",")
+    .map((email) => email.trim().toLowerCase())
+    .filter(Boolean));
+}
+
+export function isAdminEmail(email: string | null | undefined) {
+  return Boolean(email) && adminEmails().has(String(email).trim().toLowerCase());
+}
+
+export function adminAuthorized(request: Request) {
+  return isAdminEmail(request.headers.get("oai-authenticated-user-email"));
+}
+
+export function sameOrigin(request: Request) {
+  const origin = request.headers.get("origin");
+  return !origin || origin === new URL(request.url).origin;
 }
 
 export function noStoreJson(value: unknown, status = 200) {

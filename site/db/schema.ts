@@ -41,3 +41,38 @@ export const scannerStatus = sqliteTable("scanner_status", {
   statusJson: text("status_json").notNull().default("{}"),
   updatedAt: integer("updated_at").notNull().default(0),
 });
+
+export const scanJobs = sqliteTable("scan_jobs", {
+  id: integer("id").primaryKey({ autoIncrement: true }),
+  status: text("status").notNull().default("queued"),
+  configJson: text("config_json").notNull(),
+  planJson: text("plan_json").notNull(),
+  totalPoints: integer("total_points").notNull(),
+  currentIndex: integer("current_index").notNull().default(0),
+  cycle: integer("cycle").notNull().default(0),
+  loop: integer("loop").notNull().default(0),
+  capturedRows: integer("captured_rows").notNull().default(0),
+  capturedBytes: integer("captured_bytes").notNull().default(0),
+  currentCountry: text("current_country").notNull().default(""),
+  currentCity: text("current_city").notNull().default(""),
+  currentLat: real("current_lat"),
+  currentLng: real("current_lng"),
+  message: text("message").notNull().default(""),
+  createdAt: integer("created_at").notNull(),
+  updatedAt: integer("updated_at").notNull(),
+  startedAt: integer("started_at").notNull().default(0),
+  finishedAt: integer("finished_at").notNull().default(0),
+}, (table) => [
+  index("scan_jobs_status_idx").on(table.status),
+  index("scan_jobs_updated_at_idx").on(table.updatedAt),
+]);
+
+export const scanLogs = sqliteTable("scan_logs", {
+  id: integer("id").primaryKey({ autoIncrement: true }),
+  jobId: integer("job_id").notNull(),
+  at: integer("at").notNull(),
+  level: text("level").notNull().default("info"),
+  message: text("message").notNull(),
+}, (table) => [
+  index("scan_logs_job_at_idx").on(table.jobId, table.at),
+]);

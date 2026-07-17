@@ -24,7 +24,7 @@ site/.next/
 site/.vinext/
 site/.wrangler/
 site/dist/
-site/.sites-dev.*.log
+site/.sites-*.log
 site/.git-site-backup/
 site-deploy.tar.gz
 
