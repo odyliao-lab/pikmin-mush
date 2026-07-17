@@ -130,6 +130,20 @@ interruptible_wait() {
   return 0
 }
 
+restart_game_for_scan() {
+  RESTART_JOB="$1"
+  echo "[scan] no new rows, restarting game session at current GPS"
+  su -Z u:r:shell:s0 2000 -c "am force-stop $PKG" >/dev/null 2>&1
+  interruptible_wait 2 "$RESTART_JOB" || return 2
+  su -Z u:r:shell:s0 2000 -c \
+    "monkey -p $PKG -c android.intent.category.LAUNCHER 1" >/dev/null 2>&1
+  interruptible_wait 25 "$RESTART_JOB" || return 2
+  su -Z u:r:shell:s0 2000 -c "input keyevent KEYCODE_ENTER" >/dev/null 2>&1
+  su -Z u:r:shell:s0 2000 -c "input keyevent KEYCODE_DPAD_CENTER" >/dev/null 2>&1
+  interruptible_wait 5 "$RESTART_JOB" || return 2
+  [ -n "$(pidof "$PKG" 2>/dev/null)" ]
+}
+
 send_scan_ack() {
   ACK_JOB="$1"
   ACK_INDEX="$2"
@@ -202,6 +216,20 @@ execute_scan_task() {
   NEW_ROWS=$((AFTER_LINES - BEFORE_LINES))
   [ "$NEW_BYTES" -lt 0 ] && NEW_BYTES=0
   [ "$NEW_ROWS" -lt 0 ] && NEW_ROWS=0
+  if [ "$NEW_ROWS" -eq 0 ]; then
+    if restart_game_for_scan "$JOB_ID"; then
+      upload_new
+      AFTER_SIZE="$(file_size)"
+      AFTER_LINES="$(line_count)"
+      NEW_BYTES=$((AFTER_SIZE - BEFORE_SIZE))
+      NEW_ROWS=$((AFTER_LINES - BEFORE_LINES))
+      [ "$NEW_BYTES" -lt 0 ] && NEW_BYTES=0
+      [ "$NEW_ROWS" -lt 0 ] && NEW_ROWS=0
+      echo "[scan] recovery captured rows=+$NEW_ROWS bytes=+$NEW_BYTES"
+    else
+      echo "[scan] recovery restart failed or was interrupted"
+    fi
+  fi
   interruptible_wait "$TASK_DELAY" "$JOB_ID" || return
   printf '%s\t%s\t%s\t%s\t%s\n' \
     "$JOB_ID" "$TASK_INDEX" "$TASK_CYCLE" "$NEW_ROWS" "$NEW_BYTES" >"$SCAN_PENDING"
