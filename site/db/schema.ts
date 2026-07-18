@@ -41,6 +41,7 @@ export const scanAgents = sqliteTable("scan_agents", {
   displayName: text("display_name").notNull(),
   tokenHash: text("token_hash").notNull().default(""),
   enabled: integer("enabled").notNull().default(1),
+  paused: integer("paused").notNull().default(0),
   regionTagsJson: text("region_tags_json").notNull().default("[]"),
   capabilitiesJson: text("capabilities_json").notNull().default("{}"),
   agentVersion: text("agent_version").notNull().default(""),

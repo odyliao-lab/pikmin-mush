@@ -5,6 +5,8 @@ export async function GET(request: Request) {
   const agent = await authorizeFleetAgent(request);
   if (!agent) return plain("stop\n", 401);
   await ensureSchema();
+  // 後台單獨暫停此 Agent：讓進行中的掃描立即進入 pause（不影響其他 Agent 或整個 job）。
+  if (agent.paused) return plain("pause\n");
   const url = new URL(request.url);
   const jobId = Number(url.searchParams.get("job_id"));
   const targetId = Number(url.searchParams.get("target_id"));
