@@ -30,7 +30,7 @@
 **(A) 蘑菇擷取 hook** — 已驗證：
 - hook `MapManager.RegisterMapObject(MapObjectBase)` @RVA `0xCB4596C`。
 - 過濾 `class == "MapPoiBlocker"`（蘑菇）→ 讀原始 proto（見 §4）→ 取 id/lat/lng/level/type/finishMs。
-- 寫入 `/data/user/0/com.nianticlabs.pikmin/files/mushrooms.tsv`，格式：
+- 僅將等級 2–4 寫入 `/data/user/0/com.nianticlabs.pikmin/files/mushrooms.tsv`，格式：
   `ts \t id \t lat \t lng \t cluster \t cooldown \t level \t type \t finishMs`
 - **id 去重**（模組內 std::set g_seen，同一 session 不重複寫）。
 
@@ -71,7 +71,7 @@
 - `PointProto`: latDegrees_(double)@`0x18`, lngDegrees_(double)@`0x20`
 - objectCase==22 → object_(0x30)=`PoiMushroomProto`: overrideCooldownSeconds_(int)@`0x28`, poiChallenge_(PoiChallengeInfoProto*)@`0x18`
 - `PoiChallengeInfoProto`: poiId_(str)@`0x28`, mushroomClusterId_(str)@`0x30`, challengeFinishTimeMs_(long)@`0x40`, type_(int)@`0x48`, **level_(int)@`0x4C`**
-  - 實測 level 1–3；clusterId 伺服器常留空；finishMs = 蘑菇到期(ms epoch)。
+  - 實測 level 1–3；目前產品政策會捨棄 level 1。clusterId 伺服器常留空；finishMs = 蘑菇到期(ms epoch)。
 - il2cpp string：length(int)@`0x10`，UTF-16 chars@`0x14`。
 
 ### 自動瞬移

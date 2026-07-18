@@ -1,5 +1,6 @@
 import { ensureSchema, noStoreJson, runtime } from "../../../lib/cloud";
 import { publicAgent, type ScanAgentRow } from "../../../lib/fleet";
+import { MIN_MUSHROOM_LEVEL } from "../../../lib/mushroom-policy.mjs";
 
 export async function GET() {
   await ensureSchema();
@@ -9,8 +10,9 @@ export async function GET() {
     db.prepare(`SELECT id, lat, lng, level, type, cluster, cooldown,
       finish_ms, first_seen, last_seen, challenger_count,
       challenger_capacity, total_power, start_ms
-      FROM mushrooms WHERE finish_ms = 0 OR finish_ms > ?`)
-      .bind(now).all(),
+      FROM mushrooms
+      WHERE level >= ? AND (finish_ms = 0 OR finish_ms > ?)`)
+      .bind(MIN_MUSHROOM_LEVEL, now).all(),
     db.prepare("SELECT * FROM scan_agents WHERE enabled=1 ORDER BY last_seen DESC")
       .all<ScanAgentRow>(),
     db.prepare("SELECT status_json, updated_at FROM scanner_status WHERE id = 1").first(),

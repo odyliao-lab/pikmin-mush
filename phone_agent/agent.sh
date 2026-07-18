@@ -108,8 +108,10 @@ file_size() {
   number_or_zero "$SIZE_NOW"
 }
 
-line_count() {
-  LINES_NOW="$(wc -l <"$TSV" 2>/dev/null)"
+useful_line_count() {
+  # TSV 第 7 欄是蘑菇等級；Fleet 只統計等級 2 以上，避免小型蘑菇
+  # 觸發「有擷取」判定或灌入每個 target 的 captured rows。
+  LINES_NOW="$(awk -F '\t' '$7 + 0 >= 2 { count++ } END { print count + 0 }' "$TSV" 2>/dev/null)"
   LINES_NOW="$(echo "$LINES_NOW" | tr -d ' ')"
   number_or_zero "$LINES_NOW"
 }
@@ -205,7 +207,7 @@ execute_scan_task() {
 
   ensure_game_running
   BEFORE_SIZE="$(file_size)"
-  BEFORE_LINES="$(line_count)"
+  BEFORE_LINES="$(useful_line_count)"
   echo "$TASK_LAT,$TASK_LNG" >"$TELEPORT"
   if [ "$(cat "$TELEPORT" 2>/dev/null)" != "$TASK_LAT,$TASK_LNG" ]; then
     echo "[scan] GPS write failed job=$JOB_ID point=$TASK_INDEX"
@@ -223,7 +225,7 @@ execute_scan_task() {
   interruptible_wait "$TASK_DWELL" "$JOB_ID" || return
   upload_new
   AFTER_SIZE="$(file_size)"
-  AFTER_LINES="$(line_count)"
+  AFTER_LINES="$(useful_line_count)"
   NEW_BYTES=$((AFTER_SIZE - BEFORE_SIZE))
   NEW_ROWS=$((AFTER_LINES - BEFORE_LINES))
   [ "$NEW_BYTES" -lt 0 ] && NEW_BYTES=0
@@ -232,7 +234,7 @@ execute_scan_task() {
     if restart_game_for_scan "$JOB_ID"; then
       upload_new
       AFTER_SIZE="$(file_size)"
-      AFTER_LINES="$(line_count)"
+      AFTER_LINES="$(useful_line_count)"
       NEW_BYTES=$((AFTER_SIZE - BEFORE_SIZE))
       NEW_ROWS=$((AFTER_LINES - BEFORE_LINES))
       [ "$NEW_BYTES" -lt 0 ] && NEW_BYTES=0
