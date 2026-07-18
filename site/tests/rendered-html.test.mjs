@@ -32,14 +32,21 @@ test("ships the public mushroom map and protected scan console", async () => {
 });
 
 test("includes durable multi-agent leases, v2 protocol routes, and migrations", async () => {
-  const [schema, cloud, plan, fleet, task, ack, migration, phoneAgent] = await Promise.all([
+  const [
+    schema, cloud, plan, fleet, task, ack, control, agentAction, adminClient,
+    migration, pauseMigration, phoneAgent,
+  ] = await Promise.all([
     readFile(new URL("db/schema.ts", root), "utf8"),
     readFile(new URL("lib/cloud.ts", root), "utf8"),
     readFile(new URL("lib/scan-plans.ts", root), "utf8"),
     readFile(new URL("lib/fleet.ts", root), "utf8"),
     readFile(new URL("app/api/agent/v2/task/route.ts", root), "utf8"),
     readFile(new URL("app/api/agent/v2/ack/route.ts", root), "utf8"),
+    readFile(new URL("app/api/agent/v2/control/route.ts", root), "utf8"),
+    readFile(new URL("app/api/admin/agents/action/route.ts", root), "utf8"),
+    readFile(new URL("app/admin/admin-client.tsx", root), "utf8"),
     readFile(new URL("drizzle/0003_fair_dragon_man.sql", root), "utf8"),
+    readFile(new URL("drizzle/0005_military_red_hulk.sql", root), "utf8"),
     readFile(new URL("../phone_agent/agent.sh", root), "utf8"),
   ]);
 
@@ -60,6 +67,13 @@ test("includes durable multi-agent leases, v2 protocol routes, and migrations", 
   assert.match(phoneAgent, /api\/agent\/v2\/task/);
   assert.match(phoneAgent, /X-Agent-Id/);
   assert.match(phoneAgent, /interruptible_wait/);
+  assert.match(schema, /paused: integer\("paused"\)/);
+  assert.match(fleet, /if \(agent\.paused\)/);
+  assert.match(control, /if \(agent\.paused\) return plain\("pause\\n"\)/);
+  assert.match(agentAction, /\["enable", "disable", "pause", "resume"\]/);
+  assert.match(adminClient, /繼續掃描/);
+  assert.match(pauseMigration, /ADD `paused` integer DEFAULT 0 NOT NULL/);
+  assert.match(cloud, /SELECT paused FROM scan_agents LIMIT 1/);
   await access(new URL("dist/server/index.js", root));
 });
 

@@ -27,18 +27,26 @@ export function runtime(): RuntimeEnv {
 }
 
 // 對既有表補上後來新增的欄位（CREATE TABLE IF NOT EXISTS 不會改動既有表）。
-// 每個 worker isolate 只需嘗試一次；欄位已存在時 ALTER 會丟錯，忽略即可。
+// 每個 worker isolate 只需嘗試一次；若 ALTER 失敗，只有在確認欄位確實
+// 已存在時才可忽略，避免把連線或權限等真正的錯誤靜默吞掉。
 let columnsPatched = false;
 async function patchColumns(db: RuntimeEnv["DB"]) {
   if (columnsPatched) return;
   const additions = [
-    "ALTER TABLE scan_agents ADD COLUMN paused INTEGER NOT NULL DEFAULT 0",
+    {
+      sql: "ALTER TABLE scan_agents ADD COLUMN paused INTEGER NOT NULL DEFAULT 0",
+      verify: "SELECT paused FROM scan_agents LIMIT 1",
+    },
   ];
-  for (const sql of additions) {
+  for (const addition of additions) {
     try {
-      await db.prepare(sql).run();
-    } catch {
-      // 欄位已存在（duplicate column name）—— 正常，略過。
+      await db.prepare(addition.sql).run();
+    } catch (error) {
+      try {
+        await db.prepare(addition.verify).first();
+      } catch {
+        throw error;
+      }
     }
   }
   columnsPatched = true;
