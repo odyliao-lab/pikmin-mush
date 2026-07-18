@@ -5,14 +5,16 @@
 
 ## 資料流
 
-1. Agent 每 2 秒輪詢 `/api/agent/command`。
-2. `teleport` 命令直接寫入遊戲的 `teleport.txt`。
-3. Agent 以 byte offset 增量讀取 `mushrooms.tsv`，上傳至 `/api/agent/upload`。
-4. 遊戲卡住時，Agent 以 Android shell SELinux context 重啟遊戲並驗證 PID。
-5. 網路失敗時不推進 offset；恢復後自動續傳。
+1. 每個節點以獨立 `AGENT_ID` 與 Token 輪詢 `/api/agent/v2/task`。
+2. 雲端以逐點 lease 分派工作；Agent 離線或逾時後工作會自動重新排隊。
+3. Agent 直接寫入遊戲的 `teleport.txt`，並定期續租以接收暫停或停止。
+4. Agent 以 byte offset 增量讀取 `mushrooms.tsv`，上傳至 `/api/agent/upload`。
+5. 遊戲卡住時，Agent 以 Android shell SELinux context 重啟遊戲並驗證 PID。
+6. 網路失敗時不推進 offset；恢復後自動續傳及重送完成 ACK。
 
-所有 Agent API 都要求 `Authorization: Bearer <token>`。token 由 PC 端
-`scanner.py` 首次啟動時建立於 `scanner/agent_token.txt`，不應提交版本庫。
+所有 Agent API 都要求 `Authorization: Bearer <token>` 與 `X-Agent-Id`。
+`primary` 保留既有 Token；新節點由網站後台建立獨立憑證，Token 只顯示一次。
+正式 Token 不應提交版本庫。
 
 ## 手機安裝位置
 
@@ -23,7 +25,7 @@
 ```
 
 Magisk 會在開機後執行 `service.sh`，再由它啟動 `agent.sh`。正式設定在手機端
-`config`，認證密鑰在 `token`。
+`config`，認證密鑰在 `token`。每台裝置的 `AGENT_ID` 必須不同。
 
 ## PC 端
 

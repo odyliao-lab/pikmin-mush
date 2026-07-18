@@ -21,30 +21,39 @@ test("ships the public mushroom map and protected scan console", async () => {
   assert.match(adminClient, /api\/admin\/scans\/start/);
   assert.match(adminClient, /暫停/);
   assert.match(adminClient, /持續循環/);
+  assert.match(adminClient, /全球掃描節點/);
+  assert.match(adminClient, /api\/admin\/agents\/enroll/);
   assert.match(layout, /Pikmin 蘑菇探險隊/);
 });
 
-test("includes durable scan state, agent protocol routes, and migrations", async () => {
-  const [schema, cloud, plan, task, ack, migration, phoneAgent] = await Promise.all([
+test("includes durable multi-agent leases, v2 protocol routes, and migrations", async () => {
+  const [schema, cloud, plan, fleet, task, ack, migration, phoneAgent] = await Promise.all([
     readFile(new URL("db/schema.ts", root), "utf8"),
     readFile(new URL("lib/cloud.ts", root), "utf8"),
     readFile(new URL("lib/scan-plans.ts", root), "utf8"),
-    readFile(new URL("app/api/agent/scan-task/route.ts", root), "utf8"),
-    readFile(new URL("app/api/agent/scan-ack/route.ts", root), "utf8"),
-    readFile(new URL("drizzle/0002_closed_deadpool.sql", root), "utf8"),
+    readFile(new URL("lib/fleet.ts", root), "utf8"),
+    readFile(new URL("app/api/agent/v2/task/route.ts", root), "utf8"),
+    readFile(new URL("app/api/agent/v2/ack/route.ts", root), "utf8"),
+    readFile(new URL("drizzle/0003_fair_dragon_man.sql", root), "utf8"),
     readFile(new URL("../phone_agent/agent.sh", root), "utf8"),
   ]);
 
   assert.match(schema, /scanJobs/);
   assert.match(schema, /scanLogs/);
+  assert.match(schema, /scanAgents/);
+  assert.match(schema, /scanTargets/);
   assert.match(cloud, /CREATE TABLE IF NOT EXISTS scan_jobs/);
   assert.match(cloud, /ADMIN_EMAILS/);
-  assert.match(plan, /日本: JAPAN/);
+  assert.match(plan, /COUNTRY_PACK_CATALOG/);
   assert.match(plan, /buildScanPlan/);
-  assert.match(task, /source: "web-admin"/);
-  assert.match(ack, /current_index/);
-  assert.match(migration, /CREATE TABLE `scan_jobs`/);
-  assert.match(phoneAgent, /api\/agent\/scan-task/);
+  assert.match(fleet, /releaseExpiredLeases/);
+  assert.match(fleet, /lease_token/);
+  assert.match(task, /claimTask/);
+  assert.match(ack, /completeTask/);
+  assert.match(migration, /CREATE TABLE `scan_agents`/);
+  assert.match(migration, /CREATE TABLE `scan_targets`/);
+  assert.match(phoneAgent, /api\/agent\/v2\/task/);
+  assert.match(phoneAgent, /X-Agent-Id/);
   assert.match(phoneAgent, /interruptible_wait/);
   await access(new URL("dist/server/index.js", root));
 });

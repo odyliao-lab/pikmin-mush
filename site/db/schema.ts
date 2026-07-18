@@ -36,6 +36,28 @@ export const agentState = sqliteTable("agent_state", {
   partialText: text("partial_text").notNull().default(""),
 });
 
+export const scanAgents = sqliteTable("scan_agents", {
+  id: text("id").primaryKey(),
+  displayName: text("display_name").notNull(),
+  tokenHash: text("token_hash").notNull().default(""),
+  enabled: integer("enabled").notNull().default(1),
+  regionTagsJson: text("region_tags_json").notNull().default("[]"),
+  capabilitiesJson: text("capabilities_json").notNull().default("{}"),
+  agentVersion: text("agent_version").notNull().default(""),
+  lastSeen: integer("last_seen").notNull().default(0),
+  currentLat: real("current_lat"),
+  currentLng: real("current_lng"),
+  currentJobId: integer("current_job_id"),
+  currentTargetId: integer("current_target_id"),
+  uploadedRows: integer("uploaded_rows").notNull().default(0),
+  uploadedBytes: integer("uploaded_bytes").notNull().default(0),
+  partialText: text("partial_text").notNull().default(""),
+  createdAt: integer("created_at").notNull(),
+  updatedAt: integer("updated_at").notNull(),
+}, (table) => [
+  index("scan_agents_last_seen_idx").on(table.lastSeen),
+]);
+
 export const scannerStatus = sqliteTable("scanner_status", {
   id: integer("id").primaryKey(),
   statusJson: text("status_json").notNull().default("{}"),
@@ -75,4 +97,33 @@ export const scanLogs = sqliteTable("scan_logs", {
   message: text("message").notNull(),
 }, (table) => [
   index("scan_logs_job_at_idx").on(table.jobId, table.at),
+]);
+
+export const scanTargets = sqliteTable("scan_targets", {
+  id: integer("id").primaryKey({ autoIncrement: true }),
+  jobId: integer("job_id").notNull(),
+  sequence: integer("sequence").notNull(),
+  cycle: integer("cycle").notNull().default(0),
+  country: text("country").notNull().default(""),
+  city: text("city").notNull(),
+  lat: real("lat").notNull(),
+  lng: real("lng").notNull(),
+  regionIndex: integer("region_index").notNull().default(0),
+  pointIndex: integer("point_index").notNull().default(0),
+  baseCooldownS: integer("base_cooldown_s").notNull().default(0),
+  status: text("status").notNull().default("queued"),
+  leaseAgentId: text("lease_agent_id").notNull().default(""),
+  leaseToken: text("lease_token").notNull().default(""),
+  leaseExpiresAt: integer("lease_expires_at").notNull().default(0),
+  attempts: integer("attempts").notNull().default(0),
+  capturedRows: integer("captured_rows").notNull().default(0),
+  capturedBytes: integer("captured_bytes").notNull().default(0),
+  error: text("error").notNull().default(""),
+  createdAt: integer("created_at").notNull(),
+  updatedAt: integer("updated_at").notNull(),
+  completedAt: integer("completed_at").notNull().default(0),
+}, (table) => [
+  index("scan_targets_claim_idx").on(table.jobId, table.status, table.cycle),
+  index("scan_targets_lease_idx").on(table.leaseExpiresAt),
+  index("scan_targets_agent_idx").on(table.leaseAgentId, table.status),
 ]);

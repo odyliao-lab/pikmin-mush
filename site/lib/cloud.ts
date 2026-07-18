@@ -62,6 +62,27 @@ export async function ensureSchema() {
       uploaded_bytes INTEGER NOT NULL DEFAULT 0,
       partial_text TEXT NOT NULL DEFAULT ''
     )`),
+    db.prepare(`CREATE TABLE IF NOT EXISTS scan_agents (
+      id TEXT PRIMARY KEY,
+      display_name TEXT NOT NULL,
+      token_hash TEXT NOT NULL DEFAULT '',
+      enabled INTEGER NOT NULL DEFAULT 1,
+      region_tags_json TEXT NOT NULL DEFAULT '[]',
+      capabilities_json TEXT NOT NULL DEFAULT '{}',
+      agent_version TEXT NOT NULL DEFAULT '',
+      last_seen INTEGER NOT NULL DEFAULT 0,
+      current_lat REAL,
+      current_lng REAL,
+      current_job_id INTEGER,
+      current_target_id INTEGER,
+      uploaded_rows INTEGER NOT NULL DEFAULT 0,
+      uploaded_bytes INTEGER NOT NULL DEFAULT 0,
+      partial_text TEXT NOT NULL DEFAULT '',
+      created_at INTEGER NOT NULL,
+      updated_at INTEGER NOT NULL
+    )`),
+    db.prepare(`CREATE INDEX IF NOT EXISTS scan_agents_last_seen_idx
+      ON scan_agents (last_seen)`),
     db.prepare(`CREATE TABLE IF NOT EXISTS scanner_status (
       id INTEGER PRIMARY KEY,
       status_json TEXT NOT NULL DEFAULT '{}',
@@ -101,14 +122,51 @@ export async function ensureSchema() {
     )`),
     db.prepare(`CREATE INDEX IF NOT EXISTS scan_logs_job_at_idx
       ON scan_logs (job_id, at)`),
+    db.prepare(`CREATE TABLE IF NOT EXISTS scan_targets (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      job_id INTEGER NOT NULL,
+      sequence INTEGER NOT NULL,
+      cycle INTEGER NOT NULL DEFAULT 0,
+      country TEXT NOT NULL DEFAULT '',
+      city TEXT NOT NULL,
+      lat REAL NOT NULL,
+      lng REAL NOT NULL,
+      region_index INTEGER NOT NULL DEFAULT 0,
+      point_index INTEGER NOT NULL DEFAULT 0,
+      base_cooldown_s INTEGER NOT NULL DEFAULT 0,
+      status TEXT NOT NULL DEFAULT 'queued',
+      lease_agent_id TEXT NOT NULL DEFAULT '',
+      lease_token TEXT NOT NULL DEFAULT '',
+      lease_expires_at INTEGER NOT NULL DEFAULT 0,
+      attempts INTEGER NOT NULL DEFAULT 0,
+      captured_rows INTEGER NOT NULL DEFAULT 0,
+      captured_bytes INTEGER NOT NULL DEFAULT 0,
+      error TEXT NOT NULL DEFAULT '',
+      created_at INTEGER NOT NULL,
+      updated_at INTEGER NOT NULL,
+      completed_at INTEGER NOT NULL DEFAULT 0
+    )`),
+    db.prepare(`CREATE INDEX IF NOT EXISTS scan_targets_claim_idx
+      ON scan_targets (job_id, status, cycle)`),
+    db.prepare(`CREATE INDEX IF NOT EXISTS scan_targets_lease_idx
+      ON scan_targets (lease_expires_at)`),
+    db.prepare(`CREATE INDEX IF NOT EXISTS scan_targets_agent_idx
+      ON scan_targets (lease_agent_id, status)`),
   ]);
+  const now = Date.now();
   await db.batch([
     db.prepare("INSERT OR IGNORE INTO agent_state (id) VALUES (1)"),
     db.prepare("INSERT OR IGNORE INTO scanner_status (id) VALUES (1)"),
+    db.prepare(`INSERT OR IGNORE INTO scan_agents (
+      id, display_name, region_tags_json, last_seen, current_lat, current_lng,
+      uploaded_rows, uploaded_bytes, partial_text, created_at, updated_at
+    ) SELECT 'primary', '主要 Agent', '[]', last_seen, current_lat, current_lng,
+      uploaded_rows, uploaded_bytes, partial_text, ?, ?
+      FROM agent_state WHERE id=1`).bind(now, now),
   ]);
 }
 
-function safeEqual(a: string, b: string) {
+export function safeEqual(a: string, b: string) {
   if (a.length !== b.length) return false;
   let difference = 0;
   for (let index = 0; index < a.length; index += 1) {

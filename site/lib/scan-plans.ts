@@ -111,18 +111,27 @@ const ARGENTINA: Center[] = [
   ["聖菲 Santa Fe",-31.6333,-60.7000],["內烏肯 Neuquen",-38.9516,-68.0591],
 ];
 
-export const COUNTRY_PACKS: Record<string, Center[]> = {
-  日本: JAPAN,
-  澳洲: AUSTRALIA,
-  紐西蘭: NEW_ZEALAND,
-  印度: INDIA,
-  巴西: BRAZIL,
-  厄瓜多: ECUADOR,
-  阿根廷: ARGENTINA,
-};
+// 國家目錄是擴充的唯一入口。新增歐美國家時只需要加入一個定義，
+// 排程器、後台選項與 Agent 區域偏好都會自動沿用。
+export const COUNTRY_PACK_CATALOG = [
+  { id: "jp", name: "日本", region: "亞洲", cities: JAPAN },
+  { id: "in", name: "印度", region: "亞洲", cities: INDIA },
+  { id: "au", name: "澳洲", region: "大洋洲", cities: AUSTRALIA },
+  { id: "nz", name: "紐西蘭", region: "大洋洲", cities: NEW_ZEALAND },
+  { id: "br", name: "巴西", region: "南美洲", cities: BRAZIL },
+  { id: "ec", name: "厄瓜多", region: "南美洲", cities: ECUADOR },
+  { id: "ar", name: "阿根廷", region: "南美洲", cities: ARGENTINA },
+] as const;
 
-export const COUNTRY_PACK_LABELS = Object.entries(COUNTRY_PACKS).map(
-  ([name, cities]) => ({ name, count: cities.length }),
+export const COUNTRY_PACKS: Record<string, Center[]> = Object.fromEntries(
+  COUNTRY_PACK_CATALOG.flatMap((pack) => [
+    [pack.name, pack.cities],
+    [pack.id, pack.cities],
+  ]),
+);
+
+export const COUNTRY_PACK_LABELS = COUNTRY_PACK_CATALOG.map(
+  ({ id, name, region, cities }) => ({ id, name, region, count: cities.length }),
 );
 
 function finite(value: unknown, label: string) {
@@ -239,9 +248,12 @@ export function buildScanPlan(
       regions.push({ name: city[1], country: city[2], latMin: city[3],
         latMax: city[4], lngMin: city[5], lngMax: city[6] });
     }
-    for (const country of config.countryPacks) {
-      for (const [name, lat, lng] of COUNTRY_PACKS[country] ?? []) {
-        regions.push(centerRegion(name, country, lat, lng, config.radiusKm));
+    for (const packValue of config.countryPacks) {
+      const definition = COUNTRY_PACK_CATALOG.find((pack) =>
+        pack.id === packValue || pack.name === packValue);
+      if (!definition) continue;
+      for (const [name, lat, lng] of definition.cities) {
+        regions.push(centerRegion(name, definition.name, lat, lng, config.radiusKm));
       }
     }
   }

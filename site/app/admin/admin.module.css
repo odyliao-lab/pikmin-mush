@@ -52,6 +52,102 @@
   box-shadow: 0 14px 40px rgba(64, 75, 53, .08);
 }
 
+.fleetPanel {
+  max-width: 1404px;
+  margin: 0 auto 16px;
+  padding: 18px;
+  border: 1px solid rgba(61, 83, 61, .13);
+  border-radius: 20px;
+  background: rgba(255, 255, 255, .88);
+  box-shadow: 0 14px 40px rgba(64, 75, 53, .08);
+}
+
+.fleetPanel .panelTitle { margin-bottom: 12px; }
+.fleetPanel .panelTitle small { max-width: 420px; color: #788175; text-align: right; }
+.agentGrid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; }
+.agentGrid article {
+  padding: 13px;
+  border: 1px solid #dce2d8;
+  border-radius: 14px;
+  background: #fafbf7;
+}
+.agentGrid article > div { display: flex; align-items: center; gap: 8px; min-width: 0; }
+.agentGrid i { width: 9px; height: 9px; flex: 0 0 auto; border-radius: 50%; background: #bd4938; }
+.agentGrid .agentOnline i { background: #28a46c; box-shadow: 0 0 0 4px #dff4e8; }
+.agentGrid strong { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.agentGrid code { margin-left: auto; color: #7d867a; font-size: 10px; }
+.agentGrid article > span, .agentGrid article > small {
+  display: block;
+  margin-top: 6px;
+  color: #737d71;
+  font-size: 11px;
+}
+.agentGrid p {
+  margin: 9px 0 0;
+  padding-top: 8px;
+  border-top: 1px solid #e6eae2;
+  color: #45664d;
+  font-size: 12px;
+  font-weight: 800;
+}
+.agentToggle {
+  margin-top: 9px;
+  padding: 6px 9px;
+  border: 1px solid #d6ddd2;
+  border-radius: 8px;
+  color: #5d6d5e;
+  background: white;
+  font-size: 11px;
+  font-weight: 800;
+  cursor: pointer;
+}
+.enroll {
+  margin-top: 12px;
+  padding-top: 12px;
+  display: grid;
+  grid-template-columns: 1fr 1.4fr auto;
+  gap: 10px;
+  align-items: end;
+  border-top: 1px solid #e1e6dd;
+}
+.enroll label { display: grid; gap: 5px; }
+.enroll span { color: #6f786d; font-size: 11px; font-weight: 800; }
+.enroll input {
+  box-sizing: border-box;
+  width: 100%;
+  padding: 9px 10px;
+  border: 1px solid #d2d9ce;
+  border-radius: 10px;
+  background: white;
+}
+.enroll button {
+  padding: 10px 14px;
+  border: 0;
+  border-radius: 10px;
+  color: white;
+  background: #3f744e;
+  font-weight: 900;
+  cursor: pointer;
+}
+.enroll button:disabled { opacity: .5; cursor: not-allowed; }
+.credential {
+  margin-top: 12px;
+  padding: 12px;
+  display: grid;
+  gap: 8px;
+  border-radius: 12px;
+  color: #714c16;
+  background: #fff1c8;
+}
+.credential code {
+  padding: 10px;
+  overflow: auto;
+  border-radius: 8px;
+  color: #ecf8ef;
+  background: #253a2c;
+  white-space: pre;
+}
+
 .healthGrid article { padding: 17px 18px; display: grid; gap: 4px; }
 .healthGrid article > span { color: #778175; font-size: 12px; font-weight: 800; }
 .healthGrid strong { font-size: 21px; }
@@ -184,6 +280,7 @@
   .healthGrid { grid-template-columns: repeat(2, 1fr); }
   .columns { grid-template-columns: 1fr; }
   .choiceGrid { grid-template-columns: repeat(3, 1fr); }
+  .agentGrid { grid-template-columns: repeat(2, 1fr); }
 }
 
 @media (max-width: 680px) {
@@ -197,8 +294,10 @@
   .panel { padding: 16px; }
   .panelTitle { align-items: flex-start; flex-direction: column; }
   .choiceGrid, .cityGrid, .inputGrid { grid-template-columns: repeat(2, 1fr); }
+  .fleetPanel .panelTitle small { text-align: left; }
+  .enroll { grid-template-columns: 1fr; }
 }
 
 @media (max-width: 430px) {
-  .healthGrid, .choiceGrid, .cityGrid, .inputGrid { grid-template-columns: 1fr; }
+  .healthGrid, .choiceGrid, .cityGrid, .inputGrid, .agentGrid { grid-template-columns: 1fr; }
 }

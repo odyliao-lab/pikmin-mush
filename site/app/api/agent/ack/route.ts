@@ -1,4 +1,5 @@
 import { authorized, ensureSchema, plain, runtime } from "../../../../lib/cloud";
+import { touchAgent } from "../../../../lib/fleet";
 
 export async function POST(request: Request) {
   if (!authorized(request)) return plain("unauthorized\n", 401);
@@ -26,5 +27,6 @@ export async function POST(request: Request) {
       locationValid ? 1 : 0, locationValid ? lat : null,
       locationValid ? 1 : 0, locationValid ? lng : null)
     .run();
+  await touchAgent("primary", locationValid ? { lat, lng } : {});
   return plain("ok\n");
 }

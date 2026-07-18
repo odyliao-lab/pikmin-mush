@@ -23,8 +23,30 @@ type Job = {
   updated_at: number;
 };
 
+type Agent = {
+  id: string;
+  name: string;
+  enabled: boolean;
+  online: boolean;
+  last_seen: number;
+  current_location: [number, number] | null;
+  current_job_id: number | null;
+  current_target_id: number | null;
+  uploaded_rows: number;
+  uploaded_bytes: number;
+  region_tags: string[];
+  version: string;
+};
+
 type Dashboard = {
   now: number;
+  fleet: {
+    total: number;
+    online: number;
+    uploaded_rows: number;
+    uploaded_bytes: number;
+  };
+  agents: Agent[];
   agent: {
     online: boolean;
     last_seen: number;
@@ -33,6 +55,7 @@ type Dashboard = {
     uploaded_bytes: number;
   };
   job: Job | null;
+  target_counts: Record<string, number>;
   logs: Array<{ id: number; at: number; level: string; message: string }>;
 };
 
@@ -79,6 +102,9 @@ export default function AdminClient({
   });
   const [busy, setBusy] = useState(false);
   const [notice, setNotice] = useState("");
+  const [agentName, setAgentName] = useState("");
+  const [agentRegions, setAgentRegions] = useState("");
+  const [credential, setCredential] = useState<{ id: string; token: string } | null>(null);
 
   const refresh = useCallback(async () => {
     const response = await fetch("/api/admin/scans", { cache: "no-store" });
@@ -180,6 +206,54 @@ export default function AdminClient({
     }
   };
 
+  const enrollAgent = async () => {
+    setBusy(true);
+    setNotice("");
+    setCredential(null);
+    try {
+      const response = await fetch("/api/admin/agents/enroll", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          name: agentName,
+          regionTags: agentRegions.split(",").map((value) => value.trim()).filter(Boolean),
+        }),
+      });
+      const result = await response.json();
+      if (!response.ok) throw new Error(result.error ?? "建立 Agent 失敗");
+      setCredential({ id: result.agent.id, token: result.token });
+      setAgentName("");
+      setAgentRegions("");
+      await refresh();
+    } catch (error) {
+      setNotice(error instanceof Error ? error.message : String(error));
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const setAgentEnabled = async (agent: Agent) => {
+    setBusy(true);
+    setNotice("");
+    try {
+      const response = await fetch("/api/admin/agents/action", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          agentId: agent.id,
+          action: agent.enabled ? "disable" : "enable",
+        }),
+      });
+      const result = await response.json();
+      if (!response.ok) throw new Error(result.error ?? "Agent 操作失敗");
+      await refresh();
+    } catch (error) {
+      setNotice(error instanceof Error ? error.message : String(error));
+    } finally {
+      setBusy(false);
+    }
+  };
+
   const job = dashboard?.job;
   const active = Boolean(job && ACTIVE.has(job.status));
   const progress = job?.total_points
@@ -201,10 +275,10 @@ export default function AdminClient({
       </header>
 
       <section className={styles.healthGrid}>
-        <article className={dashboard?.agent.online ? styles.healthGood : styles.healthBad}>
-          <span>手機 Agent</span>
-          <strong>{dashboard?.agent.online ? "已連線" : "離線"}</strong>
-          <small>最後回報 {formatTime(dashboard?.agent.last_seen ?? 0)}</small>
+        <article className={dashboard?.fleet.online ? styles.healthGood : styles.healthBad}>
+          <span>Agent 叢集</span>
+          <strong>{dashboard?.fleet.online ?? 0} / {dashboard?.fleet.total ?? 0} 在線</strong>
+          <small>多節點平行掃描與故障接手</small>
         </article>
         <article>
           <span>目前工作</span>
@@ -214,12 +288,12 @@ export default function AdminClient({
         <article>
           <span>擷取成果</span>
           <strong>{job?.captured_rows ?? 0} 行</strong>
-          <small>手機累計上傳 {dashboard?.agent.uploaded_rows ?? 0} 行</small>
+          <small>叢集累計上傳 {dashboard?.fleet.uploaded_rows ?? 0} 行</small>
         </article>
         <article>
-          <span>掃描位置</span>
-          <strong>{job?.current_city || "—"}</strong>
-          <small>{job?.current_country || "尚未開始"}</small>
+          <span>工作佇列</span>
+          <strong>{dashboard?.target_counts?.leased ?? 0} 執行中</strong>
+          <small>{dashboard?.target_counts?.queued ?? 0} 待派・{dashboard?.target_counts?.completed ?? 0} 完成</small>
         </article>
       </section>
 
@@ -243,6 +317,56 @@ export default function AdminClient({
         </section>
       )}
 
+      <section className={styles.fleetPanel}>
+        <div className={styles.panelTitle}>
+          <div><span>AGENT FLEET</span><h2>全球掃描節點</h2></div>
+          <small>區域標籤是派工偏好；空白節點可接手任何國家。</small>
+        </div>
+        <div className={styles.agentGrid}>
+          {dashboard?.agents.map((agent) => (
+            <article key={agent.id} className={agent.online ? styles.agentOnline : styles.agentOffline}>
+              <div>
+                <i />
+                <strong>{agent.name}</strong>
+                <code>{agent.id}</code>
+              </div>
+              <span>{agent.online ? "在線" : "離線"}・最後回報 {formatTime(agent.last_seen)}</span>
+              <small>
+                {agent.current_job_id
+                  ? `工作 #${agent.current_job_id}・掃描點 #${agent.current_target_id}`
+                  : "目前待命"}
+                {agent.version ? `・v${agent.version}` : ""}
+              </small>
+              <p>{agent.region_tags.length ? agent.region_tags.join("・") : "全球支援"}</p>
+              <button className={styles.agentToggle} disabled={busy}
+                onClick={() => setAgentEnabled(agent)}>
+                {agent.enabled ? "停用節點" : "啟用節點"}
+              </button>
+            </article>
+          ))}
+          {!dashboard?.agents.length && <p className={styles.empty}>尚未建立 Agent</p>}
+        </div>
+        <div className={styles.enroll}>
+          <label><span>新節點名稱</span>
+            <input value={agentName} placeholder="例如：歐洲 Agent 01"
+              onChange={(event) => setAgentName(event.target.value)} />
+          </label>
+          <label><span>優先國家（逗號分隔）</span>
+            <input value={agentRegions} placeholder="法國,德國,荷蘭"
+              onChange={(event) => setAgentRegions(event.target.value)} />
+          </label>
+          <button onClick={enrollAgent} disabled={busy || agentName.trim().length < 2}>
+            建立 Agent 憑證
+          </button>
+        </div>
+        {credential && (
+          <div className={styles.credential}>
+            <strong>請立即保存，Token 關閉頁面後不會再次顯示</strong>
+            <code>{`AGENT_ID='${credential.id}'\nTOKEN='${credential.token}'`}</code>
+          </div>
+        )}
+      </section>
+
       <div className={styles.columns}>
         <section className={styles.panel}>
           <div className={styles.panelTitle}>
@@ -264,7 +388,7 @@ export default function AdminClient({
                     <label key={pack.name} className={packs.includes(pack.name) ? styles.checked : ""}>
                       <input type="checkbox" checked={packs.includes(pack.name)}
                         onChange={() => toggle(pack.name, packs, setPacks)} />
-                      <span>{pack.name}</span><small>{pack.count} 城市</small>
+                      <span>{pack.name}</span><small>{pack.region}・{pack.count} 城市</small>
                     </label>
                   ))}
                 </div>
@@ -336,9 +460,9 @@ export default function AdminClient({
             <strong>{estimate.cities} 城市・約 {estimate.points.toLocaleString()} 點・單輪 {estimate.hours.toFixed(1)} 小時</strong>
           </div>
           {notice && <p className={styles.notice}>{notice}</p>}
-          <button className={styles.startButton} disabled={busy || active || !dashboard?.agent.online}
+          <button className={styles.startButton} disabled={busy || active || !dashboard?.fleet.online}
             onClick={start}>
-            {active ? "目前已有掃描工作" : dashboard?.agent.online ? "開始雲端掃描" : "等待手機 Agent 上線"}
+            {active ? "目前已有掃描工作" : dashboard?.fleet.online ? "開始分散式掃描" : "等待 Agent 上線"}
           </button>
         </section>
 

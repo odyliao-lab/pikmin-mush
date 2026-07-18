@@ -18,6 +18,8 @@ fi
 . "$CONFIG"
 
 POLL_SECONDS="${POLL_SECONDS:-2}"
+AGENT_ID="${AGENT_ID:-primary}"
+AGENT_VERSION="${AGENT_VERSION:-2.0.0}"
 [ -n "$TOKEN" ] || TOKEN="$(cat "$MODDIR/token" 2>/dev/null)"
 if [ -z "$TOKEN" ]; then
   echo "[agent] missing token"
@@ -30,7 +32,9 @@ case "$LAST_SEQ" in ''|*[!0-9]*) LAST_SEQ=0 ;; esac
 
 auth_curl() {
   /system/bin/curl -fsS --connect-timeout 10 --max-time 45 \
-    -H "Authorization: Bearer $TOKEN" "$@"
+    -H "Authorization: Bearer $TOKEN" \
+    -H "X-Agent-Id: $AGENT_ID" \
+    -H "X-Agent-Version: $AGENT_VERSION" "$@"
 }
 
 save_offset() {
@@ -111,7 +115,7 @@ line_count() {
 }
 
 scan_control() {
-  auth_curl "$SERVER_URL/api/agent/scan-control?job_id=$1" 2>/dev/null
+  auth_curl "$SERVER_URL/api/agent/v2/control?job_id=$SCAN_JOB_ID&target_id=$SCAN_TARGET_ID&lease=$SCAN_LEASE" 2>/dev/null
 }
 
 interruptible_wait() {
@@ -122,7 +126,7 @@ interruptible_wait() {
     [ "$WAIT_LEFT" -lt 5 ] && WAIT_STEP="$WAIT_LEFT"
     sleep "$WAIT_STEP"
     WAIT_LEFT=$((WAIT_LEFT - WAIT_STEP))
-    CONTROL="$(scan_control "$WAIT_JOB")"
+    CONTROL="$(scan_control)"
     case "$CONTROL" in
       pause|stop) return 2 ;;
     esac
@@ -146,13 +150,13 @@ restart_game_for_scan() {
 
 send_scan_ack() {
   ACK_JOB="$1"
-  ACK_INDEX="$2"
-  ACK_CYCLE="$3"
+  ACK_TARGET="$2"
+  ACK_LEASE="$3"
   ACK_ROWS="$4"
   ACK_BYTES="$5"
   ACK_OK="$6"
   auth_curl -X POST --data-binary '' \
-    "$SERVER_URL/api/agent/scan-ack?job_id=$ACK_JOB&index=$ACK_INDEX&cycle=$ACK_CYCLE&ok=$ACK_OK&rows=$ACK_ROWS&bytes=$ACK_BYTES" \
+    "$SERVER_URL/api/agent/v2/ack?job_id=$ACK_JOB&target_id=$ACK_TARGET&lease=$ACK_LEASE&ok=$ACK_OK&rows=$ACK_ROWS&bytes=$ACK_BYTES" \
     >/dev/null 2>&1
 }
 
@@ -165,10 +169,13 @@ retry_scan_ack() {
   IFS="$OLD_IFS"
   if send_scan_ack "$1" "$2" "$3" "$4" "$5" 1; then
     rm -f "$SCAN_PENDING"
-    echo "[scan] pending ACK completed job=$1 point=$2"
+    echo "[scan] pending ACK completed job=$1 target=$2"
     return 0
   fi
-  if [ "$(scan_control "$1")" = "stop" ]; then
+  SCAN_JOB_ID="$1"
+  SCAN_TARGET_ID="$2"
+  SCAN_LEASE="$3"
+  if [ "$(scan_control)" = "stop" ]; then
     rm -f "$SCAN_PENDING"
     echo "[scan] discarded pending ACK for stopped job=$1"
     return 0
@@ -178,18 +185,23 @@ retry_scan_ack() {
 
 execute_scan_task() {
   JOB_ID="$1"
-  TASK_INDEX="$2"
-  TASK_TOTAL="$3"
-  TASK_LAT="$4"
-  TASK_LNG="$5"
-  TASK_DWELL="$6"
-  TASK_DELAY="$7"
-  TASK_COOLDOWN="$8"
-  TASK_CYCLE="$9"
+  TASK_TARGET_ID="$2"
+  TASK_INDEX="$3"
+  TASK_TOTAL="$4"
+  TASK_LAT="$5"
+  TASK_LNG="$6"
+  TASK_DWELL="$7"
+  TASK_DELAY="$8"
+  TASK_COOLDOWN="$9"
   shift 9
-  TASK_COUNTRY="$1"
-  TASK_CITY="$2"
+  TASK_CYCLE="$1"
+  TASK_LEASE="$2"
+  TASK_COUNTRY="$3"
+  TASK_CITY="$4"
   [ "$TASK_COUNTRY" = "-" ] && TASK_COUNTRY=""
+  SCAN_JOB_ID="$JOB_ID"
+  SCAN_TARGET_ID="$TASK_TARGET_ID"
+  SCAN_LEASE="$TASK_LEASE"
 
   ensure_game_running
   BEFORE_SIZE="$(file_size)"
@@ -197,7 +209,7 @@ execute_scan_task() {
   echo "$TASK_LAT,$TASK_LNG" >"$TELEPORT"
   if [ "$(cat "$TELEPORT" 2>/dev/null)" != "$TASK_LAT,$TASK_LNG" ]; then
     echo "[scan] GPS write failed job=$JOB_ID point=$TASK_INDEX"
-    send_scan_ack "$JOB_ID" "$TASK_INDEX" "$TASK_CYCLE" 0 0 0
+    send_scan_ack "$JOB_ID" "$TASK_TARGET_ID" "$TASK_LEASE" 0 0 0
     return
   fi
   echo "[scan] $TASK_COUNTRY-$TASK_CITY $((TASK_INDEX + 1))/$TASK_TOTAL GPS=$TASK_LAT,$TASK_LNG"
@@ -232,8 +244,8 @@ execute_scan_task() {
   fi
   interruptible_wait "$TASK_DELAY" "$JOB_ID" || return
   printf '%s\t%s\t%s\t%s\t%s\n' \
-    "$JOB_ID" "$TASK_INDEX" "$TASK_CYCLE" "$NEW_ROWS" "$NEW_BYTES" >"$SCAN_PENDING"
-  if send_scan_ack "$JOB_ID" "$TASK_INDEX" "$TASK_CYCLE" "$NEW_ROWS" "$NEW_BYTES" 1; then
+    "$JOB_ID" "$TASK_TARGET_ID" "$TASK_LEASE" "$NEW_ROWS" "$NEW_BYTES" >"$SCAN_PENDING"
+  if send_scan_ack "$JOB_ID" "$TASK_TARGET_ID" "$TASK_LEASE" "$NEW_ROWS" "$NEW_BYTES" 1; then
     rm -f "$SCAN_PENDING"
     echo "[scan] completed point=$((TASK_INDEX + 1)) rows=+$NEW_ROWS bytes=+$NEW_BYTES"
   else
@@ -310,19 +322,21 @@ execute_command() {
   save_seq "$seq"
 }
 
-echo "[agent] started server=$SERVER_URL"
+echo "[agent] started id=$AGENT_ID version=$AGENT_VERSION server=$SERVER_URL"
 while true; do
   upload_new
-  COMMAND="$(auth_curl "$SERVER_URL/api/agent/command?since=$LAST_SEQ" 2>/dev/null)"
-  if [ -n "$COMMAND" ]; then
-    OLD_IFS="$IFS"
-    IFS="$(printf '\t')"
-    set -- $COMMAND
-    IFS="$OLD_IFS"
-    execute_command "$1" "$2" "$3" "$4"
+  if [ "$AGENT_ID" = "primary" ]; then
+    COMMAND="$(auth_curl "$SERVER_URL/api/agent/command?since=$LAST_SEQ" 2>/dev/null)"
+    if [ -n "$COMMAND" ]; then
+      OLD_IFS="$IFS"
+      IFS="$(printf '\t')"
+      set -- $COMMAND
+      IFS="$OLD_IFS"
+      execute_command "$1" "$2" "$3" "$4"
+    fi
   fi
   if retry_scan_ack; then
-    TASK="$(auth_curl "$SERVER_URL/api/agent/scan-task" 2>/dev/null)"
+    TASK="$(auth_curl "$SERVER_URL/api/agent/v2/task" 2>/dev/null)"
     if [ -n "$TASK" ]; then
       OLD_IFS="$IFS"
       IFS="$(printf '\t')"
@@ -331,7 +345,7 @@ while true; do
       case "$2" in
         target)
           execute_scan_task "$1" "$3" "$4" "$5" "$6" "$7" "$8" "$9" \
-            "${10}" "${11}" "${12}"
+            "${10}" "${11}" "${12}" "${13}" "${14}"
           ;;
         pause|wait|'') ;;
         error) echo "[scan] cloud scan plan error job=$1" ;;

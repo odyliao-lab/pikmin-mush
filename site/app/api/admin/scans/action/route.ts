@@ -35,6 +35,15 @@ export async function POST(request: Request) {
       jobId, ...allowed)
     .run();
   if (!result.meta.changes) return noStoreJson({ error: "工作狀態已變更，請重新整理" }, 409);
+  if (action === "stop") {
+    await db.batch([
+      db.prepare(`UPDATE scan_targets SET status='cancelled', lease_agent_id='',
+        lease_token='', lease_expires_at=0, updated_at=?
+        WHERE job_id=? AND status IN ('queued','leased')`).bind(now, jobId),
+      db.prepare(`UPDATE scan_agents SET current_job_id=NULL, current_target_id=NULL,
+        updated_at=? WHERE current_job_id=?`).bind(now, jobId),
+    ]);
+  }
   await appendScanLog(jobId, "info",
     action === "pause" ? "後台暫停掃描" : action === "resume" ? "後台繼續掃描" : "後台停止掃描");
   const status = {
