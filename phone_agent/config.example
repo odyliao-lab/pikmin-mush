@@ -3,3 +3,5 @@ SERVER_URL='https://mush.odyliao.cc'
 AGENT_ID='primary'
 TOKEN=''
 POLL_SECONDS='2'
+# 1 = create and supervise a trusted virtual display entirely on the phone.
+LOCAL_DISPLAY='0'

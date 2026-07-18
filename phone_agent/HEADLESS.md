@@ -1,5 +1,24 @@
 # Headless phone scanning
 
+## Fully autonomous phone mode
+
+For a rooted physical phone that must scan while disconnected from the computer, install the
+on-device display manager once:
+
+```powershell
+powershell.exe -NoProfile -ExecutionPolicy Bypass `
+  -File .\phone_agent\install-local-display.ps1 `
+  -Serial ANDROID_ADB_SERIAL
+```
+
+This installs a Magisk-booted phone watchdog, creates the trusted virtual display locally,
+and sets `LOCAL_DISPLAY=1` in the private phone config. USB and the Windows Supervisor may
+then remain disconnected. See `SPEC_ON_DEVICE_DISPLAY.md` for architecture, recovery, and
+verified tests.
+
+The Windows modes below remain useful for interactive debugging and screen viewing, but are
+not required by autonomous phone mode.
+
 `headless-agent.ps1` lets the phone keep scanning without leaving Pikmin Bloom visible on
 its physical screen. The game still runs on the rooted Android phone; the PC owns the
 hidden display session and can start, inspect, or stop it through ADB.
