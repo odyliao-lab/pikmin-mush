@@ -10,6 +10,7 @@ export type ScanAgentRow = {
   display_name: string;
   token_hash: string;
   enabled: number;
+  paused: number;
   region_tags_json: string;
   capabilities_json: string;
   agent_version: string;
@@ -332,6 +333,11 @@ export type ClaimedTask = {
 export async function claimTask(agent: ScanAgentRow): Promise<ClaimedTask | null> {
   await ensureSchema();
   const db = runtime().DB;
+  if (agent.paused) {
+    // 此 Agent 被後台暫停：保持在線（touch）但不派工。
+    await touchAgent(agent.id);
+    return null;
+  }
   const job = await activeJob();
   if (!job || job.status === "paused") {
     await touchAgent(agent.id);
@@ -491,6 +497,7 @@ export function publicAgent(row: ScanAgentRow, now = Date.now()) {
     id: row.id,
     name: row.display_name,
     enabled: Boolean(row.enabled),
+    paused: Boolean(row.paused),
     online: Boolean(row.enabled) && now - Number(row.last_seen) < AGENT_ONLINE_MS,
     last_seen: Number(row.last_seen),
     current_location: row.current_lat == null ? null :

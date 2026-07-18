@@ -1,0 +1,1 @@
+ALTER TABLE `scan_agents` ADD `paused` integer DEFAULT 0 NOT NULL;

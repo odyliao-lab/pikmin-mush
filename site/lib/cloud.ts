@@ -25,6 +25,24 @@ export function runtime(): RuntimeEnv {
   return env as unknown as RuntimeEnv;
 }
 
+// 對既有表補上後來新增的欄位（CREATE TABLE IF NOT EXISTS 不會改動既有表）。
+// 每個 worker isolate 只需嘗試一次；欄位已存在時 ALTER 會丟錯，忽略即可。
+let columnsPatched = false;
+async function patchColumns(db: RuntimeEnv["DB"]) {
+  if (columnsPatched) return;
+  const additions = [
+    "ALTER TABLE scan_agents ADD COLUMN paused INTEGER NOT NULL DEFAULT 0",
+  ];
+  for (const sql of additions) {
+    try {
+      await db.prepare(sql).run();
+    } catch {
+      // 欄位已存在（duplicate column name）—— 正常，略過。
+    }
+  }
+  columnsPatched = true;
+}
+
 export async function ensureSchema() {
   const db = runtime().DB;
   await db.batch([
@@ -67,6 +85,7 @@ export async function ensureSchema() {
       display_name TEXT NOT NULL,
       token_hash TEXT NOT NULL DEFAULT '',
       enabled INTEGER NOT NULL DEFAULT 1,
+      paused INTEGER NOT NULL DEFAULT 0,
       region_tags_json TEXT NOT NULL DEFAULT '[]',
       capabilities_json TEXT NOT NULL DEFAULT '{}',
       agent_version TEXT NOT NULL DEFAULT '',
@@ -155,6 +174,7 @@ export async function ensureSchema() {
     db.prepare(`CREATE UNIQUE INDEX IF NOT EXISTS scan_targets_job_sequence_uidx
       ON scan_targets (job_id, sequence)`),
   ]);
+  await patchColumns(db);
   const now = Date.now();
   await db.batch([
     db.prepare("INSERT OR IGNORE INTO agent_state (id) VALUES (1)"),

@@ -27,6 +27,7 @@ type Agent = {
   id: string;
   name: string;
   enabled: boolean;
+  paused: boolean;
   online: boolean;
   last_seen: number;
   current_location: [number, number] | null;
@@ -232,17 +233,14 @@ export default function AdminClient({
     }
   };
 
-  const setAgentEnabled = async (agent: Agent) => {
+  const agentAction = async (agent: Agent, action: "enable" | "disable" | "pause" | "resume") => {
     setBusy(true);
     setNotice("");
     try {
       const response = await fetch("/api/admin/agents/action", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          agentId: agent.id,
-          action: agent.enabled ? "disable" : "enable",
-        }),
+        body: JSON.stringify({ agentId: agent.id, action }),
       });
       const result = await response.json();
       if (!response.ok) throw new Error(result.error ?? "Agent 操作失敗");
@@ -330,18 +328,33 @@ export default function AdminClient({
                 <strong>{agent.name}</strong>
                 <code>{agent.id}</code>
               </div>
-              <span>{agent.online ? "在線" : "離線"}・最後回報 {formatTime(agent.last_seen)}</span>
+              <span>
+                {agent.online ? "在線" : "離線"}
+                {agent.paused ? "・已暫停掃描" : ""}・最後回報 {formatTime(agent.last_seen)}
+              </span>
               <small>
-                {agent.current_job_id
-                  ? `工作 #${agent.current_job_id}・掃描點 #${agent.current_target_id}`
-                  : "目前待命"}
+                {agent.paused
+                  ? "已暫停：不派工"
+                  : agent.current_job_id
+                    ? `工作 #${agent.current_job_id}・掃描點 #${agent.current_target_id}`
+                    : "目前待命"}
                 {agent.version ? `・v${agent.version}` : ""}
               </small>
               <p>{agent.region_tags.length ? agent.region_tags.join("・") : "全球支援"}</p>
-              <button className={styles.agentToggle} disabled={busy}
-                onClick={() => setAgentEnabled(agent)}>
-                {agent.enabled ? "停用節點" : "啟用節點"}
-              </button>
+              <div className={styles.agentActions}>
+                {agent.enabled
+                  ? <button
+                      className={`${styles.agentToggle} ${agent.paused ? styles.agentResume : ""}`}
+                      disabled={busy}
+                      onClick={() => agentAction(agent, agent.paused ? "resume" : "pause")}>
+                      {agent.paused ? "繼續掃描" : "暫停掃描"}
+                    </button>
+                  : null}
+                <button className={styles.agentToggle} disabled={busy}
+                  onClick={() => agentAction(agent, agent.enabled ? "disable" : "enable")}>
+                  {agent.enabled ? "停用節點" : "啟用節點"}
+                </button>
+              </div>
             </article>
           ))}
           {!dashboard?.agents.length && <p className={styles.empty}>尚未建立 Agent</p>}
