@@ -117,9 +117,34 @@ bool NativeBridgeLoad(const char *game_data_dir, int api_level, void *data, size
     sleep(5);
 
     auto libart = dlopen("libart.so", RTLD_NOW);
-    auto JNI_GetCreatedJavaVMs = (jint (*)(JavaVM **, jsize, jsize *)) dlsym(libart,
-                                                                             "JNI_GetCreatedJavaVMs");
+    auto JNI_GetCreatedJavaVMs = (jint (*)(JavaVM **, jsize, jsize *)) dlsym(
+            libart, "JNI_GetCreatedJavaVMs");
+    if (!JNI_GetCreatedJavaVMs) {
+        // Android 15 exports the protected symbol from libandroid_runtime,
+        // not libart. The library is inherited from zygote in app processes.
+        auto android_runtime = dlopen("libandroid_runtime.so", RTLD_NOW | RTLD_NOLOAD);
+        if (!android_runtime) {
+            android_runtime = dlopen("libandroid_runtime.so", RTLD_NOW);
+        }
+        if (android_runtime) {
+            JNI_GetCreatedJavaVMs = (jint (*)(JavaVM **, jsize, jsize *)) dlsym(
+                    android_runtime, "JNI_GetCreatedJavaVMs");
+        }
+        if (!JNI_GetCreatedJavaVMs) {
+            // App linker namespaces may reject dlopen/dlsym for the inherited
+            // framework library. xDL resolves it from the process ELF maps.
+            auto runtime_xdl = xdl_open("libandroid_runtime.so", XDL_DEFAULT);
+            if (runtime_xdl) {
+                JNI_GetCreatedJavaVMs = (jint (*)(JavaVM **, jsize, jsize *)) xdl_sym(
+                        runtime_xdl, "JNI_GetCreatedJavaVMs", nullptr);
+            }
+        }
+    }
     LOGI("JNI_GetCreatedJavaVMs %p", JNI_GetCreatedJavaVMs);
+    if (!JNI_GetCreatedJavaVMs) {
+        LOGE("JNI_GetCreatedJavaVMs not found");
+        return false;
+    }
     JavaVM *vms_buf[1];
     JavaVM *vms;
     jsize num_vms;
@@ -142,47 +167,59 @@ bool NativeBridgeLoad(const char *game_data_dir, int api_level, void *data, size
         return false;
     }
 
+    auto native_bridge = GetNativeBridgeLibrary();
     auto nb = dlopen("libhoudini.so", RTLD_NOW);
     if (!nb) {
-        auto native_bridge = GetNativeBridgeLibrary();
         LOGI("native bridge: %s", native_bridge.data());
         nb = dlopen(native_bridge.data(), RTLD_NOW);
     }
-    if (nb) {
-        LOGI("nb %p", nb);
-        auto callbacks = (NativeBridgeCallbacks *) dlsym(nb, "NativeBridgeItf");
-        if (callbacks) {
-            LOGI("NativeBridgeLoadLibrary %p", callbacks->loadLibrary);
-            LOGI("NativeBridgeLoadLibraryExt %p", callbacks->loadLibraryExt);
-            LOGI("NativeBridgeGetTrampoline %p", callbacks->getTrampoline);
-
-            int fd = syscall(__NR_memfd_create, "anon", MFD_CLOEXEC);
-            ftruncate(fd, (off_t) length);
-            void *mem = mmap(nullptr, length, PROT_WRITE, MAP_SHARED, fd, 0);
-            memcpy(mem, data, length);
-            munmap(mem, length);
-            munmap(data, length);
-            char path[PATH_MAX];
-            snprintf(path, PATH_MAX, "/proc/self/fd/%d", fd);
-            LOGI("arm path %s", path);
-
-            void *arm_handle;
-            if (api_level >= 26) {
-                arm_handle = callbacks->loadLibraryExt(path, RTLD_NOW, (void *) 3);
-            } else {
-                arm_handle = callbacks->loadLibrary(path, RTLD_NOW);
-            }
-            if (arm_handle) {
-                LOGI("arm handle %p", arm_handle);
-                auto init = (void (*)(JavaVM *, void *)) callbacks->getTrampoline(arm_handle,
-                                                                                  "JNI_OnLoad",
-                                                                                  nullptr, 0);
-                LOGI("JNI_OnLoad %p", init);
-                init(vms, (void *) game_data_dir);
-                return true;
-            }
-            close(fd);
+    auto callbacks = nb ? (NativeBridgeCallbacks *) dlsym(nb, "NativeBridgeItf") : nullptr;
+    if (!callbacks && !native_bridge.empty()) {
+        // MuMu's bridge is loaded in a platform linker namespace that app
+        // dlopen cannot enter. Resolve its exported callback table from maps.
+        auto nb_xdl = xdl_open(native_bridge.data(), XDL_DEFAULT);
+        if (nb_xdl) {
+            callbacks = (NativeBridgeCallbacks *) xdl_sym(
+                    nb_xdl, "NativeBridgeItf", nullptr);
+            nb = nb_xdl;
         }
+    }
+    if (callbacks) {
+        LOGI("nb %p", nb);
+        LOGI("NativeBridgeLoadLibrary %p", callbacks->loadLibrary);
+        LOGI("NativeBridgeLoadLibraryExt %p", callbacks->loadLibraryExt);
+        LOGI("NativeBridgeGetTrampoline %p", callbacks->getTrampoline);
+
+        int fd = syscall(__NR_memfd_create, "anon", MFD_CLOEXEC);
+        ftruncate(fd, (off_t) length);
+        void *mem = mmap(nullptr, length, PROT_WRITE, MAP_SHARED, fd, 0);
+        memcpy(mem, data, length);
+        munmap(mem, length);
+        munmap(data, length);
+        char path[PATH_MAX];
+        snprintf(path, PATH_MAX, "/proc/self/fd/%d", fd);
+        LOGI("arm path %s", path);
+
+        void *arm_handle;
+        if (api_level >= 26) {
+            arm_handle = callbacks->loadLibraryExt(path, RTLD_NOW, (void *) 3);
+        } else {
+            arm_handle = callbacks->loadLibrary(path, RTLD_NOW);
+        }
+        if (arm_handle) {
+            LOGI("arm handle %p", arm_handle);
+            auto init = (void (*)(JavaVM *, void *)) callbacks->getTrampoline(
+                    arm_handle, "JNI_OnLoad", nullptr, 0);
+            LOGI("JNI_OnLoad %p", init);
+            close(fd);
+            if (!init) {
+                LOGE("JNI_OnLoad trampoline not found");
+                return false;
+            }
+            init(vms, (void *) game_data_dir);
+            return true;
+        }
+        close(fd);
     }
     return false;
 }

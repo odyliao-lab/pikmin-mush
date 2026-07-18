@@ -594,3 +594,23 @@ extern "C" {
 }
 
 #endif // defined(__aarch64__)
+
+#if !defined(__aarch64__)
+
+// The x86/x86_64 Zygisk loader only forwards the ARM payload through Android's
+// native bridge. These symbols remain referenced by the shared fallback path,
+// but must never attempt to patch translated ARM instructions from x86 code.
+extern "C" void A64HookFunction(void *const, void *const, void **result)
+{
+    if (result != nullptr) {
+        *result = nullptr;
+    }
+}
+
+extern "C" void *A64HookFunctionV(void *const, void *const,
+                                   void *const, const uintptr_t)
+{
+    return nullptr;
+}
+
+#endif // !defined(__aarch64__)
