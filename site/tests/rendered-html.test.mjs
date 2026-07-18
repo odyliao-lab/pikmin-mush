@@ -1,6 +1,9 @@
 import assert from "node:assert/strict";
 import { access, readFile } from "node:fs/promises";
 import test from "node:test";
+import {
+  isUsefulMushroomLevel, MIN_MUSHROOM_LEVEL,
+} from "../lib/mushroom-policy.mjs";
 
 const root = new URL("../", import.meta.url);
 
@@ -15,6 +18,8 @@ test("ships the public mushroom map and protected scan console", async () => {
   assert.match(map, /Pikmin 蘑菇探險隊/);
   assert.match(map, /href="\/admin"/);
   assert.match(map, /api\/mushrooms/);
+  assert.doesNotMatch(map, /id="lv1"/);
+  assert.match(map, /\[2,3,4\]/);
   assert.match(adminPage, /requireChatGPTUser\("\/admin"\)/);
   assert.match(adminPage, /isAdminEmail/);
   assert.match(adminClient, /建立掃描工作/);
@@ -56,4 +61,27 @@ test("includes durable multi-agent leases, v2 protocol routes, and migrations", 
   assert.match(phoneAgent, /X-Agent-Id/);
   assert.match(phoneAgent, /interruptible_wait/);
   await access(new URL("dist/server/index.js", root));
+});
+
+test("excludes level 1 mushrooms throughout the ingest and public API paths", async () => {
+  const [cloud, api, phoneAgent, hook, scanner, legacyMap] = await Promise.all([
+    readFile(new URL("lib/cloud.ts", root), "utf8"),
+    readFile(new URL("app/api/mushrooms/route.ts", root), "utf8"),
+    readFile(new URL("../phone_agent/agent.sh", root), "utf8"),
+    readFile(new URL("../module/cpp/il2cpp_dump.cpp", root), "utf8"),
+    readFile(new URL("../scanner/scanner.py", root), "utf8"),
+    readFile(new URL("../scanner/map.html", root), "utf8"),
+  ]);
+
+  assert.equal(MIN_MUSHROOM_LEVEL, 2);
+  assert.equal(isUsefulMushroomLevel(1), false);
+  assert.equal(isUsefulMushroomLevel(2), true);
+  assert.equal(isUsefulMushroomLevel(4), true);
+  assert.match(cloud, /isUsefulMushroomLevel\(level\)/);
+  assert.match(cloud, /rows\.filter\(\(row\) => isUsefulMushroomLevel\(row\.level\)\)/);
+  assert.match(api, /WHERE level >= \?/);
+  assert.match(phoneAgent, /\$7 \+ 0 >= 2/);
+  assert.match(hook, /should_log = level >= 2/);
+  assert.match(scanner, /WHERE level>=2/);
+  assert.doesNotMatch(legacyMap, /id="lv1"|mush-lv1/);
 });

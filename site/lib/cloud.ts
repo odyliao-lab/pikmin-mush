@@ -1,4 +1,5 @@
 import { env } from "cloudflare:workers";
+import { isUsefulMushroomLevel } from "./mushroom-policy.mjs";
 
 export type MushroomRow = {
   id: string;
@@ -236,6 +237,8 @@ export function parseTsv(text: string): MushroomRow[] {
     const lat = Number(fields[2]);
     const lng = Number(fields[3]);
     if (!Number.isFinite(lat) || !Number.isFinite(lng)) continue;
+    const level = integer(fields[6]);
+    if (!isUsefulMushroomLevel(level)) continue;
     const power = Number(fields[11] ?? 0);
     rows.push({
       id: fields[1],
@@ -243,7 +246,7 @@ export function parseTsv(text: string): MushroomRow[] {
       lng,
       cluster: fields[4] ?? "",
       cooldown: integer(fields[5]),
-      level: integer(fields[6]),
+      level,
       type: integer(fields[7]),
       finish_ms: integer(fields[8]),
       challenger_count: integer(fields[9]),
@@ -258,6 +261,7 @@ export function parseTsv(text: string): MushroomRow[] {
 export async function upsertMushrooms(rows: MushroomRow[]) {
   const db = runtime().DB;
   const now = Math.floor(Date.now() / 1000);
+  const usefulRows = rows.filter((row) => isUsefulMushroomLevel(row.level));
   const sql = `INSERT INTO mushrooms (
       id, lat, lng, level, type, cluster, cooldown, finish_ms,
       first_seen, last_seen, challenger_count, challenger_capacity,
@@ -276,8 +280,8 @@ export async function upsertMushrooms(rows: MushroomRow[]) {
       challenger_capacity=excluded.challenger_capacity,
       total_power=excluded.total_power,
       start_ms=excluded.start_ms`;
-  for (let offset = 0; offset < rows.length; offset += 50) {
-    const statements = rows.slice(offset, offset + 50).map((row) =>
+  for (let offset = 0; offset < usefulRows.length; offset += 50) {
+    const statements = usefulRows.slice(offset, offset + 50).map((row) =>
       db.prepare(sql).bind(
         row.id, row.lat, row.lng, row.level, row.type, row.cluster,
         row.cooldown, row.finish_ms, now, now, row.challenger_count,

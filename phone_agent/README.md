@@ -8,7 +8,8 @@
 1. 每個節點以獨立 `AGENT_ID` 與 Token 輪詢 `/api/agent/v2/task`。
 2. 雲端以逐點 lease 分派工作；Agent 離線或逾時後工作會自動重新排隊。
 3. Agent 直接寫入遊戲的 `teleport.txt`，並定期續租以接收暫停或停止。
-4. Agent 以 byte offset 增量讀取 `mushrooms.tsv`，上傳至 `/api/agent/upload`。
+4. Agent 以 byte offset 增量讀取 `mushrooms.tsv`，上傳至 `/api/agent/upload`；
+   等級 1 不列入擷取行數，雲端也會拒收低於等級 2 的資料。
 5. 遊戲卡住時，Agent 以 Android shell SELinux context 重啟遊戲並驗證 PID。
 6. 網路失敗時不推進 offset；恢復後自動續傳及重送完成 ACK。
 

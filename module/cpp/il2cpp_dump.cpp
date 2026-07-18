@@ -519,7 +519,8 @@ static void hooked_RegisterMapObject(void *thiz, void *obj, void *method) {
                 std::string key(id);
                 long ts = (long) time(nullptr);
                 auto seen = g_seen.find(key);
-                bool should_log = !key.empty() &&
+                // 等級 1（小型）不具雷達參考價值；也排除尚未解析出有效等級的資料。
+                bool should_log = level >= 2 && !key.empty() &&
                     (seen == g_seen.end() || seen->second.finish_ms != finishMs ||
                      seen->second.challenger_count != challengerCount ||
                      seen->second.total_power != totalPower ||
