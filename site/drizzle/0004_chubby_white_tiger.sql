@@ -1,0 +1,1 @@
+CREATE UNIQUE INDEX `scan_targets_job_sequence_uidx` ON `scan_targets` (`job_id`,`sequence`);

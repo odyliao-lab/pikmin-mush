@@ -1,4 +1,4 @@
-import { index, integer, real, sqliteTable, text } from "drizzle-orm/sqlite-core";
+import { index, integer, real, sqliteTable, text, uniqueIndex } from "drizzle-orm/sqlite-core";
 
 export const mushrooms = sqliteTable("mushrooms", {
   id: text("id").primaryKey(),
@@ -126,4 +126,5 @@ export const scanTargets = sqliteTable("scan_targets", {
   index("scan_targets_claim_idx").on(table.jobId, table.status, table.cycle),
   index("scan_targets_lease_idx").on(table.leaseExpiresAt),
   index("scan_targets_agent_idx").on(table.leaseAgentId, table.status),
+  uniqueIndex("scan_targets_job_sequence_uidx").on(table.jobId, table.sequence),
 ]);

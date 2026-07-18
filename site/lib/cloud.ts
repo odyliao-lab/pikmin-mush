@@ -152,6 +152,8 @@ export async function ensureSchema() {
       ON scan_targets (lease_expires_at)`),
     db.prepare(`CREATE INDEX IF NOT EXISTS scan_targets_agent_idx
       ON scan_targets (lease_agent_id, status)`),
+    db.prepare(`CREATE UNIQUE INDEX IF NOT EXISTS scan_targets_job_sequence_uidx
+      ON scan_targets (job_id, sequence)`),
   ]);
   const now = Date.now();
   await db.batch([

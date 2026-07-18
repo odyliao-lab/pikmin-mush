@@ -184,23 +184,65 @@ async function writeScannerStatus(
   ).bind(JSON.stringify(status), Math.floor(now / 1000)).run();
 }
 
-export async function materializeTargets(jobId: number, plan = [] as ReturnType<typeof parseJobPlan>) {
+export async function materializeTargets(
+  jobId: number,
+  plan = [] as ReturnType<typeof parseJobPlan>,
+  options: { cycle?: number; completedBefore?: number } = {},
+) {
   const db = runtime().DB;
   const job = await db.prepare("SELECT * FROM scan_jobs WHERE id=?")
     .bind(jobId).first<ScanJobRow>();
   if (!job) throw new Error("scan job missing");
   const targets = plan.length ? plan : parseJobPlan(job);
   const now = Date.now();
+  const cycle = options.cycle ?? Number(job.cycle);
+  const completedBefore = Math.max(0, options.completedBefore ?? 0);
   for (let offset = 0; offset < targets.length; offset += 75) {
     await db.batch(targets.slice(offset, offset + 75).map((target, index) =>
-      db.prepare(`INSERT INTO scan_targets (
+      db.prepare(`INSERT OR IGNORE INTO scan_targets (
         job_id, sequence, cycle, country, city, lat, lng, region_index,
-        point_index, base_cooldown_s, status, created_at, updated_at
-      ) VALUES (?, ?, 0, ?, ?, ?, ?, ?, ?, ?, 'queued', ?, ?)`)
-        .bind(jobId, offset + index, target.country, target.city,
+        point_index, base_cooldown_s, status, created_at, updated_at, completed_at
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`)
+        .bind(jobId, offset + index, cycle, target.country, target.city,
           target.lat, target.lng, target.regionIndex, target.pointIndex,
-          target.cooldownS, now, now)));
+          target.cooldownS, offset + index < completedBefore ? "completed" : "queued",
+          now, now, offset + index < completedBefore ? now : 0)));
   }
+}
+
+async function ensureJobTargets(job: ScanJobRow) {
+  const db = runtime().DB;
+  const count = await db.prepare(
+    "SELECT COUNT(*) AS count FROM scan_targets WHERE job_id=?",
+  ).bind(job.id).first<{ count: number }>();
+  if (Number(count?.count ?? 0) > 0) return;
+  let completedBefore = Math.max(0, Number(job.current_index));
+  if (!completedBefore) {
+    const scanner = await db.prepare(
+      "SELECT status_json FROM scanner_status WHERE id=1",
+    ).first();
+    try {
+      const status = JSON.parse(String(scanner?.status_json ?? "{}"));
+      const point = Number(status.point ?? 0);
+      const total = Number(status.total ?? 0);
+      if (total === Number(job.total_points) && point > 0 && point < total) {
+        completedBefore = point;
+      }
+    } catch {
+      completedBefore = 0;
+    }
+  }
+  await materializeTargets(job.id, parseJobPlan(job), {
+    cycle: Number(job.cycle),
+    completedBefore,
+  });
+  if (completedBefore !== Number(job.current_index)) {
+    await db.prepare("UPDATE scan_jobs SET current_index=?, updated_at=? WHERE id=?")
+      .bind(completedBefore, Date.now(), job.id).run();
+    job.current_index = completedBefore;
+  }
+  await appendScanLog(job.id, "info",
+    `既有工作已轉換為多 Agent 佇列，從 ${completedBefore}/${job.total_points} 續跑`);
 }
 
 async function releaseExpiredLeases(jobId: number, now: number) {
@@ -226,11 +268,12 @@ async function resetLoop(job: ScanJobRow) {
   const nextCycle = Number(job.cycle) + 1;
   const won = await db.prepare(`UPDATE scan_jobs SET cycle=?, current_index=0,
       updated_at=?, message=? WHERE id=? AND cycle=? AND loop=1
+      AND EXISTS (SELECT 1 FROM scan_targets WHERE job_id=?)
       AND NOT EXISTS (
         SELECT 1 FROM scan_targets WHERE job_id=? AND status IN ('queued','leased')
       )`)
     .bind(nextCycle, now, `第 ${nextCycle} 輪完成，重新分派掃描點`,
-      job.id, job.cycle, job.id).run();
+      job.id, job.cycle, job.id, job.id).run();
   if (!won.meta.changes) return false;
   await db.prepare(`UPDATE scan_targets SET cycle=?, status='queued',
       lease_agent_id='', lease_token='', lease_expires_at=0, captured_rows=0,
@@ -247,9 +290,10 @@ async function finishJobIfDone(job: ScanJobRow) {
   const result = await db.prepare(`UPDATE scan_jobs SET status='completed',
       finished_at=?, updated_at=?, message='所有掃描點已由 Agent 叢集完成'
     WHERE id=? AND status IN ('queued','running')
+      AND EXISTS (SELECT 1 FROM scan_targets WHERE job_id=?)
       AND NOT EXISTS (
         SELECT 1 FROM scan_targets WHERE job_id=? AND status IN ('queued','leased')
-      )`).bind(now, now, job.id, job.id).run();
+      )`).bind(now, now, job.id, job.id, job.id).run();
   if (result.meta.changes) {
     await appendScanLog(job.id, "info", "所有掃描點已完成");
     return true;
@@ -293,6 +337,7 @@ export async function claimTask(agent: ScanAgentRow): Promise<ClaimedTask | null
     await touchAgent(agent.id);
     return null;
   }
+  await ensureJobTargets(job);
   const now = Date.now();
   await releaseExpiredLeases(job.id, now);
   const existing = await db.prepare(`SELECT * FROM scan_targets
