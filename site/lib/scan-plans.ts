@@ -111,6 +111,35 @@ const ARGENTINA: Center[] = [
   ["聖菲 Santa Fe",-31.6333,-60.7000],["內烏肯 Neuquen",-38.9516,-68.0591],
 ];
 
+const SWEDEN: Center[] = [
+  ["斯德哥爾摩 Stockholm",59.3293,18.0686],["哥德堡 Gothenburg",57.7089,11.9746],
+  ["馬爾默 Malmo",55.6050,13.0038],["烏普薩拉 Uppsala",59.8586,17.6389],
+  ["韋斯特羅斯 Vasteras",59.6099,16.5448],["厄勒布魯 Orebro",59.2753,15.2134],
+];
+
+const NORWAY: Center[] = [
+  ["奧斯陸 Oslo",59.9139,10.7522],["卑爾根 Bergen",60.3913,5.3221],
+  ["特隆赫姆 Trondheim",63.4305,10.3951],["斯塔萬格 Stavanger",58.9700,5.7331],
+  ["特羅姆瑟 Tromso",69.6492,18.9553],["克里斯蒂安桑 Kristiansand",58.1467,7.9956],
+];
+
+const DENMARK: Center[] = [
+  ["哥本哈根 Copenhagen",55.6761,12.5683],["奧胡斯 Aarhus",56.1629,10.2039],
+  ["奧登斯 Odense",55.4038,10.4024],["奧爾堡 Aalborg",57.0488,9.9217],
+  ["埃斯比約 Esbjerg",55.4765,8.4594],
+];
+
+const FINLAND: Center[] = [
+  ["赫爾辛基 Helsinki",60.1699,24.9384],["埃斯波 Espoo",60.2055,24.6559],
+  ["坦佩雷 Tampere",61.4978,23.7610],["圖爾庫 Turku",60.4518,22.2666],
+  ["奧盧 Oulu",65.0121,25.4651],["于韋斯屈萊 Jyvaskyla",62.2426,25.7473],
+];
+
+const ICELAND: Center[] = [
+  ["雷克雅維克 Reykjavik",64.1466,-21.9426],["科帕沃于爾 Kopavogur",64.1110,-21.9087],
+  ["哈布納菲厄澤 Hafnarfjordur",64.0671,-21.9547],["阿克雷里 Akureyri",65.6885,-18.1262],
+];
+
 // 國家目錄是擴充的唯一入口。新增歐美國家時只需要加入一個定義，
 // 排程器、後台選項與 Agent 區域偏好都會自動沿用。
 export const COUNTRY_PACK_CATALOG = [
@@ -121,6 +150,11 @@ export const COUNTRY_PACK_CATALOG = [
   { id: "br", name: "巴西", region: "南美洲", cities: BRAZIL },
   { id: "ec", name: "厄瓜多", region: "南美洲", cities: ECUADOR },
   { id: "ar", name: "阿根廷", region: "南美洲", cities: ARGENTINA },
+  { id: "se", name: "瑞典", region: "北歐", cities: SWEDEN },
+  { id: "no", name: "挪威", region: "北歐", cities: NORWAY },
+  { id: "dk", name: "丹麥", region: "北歐", cities: DENMARK },
+  { id: "fi", name: "芬蘭", region: "北歐", cities: FINLAND },
+  { id: "is", name: "冰島", region: "北歐", cities: ICELAND },
 ] as const;
 
 export const COUNTRY_PACKS: Record<string, Center[]> = Object.fromEntries(

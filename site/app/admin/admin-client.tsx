@@ -61,6 +61,9 @@ type Dashboard = {
 };
 
 const ACTIVE = new Set(["queued", "running", "paused"]);
+const NORDIC_REGION_NAMES = COUNTRY_PACK_LABELS
+  .filter((pack) => pack.region === "北歐")
+  .map((pack) => pack.name);
 
 function statusLabel(status: string) {
   return ({
@@ -105,6 +108,8 @@ export default function AdminClient({
   const [notice, setNotice] = useState("");
   const [agentName, setAgentName] = useState("");
   const [agentRegions, setAgentRegions] = useState("");
+  const [editingAgentId, setEditingAgentId] = useState("");
+  const [editingAgentRegions, setEditingAgentRegions] = useState("");
   const [credential, setCredential] = useState<{ id: string; token: string } | null>(null);
 
   const refresh = useCallback(async () => {
@@ -252,6 +257,30 @@ export default function AdminClient({
     }
   };
 
+  const saveAgentRegions = async (agent: Agent) => {
+    setBusy(true);
+    setNotice("");
+    try {
+      const regionTags = editingAgentRegions.split(",")
+        .map((value) => value.trim()).filter(Boolean);
+      const response = await fetch("/api/admin/agents/action", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ agentId: agent.id, action: "update-regions", regionTags }),
+      });
+      const result = await response.json();
+      if (!response.ok) throw new Error(result.error ?? "區域偏好更新失敗");
+      setEditingAgentId("");
+      setEditingAgentRegions("");
+      setNotice(`${agent.name} 已更新為「優先指定國家、其餘任務候補」`);
+      await refresh();
+    } catch (error) {
+      setNotice(error instanceof Error ? error.message : String(error));
+    } finally {
+      setBusy(false);
+    }
+  };
+
   const job = dashboard?.job;
   const active = Boolean(job && ACTIVE.has(job.status));
   const progress = job?.total_points
@@ -341,7 +370,34 @@ export default function AdminClient({
                 {agent.version ? `・v${agent.version}` : ""}
               </small>
               <p>{agent.region_tags.length ? agent.region_tags.join("・") : "全球支援"}</p>
+              {editingAgentId === agent.id && (
+                <div className={styles.agentRegionEditor}>
+                  <label>
+                    <span>優先國家（逗號分隔；空白代表全球支援）</span>
+                    <input value={editingAgentRegions}
+                      onChange={(event) => setEditingAgentRegions(event.target.value)} />
+                  </label>
+                  <div>
+                    <button type="button" disabled={busy}
+                      onClick={() => setEditingAgentRegions(NORDIC_REGION_NAMES.join(","))}>
+                      套用北歐五國
+                    </button>
+                    <button type="button" className={styles.agentResume} disabled={busy}
+                      onClick={() => saveAgentRegions(agent)}>儲存偏好</button>
+                    <button type="button" disabled={busy}
+                      onClick={() => setEditingAgentId("")}>取消</button>
+                  </div>
+                  <small>新偏好會在目前掃描點完成後生效；北歐無待掃點時會接手其他地區。</small>
+                </div>
+              )}
               <div className={styles.agentActions}>
+                <button className={styles.agentToggle} disabled={busy}
+                  onClick={() => {
+                    setEditingAgentId(editingAgentId === agent.id ? "" : agent.id);
+                    setEditingAgentRegions(agent.region_tags.join(","));
+                  }}>
+                  {editingAgentId === agent.id ? "關閉區域設定" : "修改區域"}
+                </button>
                 {agent.enabled
                   ? <button
                       className={`${styles.agentToggle} ${agent.paused ? styles.agentResume : ""}`}
