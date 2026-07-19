@@ -16,6 +16,22 @@ then sets `LOCAL_DISPLAY=1` in the private phone config. It stops the old Agent 
 new Agent only after the trusted virtual display is healthy. USB may then remain disconnected.
 See `SPEC_ON_DEVICE_DISPLAY.md` for architecture, recovery, and verified tests.
 
+The installer acquires a phone-side lock before compiling, staging, or changing phone state.
+If the host process is interrupted, a later run fails closed instead of overlapping the still
+running remote installer. After confirming that the earlier installer has ended, recover a stale
+lock explicitly:
+
+```powershell
+powershell.exe -NoProfile -ExecutionPolicy Bypass `
+  -File .\phone_agent\install-local-display.ps1 `
+  -Serial ANDROID_ADB_SERIAL `
+  -RecoverStaleInstall
+```
+
+The recovery switch still refuses to clear the lock when its recorded, identity-matching phone
+installer process is alive. A new virtual display also force-stops and recreates the Pikmin task
+on the target display; a healthy existing display remains idempotent and does not restart the game.
+
 The installer refuses to run while the serial-scoped Windows Supervisor Scheduled Task, a
 recorded live Supervisor process, or a manually started Windows headless scrcpy session exists.
 Remove the Task and stop any manual session first:
