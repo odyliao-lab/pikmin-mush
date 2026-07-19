@@ -17,14 +17,17 @@ $supervisorStatePath = Join-Path $env:LOCALAPPDATA "CodexTools\pikmin-supervisor
 $compiler = Join-Path $NdkPath `
     'toolchains\llvm\prebuilt\windows-x86_64\bin\aarch64-linux-android28-clang.cmd'
 $drainOutput = Join-Path $env:TEMP "pikmin-localvd-drain-$safeSerial"
+$identityScript = Join-Path $scriptDirectory 'windows-process-identity.ps1'
 
 foreach ($path in @($AdbPath, $ScrcpyServerPath, $compiler,
         (Join-Path $scriptDirectory 'local-display.sh'),
         (Join-Path $scriptDirectory 'localvd-drain.c'),
         (Join-Path $scriptDirectory 'agent.sh'),
-        (Join-Path $scriptDirectory 'service.sh'))) {
+        (Join-Path $scriptDirectory 'service.sh'),
+        $identityScript)) {
     if (-not (Test-Path -LiteralPath $path)) { throw "Required file not found: $path" }
 }
+. $identityScript
 
 function Invoke-Adb {
     param([Parameter(ValueFromRemainingArguments = $true)][string[]]$Arguments)
@@ -38,10 +41,6 @@ function Invoke-Root {
 }
 
 function Get-HeadlessScrcpyProcess {
-    $serialPattern = '(?i)(?:^|\s)"?--serial(?:=|\s+)"?' +
-        [regex]::Escape($Serial) + '"?(?=\s|$)'
-    $markerPattern = '(?i)(?:^|\s)"?--window-title=' +
-        [regex]::Escape("PikminHeadless-$safeSerial") + '"?(?=\s|$)'
     try {
         $scrcpyProcesses = @(Get-CimInstance Win32_Process -Filter "Name='scrcpy.exe'" `
             -ErrorAction Stop)
@@ -50,13 +49,12 @@ function Get-HeadlessScrcpyProcess {
     }
     foreach ($process in $scrcpyProcesses) {
         $commandLine = [string]$process.CommandLine
-        if ($commandLine -notmatch $serialPattern) { continue }
-        $isMarkedSession = $commandLine -match $markerPattern -or
-            $commandLine -match '(?i)--window-title=PikminHeadlessDisplay(?:"|\s|$)'
-        $isLegacyVirtual = $commandLine -match '(?i)--new-display=720x1600/320' -and
-            $commandLine -match '(?i)--start-app=com\.nianticlabs\.pikmin'
-        $isLegacyScreenOff = $commandLine -match '(?i)--turn-screen-off' -and
-            $commandLine -match '(?i)--no-window'
+        $isMarkedSession = Test-PikminHeadlessCommandLine -CommandLine $commandLine `
+            -Serial $Serial -Marker "PikminHeadless-$safeSerial"
+        $isLegacyVirtual = Test-PikminHeadlessCommandLine -CommandLine $commandLine `
+            -Serial $Serial -LegacyMode 'virtual'
+        $isLegacyScreenOff = Test-PikminHeadlessCommandLine -CommandLine $commandLine `
+            -Serial $Serial -LegacyMode 'screen-off'
         if ($isMarkedSession -or $isLegacyVirtual -or $isLegacyScreenOff) { return $process }
     }
     return $null

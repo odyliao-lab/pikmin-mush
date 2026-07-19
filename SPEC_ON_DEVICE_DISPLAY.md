@@ -313,7 +313,8 @@ powershell.exe -NoProfile -ExecutionPolicy Bypass `
 1. 驗證 ADB、root 與 ABI。
 2. 若同 serial 的 Windows Supervisor Scheduled Task、Supervisor 程序或手動啟動的 Windows
    headless scrcpy session 仍存在，立即中止，不對手機做任何部署。scrcpy 偵測同時比對
-   `--serial` 與 serial-scoped `--window-title` marker，並相容辨識舊版 headless 參數。
+   `--serial` 與 serial-scoped `--window-title` marker；舊版 virtual／screen-off 只有在完整
+   固定參數與正確 serial 全部符合時才視為受管理 session。
 3. 使用 NDK 編譯 PIE ARM64 `localvd-drain`。
 4. 推送到固定 staging directory。
 5. 先停止舊 manager 與 cmdline 身分相符的舊 Agent，避免雙 owner 與舊 Agent 繼續把遊戲

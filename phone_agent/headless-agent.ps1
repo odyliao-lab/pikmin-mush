@@ -15,6 +15,9 @@ $ErrorActionPreference = 'Stop'
 $packageName = 'com.nianticlabs.pikmin'
 $activityName = 'com.nianticproject.ichigo.IchigoUnityPlayerActivity'
 $displayFile = '/data/adb/modules/pikmin_scanner_agent/game.display'
+$identityScript = Join-Path $PSScriptRoot 'windows-process-identity.ps1'
+if (-not (Test-Path -LiteralPath $identityScript)) { throw "identity helper not found: $identityScript" }
+. $identityScript
 
 function Invoke-Adb {
     param([Parameter(ValueFromRemainingArguments = $true)][string[]]$Arguments)
@@ -73,16 +76,14 @@ function Get-ManagedProcess($State) {
     if (-not $State -or -not $State.pid -or $State.serial -ne $script:deviceSerial) { return $null }
     $candidate = Get-Process -Id ([int]$State.pid) -ErrorAction SilentlyContinue
     if (-not $candidate -or $candidate.ProcessName -ne 'scrcpy') { return $null }
-    $expectedMarker = if ($State.marker) { [string]$State.marker } else { 'PikminHeadlessDisplay' }
     try {
         $commandLine = (Get-CimInstance Win32_Process -Filter `
             "ProcessId=$($candidate.Id)" -ErrorAction Stop).CommandLine
     } catch { return $null }
-    $serialPattern = '(?i)(?:^|\s)"?--serial(?:=|\s+)"?' +
-        [regex]::Escape($script:deviceSerial) + '"?(?=\s|$)'
-    $markerPattern = '(?i)(?:^|\s)"?--window-title=' +
-        [regex]::Escape($expectedMarker) + '"?(?=\s|$)'
-    if ($commandLine -notmatch $serialPattern -or $commandLine -notmatch $markerPattern) {
+    $marker = if ($State.marker) { [string]$State.marker } else { '' }
+    $legacyMode = if ($State.marker) { '' } else { [string]$State.mode }
+    if (-not (Test-PikminHeadlessCommandLine -CommandLine $commandLine `
+            -Serial $script:deviceSerial -Marker $marker -LegacyMode $legacyMode)) {
         return $null
     }
     return $candidate
@@ -140,6 +141,13 @@ if ($Action -eq 'stop') {
     $state = Read-State
     if ($state) {
         $managedProcess = Get-ManagedProcess $state
+        $statePidProcess = if ($state.pid) {
+            Get-Process -Id ([int]$state.pid) -ErrorAction SilentlyContinue
+        } else { $null }
+        if (-not $managedProcess -and $statePidProcess -and
+            $statePidProcess.ProcessName -eq 'scrcpy') {
+            throw "State PID $($state.pid) is a live scrcpy process, but serial/session identity could not be verified. State was preserved; inspect the process manually."
+        }
         if ($managedProcess) {
             Clear-DeviceDisplay
             Stop-Process -Id $managedProcess.Id -ErrorAction SilentlyContinue

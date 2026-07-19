@@ -79,6 +79,18 @@ marker `--window-title=PikminHeadless-<safe-serial>`. A state-file PID is never 
 proof of ownership: process name, exact serial, and marker must all match before status treats
 it as healthy or lifecycle code may stop it.
 
+Upgrade compatibility is centralized in `phone_agent/windows-process-identity.ps1`. A state
+without `marker` may be accepted only through one of these complete legacy signatures:
+
+- `virtual`: correct serial plus every fixed legacy virtual/display/window argument, including
+  `--window-title=PikminHeadlessDisplay`.
+- `screen-off`: correct serial plus `--stay-awake`, `--no-audio`, `--turn-screen-off`,
+  `--no-window`, `--max-size=640`, and `--max-fps=2`.
+
+If a state PID is a live `scrcpy.exe` but neither current nor legacy identity can be proven,
+`stop` must preserve the state and fail explicitly. It must not clear state and start a second
+session.
+
 ## 5. Health model
 
 Each poll records:
@@ -151,9 +163,11 @@ limit for the Supervisor process.
    intervention.
 5. `stop` leaves scanning alive; `shutdown` clears display state and stops scrcpy.
 6. During a 30-minute run, TSV/Agent progress continues and no duplicate Agent parent appears.
-7. Replace the state PID with another phone's live scrcpy PID; status must reject it and stop/
-   recovery must not terminate that process.
-8. With `LOCAL_DISPLAY=1`, a live local-display daemon, or a healthy on-device display, both
+7. Run `phone_agent/tests/windows-process-identity.tests.ps1`; current marker, legacy virtual,
+   and legacy screen-off must match, while every case with another phone serial is rejected.
+8. Replace the state PID with an unverifiable live scrcpy PID; `stop` must preserve state and
+   recovery must not terminate it or start a replacement.
+9. With `LOCAL_DISPLAY=1`, a live local-display daemon, or a healthy on-device display, both
    direct Windows start and Scheduled Task installation must fail before creating scrcpy.
 
 ### 9.1 Verified on Redmi Note 10 5G

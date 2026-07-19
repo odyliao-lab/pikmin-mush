@@ -49,6 +49,12 @@ Windows scrcpy processes are owned by an exact `(PID, process name, ADB serial, 
 identity. The marker is `PikminHeadless-<safe-serial>`; PID and process name alone must never be
 used to stop a session in a multi-phone deployment.
 
+For upgrades, legacy virtual and screen-off sessions without the new serial marker are accepted
+only when their complete fixed argument signature and serial match. The shared rules live in
+`windows-process-identity.ps1` and are covered by
+`tests/windows-process-identity.tests.ps1`. A live scrcpy at the state PID with an unverifiable
+identity causes `stop` to preserve state and fail for manual inspection.
+
 ## Requirements
 
 - The phone is connected by ADB and the `pikmin_scanner_agent` Magisk module is installed.

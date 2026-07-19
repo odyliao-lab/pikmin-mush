@@ -14,6 +14,9 @@ $activityName = 'com.nianticproject.ichigo.IchigoUnityPlayerActivity'
 $agentModule = '/data/adb/modules/pikmin_scanner_agent'
 $displayFile = "$agentModule/game.display"
 $headlessScript = Join-Path $PSScriptRoot 'headless-agent.ps1'
+$identityScript = Join-Path $PSScriptRoot 'windows-process-identity.ps1'
+if (-not (Test-Path -LiteralPath $identityScript)) { throw "identity helper not found: $identityScript" }
+. $identityScript
 
 $config = if ($ConfigPath) {
     Get-Content -LiteralPath $ConfigPath -Raw | ConvertFrom-Json
@@ -105,16 +108,14 @@ function Get-HeadlessProcess($State) {
     if (-not $State -or -not $State.pid -or $State.serial -ne $deviceSerial) { return $null }
     $candidate = Get-Process -Id ([int]$State.pid) -ErrorAction SilentlyContinue
     if (-not $candidate -or $candidate.ProcessName -ne 'scrcpy') { return $null }
-    $expectedMarker = if ($State.marker) { [string]$State.marker } else { 'PikminHeadlessDisplay' }
     try {
         $commandLine = (Get-CimInstance Win32_Process -Filter `
             "ProcessId=$($candidate.Id)" -ErrorAction Stop).CommandLine
     } catch { return $null }
-    $serialPattern = '(?i)(?:^|\s)"?--serial(?:=|\s+)"?' +
-        [regex]::Escape($deviceSerial) + '"?(?=\s|$)'
-    $markerPattern = '(?i)(?:^|\s)"?--window-title=' +
-        [regex]::Escape($expectedMarker) + '"?(?=\s|$)'
-    if ($commandLine -notmatch $serialPattern -or $commandLine -notmatch $markerPattern) {
+    $marker = if ($State.marker) { [string]$State.marker } else { '' }
+    $legacyMode = if ($State.marker) { '' } else { [string]$State.mode }
+    if (-not (Test-PikminHeadlessCommandLine -CommandLine $commandLine `
+            -Serial $deviceSerial -Marker $marker -LegacyMode $legacyMode)) {
         return $null
     }
     return $candidate
