@@ -20,6 +20,8 @@ test("ships the public mushroom map and protected scan console", async () => {
   assert.match(map, /api\/mushrooms/);
   assert.doesNotMatch(map, /id="lv1"/);
   assert.match(map, /\[2,3,4\]/);
+  assert.match(map, /DEFAULT_HIDDEN_TYPES=new Set\(\['15'\]\)/);
+  assert.match(map, /!DEFAULT_HIDDEN_TYPES\.has\(v\)/);
   assert.match(adminPage, /requireChatGPTUser\("\/admin"\)/);
   assert.match(adminPage, /isAdminEmail/);
   assert.match(adminClient, /建立掃描工作/);
