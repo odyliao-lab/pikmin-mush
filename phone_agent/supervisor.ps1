@@ -101,11 +101,23 @@ function Invoke-AdbRoot([string]$Command) {
     return $output
 }
 
-function Get-ProcessByNameAndId($ProcessId, [string]$Name) {
-    if (-not $ProcessId) { return $null }
-    $candidate = Get-Process -Id ([int]$ProcessId) -ErrorAction SilentlyContinue
-    if ($candidate -and $candidate.ProcessName -eq $Name) { return $candidate }
-    return $null
+function Get-HeadlessProcess($State) {
+    if (-not $State -or -not $State.pid -or $State.serial -ne $deviceSerial) { return $null }
+    $candidate = Get-Process -Id ([int]$State.pid) -ErrorAction SilentlyContinue
+    if (-not $candidate -or $candidate.ProcessName -ne 'scrcpy') { return $null }
+    $expectedMarker = if ($State.marker) { [string]$State.marker } else { 'PikminHeadlessDisplay' }
+    try {
+        $commandLine = (Get-CimInstance Win32_Process -Filter `
+            "ProcessId=$($candidate.Id)" -ErrorAction Stop).CommandLine
+    } catch { return $null }
+    $serialPattern = '(?i)(?:^|\s)"?--serial(?:=|\s+)"?' +
+        [regex]::Escape($deviceSerial) + '"?(?=\s|$)'
+    $markerPattern = '(?i)(?:^|\s)"?--window-title=' +
+        [regex]::Escape($expectedMarker) + '"?(?=\s|$)'
+    if ($commandLine -notmatch $serialPattern -or $commandLine -notmatch $markerPattern) {
+        return $null
+    }
+    return $candidate
 }
 
 function Get-SupervisorProcess($State) {
@@ -114,7 +126,10 @@ function Get-SupervisorProcess($State) {
     if (-not $candidate -or $candidate.ProcessName -notin @('powershell', 'pwsh')) { return $null }
     try {
         $commandLine = (Get-CimInstance Win32_Process -Filter "ProcessId=$($candidate.Id)").CommandLine
-        if ($commandLine -notmatch [regex]::Escape($PSCommandPath) -or $commandLine -notmatch '\brun\b') {
+        $serialPattern = '(?i)(?:^|\s)-Serial\s+"?' +
+            [regex]::Escape($deviceSerial) + '"?(?=\s|$)'
+        if ($commandLine -notmatch [regex]::Escape($PSCommandPath) -or
+            $commandLine -notmatch '\brun\b' -or $commandLine -notmatch $serialPattern) {
             return $null
         }
     } catch { return $null }
@@ -170,7 +185,7 @@ function Get-DeviceSnapshot {
 
     $headlessState = Read-JsonFile $headlessStatePath
     $scrcpy = if ($headlessState) {
-        Get-ProcessByNameAndId $headlessState.pid 'scrcpy'
+        Get-HeadlessProcess $headlessState
     } else { $null }
     $snapshot.headlessRunning = [bool]$scrcpy
     if ($headlessState -and $headlessState.displayId -ne $null) {

@@ -74,6 +74,11 @@ The underlying headless session state is also serial-scoped at
 `%LOCALAPPDATA%\CodexTools\pikmin-headless\<adb-serial>\state.json`, so multiple nodes do
 not overwrite each other.
 
+Every managed scrcpy command line includes both `--serial <adb-serial>` and the serial-scoped
+marker `--window-title=PikminHeadless-<safe-serial>`. A state-file PID is never sufficient
+proof of ownership: process name, exact serial, and marker must all match before status treats
+it as healthy or lifecycle code may stop it.
+
 ## 5. Health model
 
 Each poll records:
@@ -117,7 +122,10 @@ Recovery uses a configurable cooldown to prevent restart storms.
 ## 7. Safety invariants
 
 - Validate ADB serial and use exact device-scoped commands.
-- Validate managed Windows PIDs by process name before stopping them.
+- Validate managed Windows PIDs by process name, exact ADB serial, and serial-scoped command-line
+  marker before stopping them. This prevents PID reuse from targeting another phone's scrcpy.
+- Refuse Windows headless start and Scheduled Task installation while phone config has
+  `LOCAL_DISPLAY=1`.
 - Clear `game.display` before destroying its scrcpy virtual display.
 - A stale/missing display id makes `agent.sh` fall back to display 0.
 - Preserve phone token, config, offset, pending ACK, TSV, and scan leases during recovery.
@@ -143,6 +151,10 @@ limit for the Supervisor process.
    intervention.
 5. `stop` leaves scanning alive; `shutdown` clears display state and stops scrcpy.
 6. During a 30-minute run, TSV/Agent progress continues and no duplicate Agent parent appears.
+7. Replace the state PID with another phone's live scrcpy PID; status must reject it and stop/
+   recovery must not terminate that process.
+8. With `LOCAL_DISPLAY=1`, a live local-display daemon, or a healthy on-device display, both
+   direct Windows start and Scheduled Task installation must fail before creating scrcpy.
 
 ### 9.1 Verified on Redmi Note 10 5G
 

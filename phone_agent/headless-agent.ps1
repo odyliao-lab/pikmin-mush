@@ -70,10 +70,32 @@ function Read-State {
 }
 
 function Get-ManagedProcess($State) {
-    if (-not $State) { return $null }
-    $candidate = Get-Process -Id $State.pid -ErrorAction SilentlyContinue
-    if ($candidate -and $candidate.ProcessName -eq 'scrcpy') { return $candidate }
-    return $null
+    if (-not $State -or -not $State.pid -or $State.serial -ne $script:deviceSerial) { return $null }
+    $candidate = Get-Process -Id ([int]$State.pid) -ErrorAction SilentlyContinue
+    if (-not $candidate -or $candidate.ProcessName -ne 'scrcpy') { return $null }
+    $expectedMarker = if ($State.marker) { [string]$State.marker } else { 'PikminHeadlessDisplay' }
+    try {
+        $commandLine = (Get-CimInstance Win32_Process -Filter `
+            "ProcessId=$($candidate.Id)" -ErrorAction Stop).CommandLine
+    } catch { return $null }
+    $serialPattern = '(?i)(?:^|\s)"?--serial(?:=|\s+)"?' +
+        [regex]::Escape($script:deviceSerial) + '"?(?=\s|$)'
+    $markerPattern = '(?i)(?:^|\s)"?--window-title=' +
+        [regex]::Escape($expectedMarker) + '"?(?=\s|$)'
+    if ($commandLine -notmatch $serialPattern -or $commandLine -notmatch $markerPattern) {
+        return $null
+    }
+    return $candidate
+}
+
+function Assert-OnDeviceDisplayDisabled {
+    $module = '/data/adb/modules/pikmin_scanner_agent'
+    $ownerStatus = (Invoke-AdbRoot @"
+if test -f $module/config; then . $module/config; fi; echo LOCAL=`${LOCAL_DISPLAY:-0}; daemon_pid=`$(cat /data/local/tmp/pikmin-local-display-runtime/daemon.pid 2>/dev/null || true); if test -n "`$daemon_pid" && kill -0 "`$daemon_pid" 2>/dev/null && grep -Fq "local-display.sh daemon" /proc/`$daemon_pid/cmdline 2>/dev/null; then echo DAEMON=1; else echo DAEMON=0; fi; if test -x $module/local-display.sh && $module/local-display.sh status >/dev/null 2>&1; then echo DISPLAY=1; else echo DISPLAY=0; fi
+"@) -join "`n"
+    if ($ownerStatus -match '(?m)^(LOCAL|DAEMON|DISPLAY)=1\s*$') {
+        throw 'On-device display ownership is still enabled or running. Set LOCAL_DISPLAY=0 and stop the local display daemon before starting Windows headless mode.'
+    }
 }
 
 function Show-Status {
@@ -97,6 +119,7 @@ if (-not (Test-Path -LiteralPath $AdbPath)) { throw "adb not found: $AdbPath" }
 $script:deviceSerial = Resolve-DeviceSerial
 Invoke-Adb get-state | Out-Null
 $safeSerial = $script:deviceSerial -replace '[^A-Za-z0-9_.-]', '_'
+$sessionMarker = "PikminHeadless-$safeSerial"
 $stateDirectory = Join-Path $env:LOCALAPPDATA "CodexTools\pikmin-headless\$safeSerial"
 $statePath = Join-Path $stateDirectory 'state.json'
 $legacyStatePath = Join-Path $env:LOCALAPPDATA 'CodexTools\pikmin-headless\state.json'
@@ -115,23 +138,26 @@ if ($Action -eq 'status') {
 
 if ($Action -eq 'stop') {
     $state = Read-State
-    Clear-DeviceDisplay
     if ($state) {
         $managedProcess = Get-ManagedProcess $state
-        if ($managedProcess) { Stop-Process -Id $managedProcess.Id -ErrorAction SilentlyContinue }
-        Start-Sleep -Seconds 2
-        Remove-Item -LiteralPath $statePath -Force -ErrorAction SilentlyContinue
-        if ($state.mode -eq 'virtual') {
-            Invoke-Adb shell am start --display 0 -n "$packageName/$activityName" | Out-Null
-        } else {
-            Invoke-Adb shell input keyevent KEYCODE_WAKEUP | Out-Null
+        if ($managedProcess) {
+            Clear-DeviceDisplay
+            Stop-Process -Id $managedProcess.Id -ErrorAction SilentlyContinue
+            Start-Sleep -Seconds 2
+            if ($state.mode -eq 'virtual') {
+                Invoke-Adb shell am start --display 0 -n "$packageName/$activityName" | Out-Null
+            } else {
+                Invoke-Adb shell input keyevent KEYCODE_WAKEUP | Out-Null
+            }
         }
+        Remove-Item -LiteralPath $statePath -Force -ErrorAction SilentlyContinue
     }
     Show-Status
     exit
 }
 
 if (-not (Test-Path -LiteralPath $ScrcpyPath)) { throw "scrcpy not found: $ScrcpyPath" }
+Assert-OnDeviceDisplayDisabled
 $oldState = Read-State
 if (Get-ManagedProcess $oldState) {
     throw "Headless session already running (PID $($oldState.pid)). Stop it first."
@@ -143,12 +169,15 @@ $displaysBefore = (Invoke-Adb shell cmd display get-displays) -join "`n"
 $existingDisplayIds = @([regex]::Matches($displaysBefore, 'Display id (\d+):[^\r\n]*scrcpy') |
     ForEach-Object { [int]$_.Groups[1].Value })
 
-$scrcpyArguments = @('--serial', $script:deviceSerial, '--stay-awake', '--no-audio')
+$scrcpyArguments = @(
+    '--serial', $script:deviceSerial, '--stay-awake', '--no-audio',
+    "--window-title=$sessionMarker"
+)
 if ($Mode -eq 'virtual') {
     $scrcpyArguments += @(
         '--new-display=720x1600/320', "--start-app=$packageName", '--keep-active',
         '--max-fps=1', '--video-bit-rate=100K', '--window-x=-2000', '--window-y=-2000',
-        '--window-width=64', '--window-height=64', '--window-title=PikminHeadlessDisplay'
+        '--window-width=64', '--window-height=64'
     )
 } else {
     $scrcpyArguments += @('--turn-screen-off', '--no-window', '--max-size=640', '--max-fps=2')
@@ -190,6 +219,7 @@ if ($Mode -eq 'virtual') {
     mode = $Mode
     displayId = $displayId
     serial = $script:deviceSerial
+    marker = $sessionMarker
     startedAt = (Get-Date).ToString('o')
 } | ConvertTo-Json | Set-Content -LiteralPath $statePath -Encoding utf8
 

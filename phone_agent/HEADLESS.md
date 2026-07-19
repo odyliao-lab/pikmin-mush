@@ -16,8 +16,9 @@ then sets `LOCAL_DISPLAY=1` in the private phone config. It stops the old Agent 
 new Agent only after the trusted virtual display is healthy. USB may then remain disconnected.
 See `SPEC_ON_DEVICE_DISPLAY.md` for architecture, recovery, and verified tests.
 
-The installer refuses to run while the serial-scoped Windows Supervisor Scheduled Task or a
-recorded live Supervisor process exists. Remove it first with:
+The installer refuses to run while the serial-scoped Windows Supervisor Scheduled Task, a
+recorded live Supervisor process, or a manually started Windows headless scrcpy session exists.
+Remove the Task and stop any manual session first:
 
 ```powershell
 powershell.exe -NoProfile -ExecutionPolicy Bypass -File `
@@ -43,6 +44,10 @@ hidden display session and can start, inspect, or stop it through ADB.
 The phone Agent reads `game.display` from its Magisk module directory. Launches, recovery
 restarts, and confirmation key events are sent to that display. If scrcpy disconnects and
 the display disappears, the Agent rejects the stale id and falls back to the main display.
+
+Windows scrcpy processes are owned by an exact `(PID, process name, ADB serial, session marker)`
+identity. The marker is `PikminHeadless-<safe-serial>`; PID and process name alone must never be
+used to stop a session in a multi-phone deployment.
 
 ## Requirements
 
@@ -112,3 +117,7 @@ powershell.exe -NoProfile -ExecutionPolicy Bypass -File `
   .\phone_agent\install-supervisor-task.ps1 install `
   -Serial 7lw8ibvghe6dtof6 -Mode virtual
 ```
+
+Both this installer and `headless-agent.ps1 start` refuse Windows ownership while the phone
+config contains `LOCAL_DISPLAY=1`, the validated daemon PID is alive, or its local display is
+healthy. Disable and stop the on-device daemon before switching modes.

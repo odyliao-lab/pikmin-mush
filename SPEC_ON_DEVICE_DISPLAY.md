@@ -311,8 +311,9 @@ powershell.exe -NoProfile -ExecutionPolicy Bypass `
 安裝器會：
 
 1. 驗證 ADB、root 與 ABI。
-2. 若同 serial 的 Windows Supervisor Scheduled Task 或 Supervisor 程序仍存在，立即中止，
-   不對手機做任何部署。
+2. 若同 serial 的 Windows Supervisor Scheduled Task、Supervisor 程序或手動啟動的 Windows
+   headless scrcpy session 仍存在，立即中止，不對手機做任何部署。scrcpy 偵測同時比對
+   `--serial` 與 serial-scoped `--window-title` marker，並相容辨識舊版 headless 參數。
 3. 使用 NDK 編譯 PIE ARM64 `localvd-drain`。
 4. 推送到固定 staging directory。
 5. 先停止舊 manager 與 cmdline 身分相符的舊 Agent，避免雙 owner 與舊 Agent 繼續把遊戲
@@ -322,6 +323,11 @@ powershell.exe -NoProfile -ExecutionPolicy Bypass `
 8. 設定 `LOCAL_DISPLAY=1`。
 9. 透過新版 `service.sh` 啟動 display；確認 healthy 後才啟動新版 `agent.sh`。
 10. 最多等待 90 秒直到 `status` healthy。
+
+步驟 5 之後的任何錯誤都會進入自動 rollback：保留原始安裝錯誤供呼叫端診斷，同時嘗試
+設定 `LOCAL_DISPLAY=0`、停止 daemon/workers、移除 `game.display`、把 Pikmin Activity 拉回
+display 0，並直接啟動且驗證 Agent。若 rollback 本身有步驟失敗，另以 warning 回報，但
+最後仍拋出原始安裝錯誤，不以 rollback 訊息覆蓋根因。
 
 ### 13.3 scrcpy 升級注意
 
@@ -370,6 +376,8 @@ powershell.exe -NoProfile -ExecutionPolicy Bypass `
 |---|---|
 | Root/ABI | `su -c id` 為 uid 0；ABI 有對應 drain binary。 |
 | Cold start | 90 秒內 manager status healthy。 |
+| Install rollback | 注入 server／drain 啟動失敗；最後為 `LOCAL_DISPLAY=0`、無 local daemon、遊戲在 display 0、Agent 存活，且呼叫端收到原始錯誤。 |
+| Owner mutex | Windows headless 存活時 autonomous installer 拒絕；local flag／daemon／display 任一存在時 Windows start 拒絕。 |
 | Display flags | display 為 trusted/always-unlocked，owner shell UID 2000。 |
 | Game launch | Pikmin 是該 display 的 `topResumedActivity`。 |
 | Physical screen | Display 0 可關閉；virtual display 維持 `ON`。 |
@@ -455,6 +463,9 @@ Android major version 上通過第 15 節矩陣。
 
 ## 18. 回退方案
 
+`install-local-display.ps1` 在安裝或 90 秒健康檢查失敗時會自動執行本節動作。以下命令供
+操作者主動切回 Windows 模式或自動 rollback 也無法連線手機時使用。
+
 停用 autonomous display：
 
 ```sh
@@ -465,8 +476,11 @@ am start --display 0 -n \
   com.nianticlabs.pikmin/com.nianticproject.ichigo.IchigoUnityPlayerActivity
 ```
 
-若要恢復 Windows Supervisor，再重新安裝該手機 serial 的 Scheduled Task。不要讓兩套
-display owner 同時啟用，否則雙方會競爭 `game.display` 並反覆移動遊戲 Activity。
+若要恢復 Windows Supervisor，再重新安裝該手機 serial 的 Scheduled Task。Task 安裝器與
+`headless-agent.ps1 start` 都會檢查手機 config、daemon PID 身分及 local display health；
+任一仍表示 on-device owner 存在，就拒絕建立 Windows owner。反方向的 autonomous
+安裝器也會拒絕既有 Supervisor／headless scrcpy。這是程式強制的雙向互斥，不只依賴
+操作流程。
 
 ## 19. 安全不變量
 
