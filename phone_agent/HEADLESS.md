@@ -16,6 +16,16 @@ then sets `LOCAL_DISPLAY=1` in the private phone config. It stops the old Agent 
 new Agent only after the trusted virtual display is healthy. USB may then remain disconnected.
 See `SPEC_ON_DEVICE_DISPLAY.md` for architecture, recovery, and verified tests.
 
+Boot recovery is bounded: every framework display probe has a timeout, and a display that is
+still recovering after the boot wait no longer prevents the cloud Agent from starting. The
+display daemon continues rebuilding in the background while the Agent uses its existing
+display-0 fallback.
+
+For phone-only manual recovery, open Magisk, find `Pikmin Scanner Agent`, and tap its
+**Action** button. The installed `action.sh` stops only cmdline-validated processes owned by
+this module, performs a cold display restart, starts exactly one Agent parent, and writes
+`manual-recovery.log`. This does not require USB, ADB, or the Windows Supervisor.
+
 The installer refuses to run while the serial-scoped Windows Supervisor Scheduled Task, a
 recorded live Supervisor process, or a manually started Windows headless scrcpy session exists.
 Remove the Task and stop any manual session first:

@@ -273,7 +273,10 @@ $adb = 'C:\Program Files\Netease\MuMuPlayer\nx_main\adb.exe'
 - 遊戲在虛擬 display resumed，實體 display 可關閉或操作其他 App。
 - Server／drain 死亡時，daemon 驗證 PID 身分後重建 display 並更新 `game.display`。
 - Worker replacement 會等待舊程序與 display 完全消失，避免殘留 socket 或重複 display。
-- `service.sh` 會先等 display healthy 才啟動 Agent，避免遊戲競態回到 display 0。
+- `service.sh` 以有界 probe 等待 display healthy；逾時時 daemon 繼續背景修復，Agent
+  仍會啟動並使用 display 0 fallback，避免 framework status 卡住後整台永久離線。
+- Magisk 模組提供 `action.sh`；手機端按模組 **Action** 可冷重啟 display 與唯一 Agent，
+  不需要 USB 或 ADB，結果寫入 `manual-recovery.log`。
 - 安裝失敗會自動設回 `LOCAL_DISPLAY=0`、停止 daemon、回到 display 0 並重啟 Agent；原始
   安裝錯誤仍會向外拋出。
 - Windows 與 on-device owner 是雙向互斥；Windows scrcpy 身分必須同時符合 PID、程序名、

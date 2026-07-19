@@ -18,13 +18,14 @@ SCID="50494b4d"
 SOCKET_NAME="scrcpy_$SCID"
 SIZE="${PIKMIN_LOCAL_DISPLAY_SIZE:-720x1600}"
 DPI="${PIKMIN_LOCAL_DISPLAY_DPI:-320}"
+STATUS_TIMEOUT_SECONDS="${PIKMIN_LOCAL_DISPLAY_STATUS_TIMEOUT:-8}"
 PACKAGE="com.nianticlabs.pikmin"
 ACTIVITY="com.nianticproject.ichigo.IchigoUnityPlayerActivity"
 
 alive() {
   pid="$(cat "$1" 2>/dev/null || true)"
   [ -n "$pid" ] && kill -0 "$pid" 2>/dev/null || return 1
-  command_line="$(tr '\000' ' ' <"/proc/$pid/cmdline" 2>/dev/null || true)"
+  command_line="$(tr '\000' ' ' 2>/dev/null <"/proc/$pid/cmdline" || true)"
   case "$1" in
     *server.pid) echo "$command_line" | grep -Eq 'scrcpy.Server|local-display.sh internal-server' ;;
     *drain.pid) echo "$command_line" | grep -Eq 'localvd-drain|local-display.sh internal-drain' ;;
@@ -34,7 +35,9 @@ alive() {
 }
 
 display_present() {
-  [ -n "$1" ] && dumpsys display 2>/dev/null | grep -Eq "mDisplayId=$1([^0-9]|$)"
+  [ -n "$1" ] &&
+    timeout -k 2 "$STATUS_TIMEOUT_SECONDS" dumpsys display 2>/dev/null |
+      grep -Eq "mDisplayId=$1([^0-9]|$)"
 }
 
 stop_worker() {
