@@ -34,19 +34,51 @@ alive() {
 }
 
 display_present() {
-  [ -n "$1" ] && dumpsys display 2>/dev/null | grep -q "mDisplayId=$1"
+  [ -n "$1" ] && dumpsys display 2>/dev/null | grep -Eq "mDisplayId=$1([^0-9]|$)"
 }
 
 stop_worker() {
   pid_file="$1"
   pid="$(cat "$pid_file" 2>/dev/null || true)"
-  alive "$pid_file" && kill "$pid" 2>/dev/null || true
+  if ! alive "$pid_file"; then
+    rm -f "$pid_file"
+    return 0
+  fi
+
+  kill "$pid" 2>/dev/null || true
+  attempt=0
+  while alive "$pid_file" && [ "$attempt" -lt 50 ]; do
+    sleep 0.1
+    attempt=$((attempt + 1))
+  done
+  if alive "$pid_file"; then
+    kill -9 "$pid" 2>/dev/null || true
+    attempt=0
+    while alive "$pid_file" && [ "$attempt" -lt 20 ]; do
+      sleep 0.1
+      attempt=$((attempt + 1))
+    done
+  fi
+  if alive "$pid_file"; then
+    echo "Worker did not stop: $pid" >&2
+    return 1
+  fi
   rm -f "$pid_file"
 }
 
 stop_workers() {
-  stop_worker "$DRAIN_PID_FILE"
-  stop_worker "$SERVER_PID_FILE"
+  old_display_id="$(display_id_from_log)"
+  stop_worker "$DRAIN_PID_FILE" || return 1
+  stop_worker "$SERVER_PID_FILE" || return 1
+  attempt=0
+  while display_present "$old_display_id" && [ "$attempt" -lt 50 ]; do
+    sleep 0.1
+    attempt=$((attempt + 1))
+  done
+  if display_present "$old_display_id"; then
+    echo "Virtual display did not disappear: $old_display_id" >&2
+    return 1
+  fi
 }
 
 display_id_from_log() {
@@ -79,7 +111,7 @@ case "$ACTION" in
       fi
     fi
 
-    stop_workers
+    stop_workers || exit 1
 
     [ -r "$SERVER_JAR" ] || { echo "Missing $SERVER_JAR" >&2; exit 1; }
     [ -x "$DRAIN_BIN" ] || { echo "Missing executable $DRAIN_BIN" >&2; exit 1; }
@@ -164,17 +196,22 @@ case "$ACTION" in
   stop)
     daemon_pid="$(cat "$DAEMON_PID_FILE" 2>/dev/null || true)"
     if alive "$DAEMON_PID_FILE" && [ "$daemon_pid" != "$$" ]; then
-      kill "$daemon_pid" 2>/dev/null || true
+      # The daemon is a setsid session leader. Terminate its process group so an
+      # in-flight `local-display.sh start` child cannot publish replacement workers
+      # after stop_workers has finished.
+      kill -TERM "-$daemon_pid" 2>/dev/null || kill "$daemon_pid" 2>/dev/null || true
       attempt=0
       while kill -0 "$daemon_pid" 2>/dev/null && [ "$attempt" -lt 20 ]; do
         sleep 0.1
         attempt=$((attempt + 1))
       done
-      kill -9 "$daemon_pid" 2>/dev/null || true
+      if alive "$DAEMON_PID_FILE"; then
+        kill -9 "$daemon_pid" 2>/dev/null || true
+      fi
       rm -f "$DAEMON_PID_FILE"
     fi
     display_id="$(display_id_from_log)"
-    stop_workers
+    stop_workers || exit 1
     if [ -f "$DISPLAY_FILE" ]; then
       configured="$(cat "$DISPLAY_FILE" 2>/dev/null || true)"
       [ -z "$display_id" ] || [ "$configured" = "$display_id" ] && rm -f "$DISPLAY_FILE"

@@ -272,6 +272,8 @@ $adb = 'C:\Program Files\Netease\MuMuPlayer\nx_main\adb.exe'
 - `localvd-drain` 只連手機本機 abstract socket，不需要 PC、ADB 或網路串流。
 - 遊戲在虛擬 display resumed，實體 display 可關閉或操作其他 App。
 - Server／drain 死亡時，daemon 驗證 PID 身分後重建 display 並更新 `game.display`。
+- Worker replacement 會等待舊程序與 display 完全消失，避免殘留 socket 或重複 display。
+- `service.sh` 會先等 display healthy 才啟動 Agent，避免遊戲競態回到 display 0。
 - 已通過 Doze、ADB 中斷、server SIGKILL 與兩次 reboot 實機驗證。
 - 完整架構、狀態機、安裝、故障診斷與第二 Agent 流程見 `SPEC_ON_DEVICE_DISPLAY.md`。
 
@@ -538,9 +540,10 @@ powershell.exe -NoProfile -ExecutionPolicy Bypass `
   -Serial ANDROID_ADB_SERIAL
 ```
 
-安裝器會保留 private config/token、編譯 native drain、部署 scrcpy server、設定
-`LOCAL_DISPLAY=1` 並等待 healthy。On-device daemon 與 Windows Supervisor 不可同時管理
-同一手機；autonomous 模式應移除該 serial 的 Windows Scheduled Task。
+安裝器會保留 private config/token、編譯 native drain、同步部署並重啟新版 `agent.sh`、
+部署 scrcpy server、設定 `LOCAL_DISPLAY=1` 並等待 healthy。On-device daemon 與 Windows
+Supervisor 不可同時管理同一手機；若該 serial 的 Scheduled Task 或已記錄的 Supervisor
+程序仍存在，安裝器會直接拒絕部署，必須先停止並移除。
 
 ---
 

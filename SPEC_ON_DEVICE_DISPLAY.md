@@ -225,6 +225,7 @@ Android boot
   -> parse dynamic display id from server.log
   -> write game.display
   -> am start --display N Pikmin
+  -> service.sh waits until local-display.sh status is healthy
   -> validate/start agent.sh with cmdline-safe PID check
 ```
 
@@ -236,6 +237,8 @@ Android boot
 1. 驗證既有 server PID、drain PID 與 display。
 2. 若三者健康：重寫正確 `game.display` 後回傳成功，保持冪等。
 3. 若任一不健康：只終止 cmdline 身分符合的 worker。
+   對每個 worker 先送 TERM 並等待，逾時才對同一個已驗證 PID 送 SIGKILL；確認程序與舊
+   display 都消失前不得刪除 PID file 或建立 replacement worker。
 4. 驗證 `scrcpy-server` 可讀、`localvd-drain` 可執行。
 5. 建立 mode `0700` runtime directory。
 6. 以 `nohup setsid` 啟動 server，父程序立即用 `$!` 發布 PID。
@@ -279,9 +282,11 @@ Healthy 必須同時成立：
 
 ### 12.1 Daemon stop 保證
 
-Daemon 可能正同步執行最長約 60 秒的 start retry。`stop` 先發 TERM、最多等待 2 秒，
-仍存活才對已通過身分驗證的 daemon PID 發 SIGKILL。這避免舊 daemon 與新 daemon 同時
-重建、互相殺 worker。
+Daemon 可能正同步執行最長約 60 秒的 start retry。daemon 由 `setsid` 啟動，因此 `stop`
+先對已驗證 daemon 的 process group 發 TERM，連同進行中的 `start` child 一起停止；最多
+等待 2 秒後，仍存活才對已通過身分驗證的 daemon PID 發 SIGKILL。接著逐一停止並等待
+drain、server 與舊 display 消失。這避免舊 daemon／start child 在新 daemon 建立後又發布
+一組 worker。
 
 ## 13. 安裝與升級
 
@@ -306,13 +311,17 @@ powershell.exe -NoProfile -ExecutionPolicy Bypass `
 安裝器會：
 
 1. 驗證 ADB、root 與 ABI。
-2. 使用 NDK 編譯 PIE ARM64 `localvd-drain`。
-3. 推送到固定 staging directory。
-4. 先停止舊 manager，避免覆寫執行中的 native binary 出現 `Text file busy`。
-5. 複製 manager、service、drain 與 scrcpy server 到 Magisk module。
-6. 保留既有 config、token、offset、log 與 TSV。
-7. 設定 `LOCAL_DISPLAY=1`。
-8. 啟動 daemon，最多等待 90 秒直到 `status` healthy。
+2. 若同 serial 的 Windows Supervisor Scheduled Task 或 Supervisor 程序仍存在，立即中止，
+   不對手機做任何部署。
+3. 使用 NDK 編譯 PIE ARM64 `localvd-drain`。
+4. 推送到固定 staging directory。
+5. 先停止舊 manager 與 cmdline 身分相符的舊 Agent，避免雙 owner 與舊 Agent 繼續把遊戲
+   啟動到 display 0。
+6. 複製 `agent.sh`、manager、service、drain 與 scrcpy server 到 Magisk module。
+7. 保留既有 config、token、offset、log 與 TSV。
+8. 設定 `LOCAL_DISPLAY=1`。
+9. 透過新版 `service.sh` 啟動 display；確認 healthy 後才啟動新版 `agent.sh`。
+10. 最多等待 90 秒直到 `status` healthy。
 
 ### 13.3 scrcpy 升級注意
 

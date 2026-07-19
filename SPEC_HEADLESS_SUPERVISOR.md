@@ -108,8 +108,11 @@ Recovery uses a configurable cooldown to prevent restart storms.
    replacement PID.
 4. **Game not resumed**: allow `GameResumeGraceSeconds`; then launch the explicit activity on
    the configured display. Agent-level force-stop recovery remains owned by `agent.sh`.
-5. **Repeated failure**: continue monitoring but cap automatic recovery attempts within a
-   rolling run. Record `degraded` and the exact error for operator inspection.
+5. **Repeated failure**: cap consecutive automatic recovery attempts to prevent a restart
+   storm. A completely healthy pass resets the counter immediately. If the cap is reached
+   while the node remains degraded, `recoveryResetSeconds` (default 300 seconds) resets the
+   circuit and permits another bounded attempt window. Record `degraded` and the exact error
+   during the wait.
 
 ## 7. Safety invariants
 
@@ -126,6 +129,9 @@ Recovery uses a configurable cooldown to prevent restart storms.
 `supervisor.config.example.json` documents the supported keys. A deployment may pass a private
 config path or override the ADB serial on the command line. Credentials are not part of the
 Supervisor configuration.
+
+`maxRecoveryAttempts` is therefore a consecutive-failure circuit breaker, not a lifetime
+limit for the Supervisor process.
 
 ## 9. Acceptance tests
 

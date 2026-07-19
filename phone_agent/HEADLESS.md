@@ -11,10 +11,19 @@ powershell.exe -NoProfile -ExecutionPolicy Bypass `
   -Serial ANDROID_ADB_SERIAL
 ```
 
-This installs a Magisk-booted phone watchdog, creates the trusted virtual display locally,
-and sets `LOCAL_DISPLAY=1` in the private phone config. USB and the Windows Supervisor may
-then remain disconnected. See `SPEC_ON_DEVICE_DISPLAY.md` for architecture, recovery, and
-verified tests.
+This installs the current `agent.sh`, a Magisk-booted phone watchdog, and the display assets,
+then sets `LOCAL_DISPLAY=1` in the private phone config. It stops the old Agent and starts the
+new Agent only after the trusted virtual display is healthy. USB may then remain disconnected.
+See `SPEC_ON_DEVICE_DISPLAY.md` for architecture, recovery, and verified tests.
+
+The installer refuses to run while the serial-scoped Windows Supervisor Scheduled Task or a
+recorded live Supervisor process exists. Remove it first with:
+
+```powershell
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File `
+  .\phone_agent\install-supervisor-task.ps1 uninstall `
+  -Serial ANDROID_ADB_SERIAL
+```
 
 The Windows modes below remain useful for interactive debugging and screen viewing, but are
 not required by autonomous phone mode.

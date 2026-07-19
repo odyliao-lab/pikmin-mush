@@ -6,6 +6,7 @@
   "pollSeconds": 10,
   "gameResumeGraceSeconds": 45,
   "recoveryCooldownSeconds": 20,
+  "recoveryResetSeconds": 300,
   "tsvStaleWarningSeconds": 900,
   "maxRecoveryAttempts": 20,
   "logMaxBytes": 5242880

@@ -11,7 +11,16 @@ if [ -f "$MODDIR/config" ]; then
 fi
 
 if [ "${LOCAL_DISPLAY:-0}" = "1" ] && [ -x "$MODDIR/local-display.sh" ]; then
-  "$MODDIR/local-display.sh" start-daemon >>"$MODDIR/local-display-boot.log" 2>&1
+  "$MODDIR/local-display.sh" start-daemon >>"$MODDIR/local-display-boot.log" 2>&1 || exit 1
+  DISPLAY_ATTEMPT=0
+  until "$MODDIR/local-display.sh" status >/dev/null 2>&1; do
+    if [ "$DISPLAY_ATTEMPT" -ge 90 ]; then
+      echo "[service] local display did not become healthy" >>"$MODDIR/local-display-boot.log"
+      exit 1
+    fi
+    sleep 1
+    DISPLAY_ATTEMPT=$((DISPLAY_ATTEMPT + 1))
+  done
 fi
 
 if [ -f "$MODDIR/agent.pid" ]; then

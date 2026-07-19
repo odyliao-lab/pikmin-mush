@@ -32,6 +32,7 @@ $effectiveMode = if ($Mode) { $Mode } else { [string](Get-ConfigValue 'mode' 'vi
 $pollSeconds = [int](Get-ConfigValue 'pollSeconds' 10)
 $gameResumeGraceSeconds = [int](Get-ConfigValue 'gameResumeGraceSeconds' 45)
 $recoveryCooldownSeconds = [int](Get-ConfigValue 'recoveryCooldownSeconds' 20)
+$recoveryResetSeconds = [int](Get-ConfigValue 'recoveryResetSeconds' 300)
 $tsvStaleWarningSeconds = [int](Get-ConfigValue 'tsvStaleWarningSeconds' 900)
 $maxRecoveryAttempts = [int](Get-ConfigValue 'maxRecoveryAttempts' 20)
 $logMaxBytes = [long](Get-ConfigValue 'logMaxBytes' 5242880)
@@ -186,7 +187,7 @@ function Get-DeviceSnapshot {
         $snapshot.displayPresent = ($effectiveMode -eq 'screen-off' -and $snapshot.headlessRunning)
     }
 
-    $snapshot.gamePid = (Invoke-Adb shell pidof $packageName | Out-String).Trim()
+    $snapshot.gamePid = (Invoke-Adb shell "pidof $packageName 2>/dev/null || true" | Out-String).Trim()
     $activities = (Invoke-Adb shell dumpsys activity activities) -join "`n"
     $resumedLines = $activities -split "`r?`n" |
         Where-Object { $_ -match 'topResumedActivity|ResumedActivity:' }
@@ -221,7 +222,13 @@ if ($previousState) {
 if (-not $runtime.lastTsvGrowthAt) { $runtime.lastTsvGrowthAt = Get-Date }
 
 function Can-Recover {
-    if ($runtime.recoveryAttempts -ge $maxRecoveryAttempts) { return $false }
+    if ($runtime.recoveryAttempts -ge $maxRecoveryAttempts) {
+        $resetDue = $runtime.lastRecoveryAt -and
+            ((Get-Date) - $runtime.lastRecoveryAt).TotalSeconds -ge $recoveryResetSeconds
+        if (-not $resetDue) { return $false }
+        Write-Log 'INFO' "recovery circuit reset after $recoveryResetSeconds seconds"
+        $runtime.recoveryAttempts = 0
+    }
     if (-not $runtime.lastRecoveryAt) { return $true }
     return ((Get-Date) - $runtime.lastRecoveryAt).TotalSeconds -ge $recoveryCooldownSeconds
 }
@@ -320,6 +327,10 @@ function Invoke-HealthPass {
     $stale = ((Get-Date) - $runtime.lastTsvGrowthAt).TotalSeconds -ge $tsvStaleWarningSeconds
     $healthy = $device.headlessRunning -and $device.displayPresent -and
         $device.gameResumed -and $device.agentAlive
+    if ($healthy -and $runtime.recoveryAttempts -gt 0) {
+        Write-Log 'INFO' 'recovery counter reset after a healthy pass'
+        $runtime.recoveryAttempts = 0
+    }
     $status = if ($healthy -and -not $stale) { 'healthy' } else { 'degraded' }
     if ($stale) { $runtime.lastError = "TSV has not grown for at least $tsvStaleWarningSeconds seconds" }
     elseif ($healthy) { $runtime.lastError = '' }
