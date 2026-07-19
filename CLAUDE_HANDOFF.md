@@ -279,7 +279,8 @@ $adb = 'C:\Program Files\Netease\MuMuPlayer\nx_main\adb.exe'
 - Windows 與 on-device owner 是雙向互斥；Windows scrcpy 身分必須同時符合 PID、程序名、
   ADB serial 與 serial-scoped marker。
 - 舊版無 marker session 由 `windows-process-identity.ps1` 嚴格比對完整 virtual／screen-off
-  固定參數；活著但無法驗證的 scrcpy 必須保留 state 並報錯，禁止另開 replacement。
+  固定參數；活著但無法驗證的 scrcpy 在 start、stop 與 Supervisor recovery 都必須保留
+  state 並報錯，禁止另開 replacement。
 - 已通過 Doze、ADB 中斷、server SIGKILL 與兩次 reboot 實機驗證。
 - 完整架構、狀態機、安裝、故障診斷與第二 Agent 流程見 `SPEC_ON_DEVICE_DISPLAY.md`。
 

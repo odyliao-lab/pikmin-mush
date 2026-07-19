@@ -44,3 +44,17 @@ function Test-PikminHeadlessCommandLine {
     }
     return $true
 }
+
+function Get-PikminHeadlessStateDisposition {
+    param(
+        [bool]$StatePidAlive,
+        [string]$StatePidProcessName = '',
+        [bool]$IdentityVerified
+    )
+
+    if ($IdentityVerified) { return 'managed' }
+    if ($StatePidAlive -and $StatePidProcessName -eq 'scrcpy') {
+        return 'unverified-live-scrcpy'
+    }
+    return 'replaceable'
+}

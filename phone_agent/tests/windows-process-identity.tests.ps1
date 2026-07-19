@@ -37,4 +37,19 @@ if (Test-PikminHeadlessCommandLine -CommandLine $incompleteScreenOff -Serial $se
     throw 'Accepted incomplete legacy screen-off identity.'
 }
 
+$unverifiedDisposition = Get-PikminHeadlessStateDisposition `
+    -StatePidAlive $true -StatePidProcessName 'scrcpy' -IdentityVerified $false
+if ($unverifiedDisposition -ne 'unverified-live-scrcpy') {
+    throw 'An unverifiable live scrcpy did not fail closed.'
+}
+if ($unverifiedDisposition -eq 'replaceable') {
+    throw 'An unverifiable live scrcpy was allowed to start a replacement session.'
+}
+
+$deadDisposition = Get-PikminHeadlessStateDisposition `
+    -StatePidAlive $false -StatePidProcessName '' -IdentityVerified $false
+if ($deadDisposition -ne 'replaceable') {
+    throw 'A dead stale state should permit replacement.'
+}
+
 Write-Host 'Windows process identity regression tests passed.'

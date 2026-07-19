@@ -88,8 +88,9 @@ without `marker` may be accepted only through one of these complete legacy signa
   `--no-window`, `--max-size=640`, and `--max-fps=2`.
 
 If a state PID is a live `scrcpy.exe` but neither current nor legacy identity can be proven,
-`stop` must preserve the state and fail explicitly. It must not clear state and start a second
-session.
+both `start` and `stop` must preserve the state and fail explicitly. Supervisor recovery receives
+the same failure from `stop`, so it cannot continue to `start`. No path may clear state and start
+a second session.
 
 ## 5. Health model
 
@@ -165,8 +166,8 @@ limit for the Supervisor process.
 6. During a 30-minute run, TSV/Agent progress continues and no duplicate Agent parent appears.
 7. Run `phone_agent/tests/windows-process-identity.tests.ps1`; current marker, legacy virtual,
    and legacy screen-off must match, while every case with another phone serial is rejected.
-8. Replace the state PID with an unverifiable live scrcpy PID; `stop` must preserve state and
-   recovery must not terminate it or start a replacement.
+8. Replace the state PID with an unverifiable live scrcpy PID; direct `start` and `stop` must
+   preserve state, and recovery must not terminate it or start a replacement.
 9. With `LOCAL_DISPLAY=1`, a live local-display daemon, or a healthy on-device display, both
    direct Windows start and Scheduled Task installation must fail before creating scrcpy.
 

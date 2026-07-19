@@ -89,6 +89,30 @@ function Get-ManagedProcess($State) {
     return $candidate
 }
 
+function Get-StatePidProcess($State) {
+    if (-not $State -or -not $State.pid) { return $null }
+    return Get-Process -Id ([int]$State.pid) -ErrorAction SilentlyContinue
+}
+
+function Get-StateDisposition($State, $ManagedProcess) {
+    $statePidProcess = Get-StatePidProcess $State
+    $processName = if ($statePidProcess) { $statePidProcess.ProcessName } else { '' }
+    return (Get-PikminHeadlessStateDisposition `
+        -StatePidAlive ([bool]$statePidProcess) `
+        -StatePidProcessName $processName `
+        -IdentityVerified ([bool]$ManagedProcess))
+}
+
+function Assert-StateAllowsReplacement($State, $ManagedProcess) {
+    $disposition = Get-StateDisposition $State $ManagedProcess
+    if ($disposition -eq 'managed') {
+        throw "Headless session already running (PID $($State.pid)). Stop it first."
+    }
+    if ($disposition -eq 'unverified-live-scrcpy') {
+        throw "State PID $($State.pid) is a live scrcpy process, but serial/session identity could not be verified. State was preserved; refusing to start a replacement session."
+    }
+}
+
 function Assert-OnDeviceDisplayDisabled {
     $module = '/data/adb/modules/pikmin_scanner_agent'
     $ownerStatus = (Invoke-AdbRoot @"
@@ -141,11 +165,7 @@ if ($Action -eq 'stop') {
     $state = Read-State
     if ($state) {
         $managedProcess = Get-ManagedProcess $state
-        $statePidProcess = if ($state.pid) {
-            Get-Process -Id ([int]$state.pid) -ErrorAction SilentlyContinue
-        } else { $null }
-        if (-not $managedProcess -and $statePidProcess -and
-            $statePidProcess.ProcessName -eq 'scrcpy') {
+        if ((Get-StateDisposition $state $managedProcess) -eq 'unverified-live-scrcpy') {
             throw "State PID $($state.pid) is a live scrcpy process, but serial/session identity could not be verified. State was preserved; inspect the process manually."
         }
         if ($managedProcess) {
@@ -167,9 +187,8 @@ if ($Action -eq 'stop') {
 if (-not (Test-Path -LiteralPath $ScrcpyPath)) { throw "scrcpy not found: $ScrcpyPath" }
 Assert-OnDeviceDisplayDisabled
 $oldState = Read-State
-if (Get-ManagedProcess $oldState) {
-    throw "Headless session already running (PID $($oldState.pid)). Stop it first."
-}
+$oldManagedProcess = Get-ManagedProcess $oldState
+Assert-StateAllowsReplacement $oldState $oldManagedProcess
 
 Clear-DeviceDisplay
 

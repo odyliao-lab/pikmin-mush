@@ -54,6 +54,8 @@ only when their complete fixed argument signature and serial match. The shared r
 `windows-process-identity.ps1` and are covered by
 `tests/windows-process-identity.tests.ps1`. A live scrcpy at the state PID with an unverifiable
 identity causes `stop` to preserve state and fail for manual inspection.
+The same fail-closed disposition is checked before `start`, so it cannot create a replacement
+beside an unverifiable live scrcpy; Supervisor recovery stops at the same guard.
 
 ## Requirements
 
