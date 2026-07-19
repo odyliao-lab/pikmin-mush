@@ -59,6 +59,11 @@ test("includes durable multi-agent leases, v2 protocol routes, and migrations", 
   assert.match(cloud, /CREATE TABLE IF NOT EXISTS scan_jobs/);
   assert.match(cloud, /ADMIN_EMAILS/);
   assert.match(plan, /COUNTRY_PACK_CATALOG/);
+  assert.match(plan, /name: "瑞典", region: "北歐"/);
+  assert.match(plan, /name: "挪威", region: "北歐"/);
+  assert.match(plan, /name: "丹麥", region: "北歐"/);
+  assert.match(plan, /name: "芬蘭", region: "北歐"/);
+  assert.match(plan, /name: "冰島", region: "北歐"/);
   assert.match(plan, /buildScanPlan/);
   assert.match(fleet, /releaseExpiredLeases/);
   assert.match(fleet, /lease_token/);
@@ -72,8 +77,10 @@ test("includes durable multi-agent leases, v2 protocol routes, and migrations", 
   assert.match(schema, /paused: integer\("paused"\)/);
   assert.match(fleet, /if \(agent\.paused\)/);
   assert.match(control, /if \(agent\.paused\) return plain\("pause\\n"\)/);
-  assert.match(agentAction, /\["enable", "disable", "pause", "resume"\]/);
+  assert.match(agentAction, /\["enable", "disable", "pause", "resume", "update-regions"\]/);
+  assert.match(agentAction, /region_tags_json=\?/);
   assert.match(adminClient, /繼續掃描/);
+  assert.match(adminClient, /套用北歐五國/);
   assert.match(pauseMigration, /ADD `paused` integer DEFAULT 0 NOT NULL/);
   assert.match(cloud, /SELECT paused FROM scan_agents LIMIT 1/);
   await access(new URL("dist/server/index.js", root));

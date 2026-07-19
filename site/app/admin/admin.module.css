@@ -91,6 +91,41 @@
   font-weight: 800;
 }
 .agentActions { display: flex; gap: 8px; flex-wrap: wrap; }
+.agentGrid .agentRegionEditor {
+  margin-top: 10px;
+  padding: 10px;
+  display: grid;
+  gap: 8px;
+  border: 1px solid #cfe0ca;
+  border-radius: 10px;
+  background: #f1f8ee;
+}
+.agentRegionEditor label { display: grid; gap: 5px; }
+.agentRegionEditor label span, .agentRegionEditor > small {
+  color: #687766;
+  font-size: 11px;
+  font-weight: 700;
+}
+.agentRegionEditor input {
+  box-sizing: border-box;
+  width: 100%;
+  padding: 8px 9px;
+  border: 1px solid #cbd7c7;
+  border-radius: 8px;
+  background: white;
+}
+.agentRegionEditor > div { display: flex; gap: 7px; flex-wrap: wrap; }
+.agentRegionEditor button {
+  padding: 6px 9px;
+  border: 1px solid #c7d3c3;
+  border-radius: 8px;
+  color: #4d6251;
+  background: white;
+  font-size: 11px;
+  font-weight: 800;
+  cursor: pointer;
+}
+.agentRegionEditor button.agentResume { color: white; border-color: #438b5c; background: #438b5c; }
 .agentToggle {
   margin-top: 9px;
   padding: 6px 9px;
