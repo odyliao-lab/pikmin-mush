@@ -2,6 +2,7 @@
 MODDIR=${0%/*}
 CONFIG="$MODDIR/config"
 PKG="com.nianticlabs.pikmin"
+GAME_ACTIVITY="com.nianticproject.ichigo.IchigoUnityPlayerActivity"
 APP_FILES="/data/user/0/$PKG/files"
 TSV="$APP_FILES/mushrooms.tsv"
 TELEPORT="$APP_FILES/teleport.txt"
@@ -10,6 +11,7 @@ SEQ_FILE="$MODDIR/last.seq"
 CHUNK="$MODDIR/upload.chunk"
 RESPONSE="$MODDIR/curl.response"
 SCAN_PENDING="$MODDIR/scan.pending"
+DISPLAY_FILE="$MODDIR/game.display"
 
 if [ ! -f "$CONFIG" ]; then
   echo "[agent] missing $CONFIG"
@@ -79,24 +81,55 @@ upload_new() {
   return 1
 }
 
+game_display_id() {
+  DISPLAY_ID="$(cat "$DISPLAY_FILE" 2>/dev/null)"
+  case "$DISPLAY_ID" in ''|*[!0-9]*) return 1 ;; esac
+  su -Z u:r:shell:s0 2000 -c "cmd display get-displays" 2>/dev/null |
+    grep -q "Display id $DISPLAY_ID:" || return 1
+  echo "$DISPLAY_ID"
+}
+
+launch_game() {
+  DISPLAY_ID="$(game_display_id)"
+  if [ -n "$DISPLAY_ID" ]; then
+    su -Z u:r:shell:s0 2000 -c \
+      "am start --display $DISPLAY_ID -n $PKG/$GAME_ACTIVITY" >/dev/null 2>&1
+  else
+    su -Z u:r:shell:s0 2000 -c \
+      "monkey -p $PKG -c android.intent.category.LAUNCHER 1" >/dev/null 2>&1
+  fi
+}
+
+game_keyevent() {
+  KEY_NAME="$1"
+  DISPLAY_ID="$(game_display_id)"
+  if [ -n "$DISPLAY_ID" ]; then
+    su -Z u:r:shell:s0 2000 -c \
+      "input -d $DISPLAY_ID keyevent $KEY_NAME" >/dev/null 2>&1
+  else
+    su -Z u:r:shell:s0 2000 -c \
+      "input keyevent $KEY_NAME" >/dev/null 2>&1
+  fi
+}
+
+game_is_resumed() {
+  su -Z u:r:shell:s0 2000 -c "dumpsys activity activities" 2>/dev/null |
+    grep -E 'topResumedActivity|ResumedActivity:' |
+    grep -q "$PKG"
+}
+
 ensure_game_running() {
   if ! pidof "$PKG" >/dev/null 2>&1; then
-    su -Z u:r:shell:s0 2000 -c "monkey -p $PKG -c android.intent.category.LAUNCHER 1" >/dev/null 2>&1
+    launch_game
     sleep 25
-    su -Z u:r:shell:s0 2000 -c "input keyevent KEYCODE_ENTER"
-    su -Z u:r:shell:s0 2000 -c "input keyevent KEYCODE_DPAD_CENTER"
+    game_keyevent KEYCODE_ENTER
+    game_keyevent KEYCODE_DPAD_CENTER
     return
   fi
-  TOP="$(su -Z u:r:shell:s0 2000 -c "dumpsys activity activities" 2>/dev/null |
-    grep mResumedActivity | head -n 1)"
-  case "$TOP" in
-    *"$PKG"*) ;;
-    *)
-      su -Z u:r:shell:s0 2000 -c \
-        "monkey -p $PKG -c android.intent.category.LAUNCHER 1" >/dev/null 2>&1
-      sleep 8
-      ;;
-  esac
+  if ! game_is_resumed; then
+    launch_game
+    sleep 8
+  fi
 }
 
 number_or_zero() {
@@ -141,11 +174,10 @@ restart_game_for_scan() {
   echo "[scan] no new rows, restarting game session at current GPS"
   su -Z u:r:shell:s0 2000 -c "am force-stop $PKG" >/dev/null 2>&1
   interruptible_wait 2 "$RESTART_JOB" || return 2
-  su -Z u:r:shell:s0 2000 -c \
-    "monkey -p $PKG -c android.intent.category.LAUNCHER 1" >/dev/null 2>&1
+  launch_game
   interruptible_wait 25 "$RESTART_JOB" || return 2
-  su -Z u:r:shell:s0 2000 -c "input keyevent KEYCODE_ENTER" >/dev/null 2>&1
-  su -Z u:r:shell:s0 2000 -c "input keyevent KEYCODE_DPAD_CENTER" >/dev/null 2>&1
+  game_keyevent KEYCODE_ENTER
+  game_keyevent KEYCODE_DPAD_CENTER
   interruptible_wait 5 "$RESTART_JOB" || return 2
   [ -n "$(pidof "$PKG" 2>/dev/null)" ]
 }
@@ -216,8 +248,8 @@ execute_scan_task() {
   fi
   echo "[scan] $TASK_COUNTRY-$TASK_CITY $((TASK_INDEX + 1))/$TASK_TOTAL GPS=$TASK_LAT,$TASK_LNG"
   sleep 3
-  su -Z u:r:shell:s0 2000 -c "input keyevent KEYCODE_ENTER" >/dev/null 2>&1
-  su -Z u:r:shell:s0 2000 -c "input keyevent KEYCODE_DPAD_CENTER" >/dev/null 2>&1
+  game_keyevent KEYCODE_ENTER
+  game_keyevent KEYCODE_DPAD_CENTER
   if [ "$TASK_COOLDOWN" -gt 0 ]; then
     echo "[scan] cross-city cooldown ${TASK_COOLDOWN}s"
     interruptible_wait "$TASK_COOLDOWN" "$JOB_ID" || return
@@ -278,8 +310,7 @@ execute_command() {
       fi
       ;;
     confirm)
-      if su -Z u:r:shell:s0 2000 -c "input keyevent KEYCODE_ENTER" &&
-         su -Z u:r:shell:s0 2000 -c "input keyevent KEYCODE_DPAD_CENTER"; then
+      if game_keyevent KEYCODE_ENTER && game_keyevent KEYCODE_DPAD_CENTER; then
         ack "$seq" 1 "" ""
       else
         ack "$seq" 0 "" ""
@@ -289,10 +320,10 @@ execute_command() {
       OLD_PID="$(pidof "$PKG" 2>/dev/null)"
       su -Z u:r:shell:s0 2000 -c "am force-stop $PKG"
       sleep 2
-      su -Z u:r:shell:s0 2000 -c "monkey -p $PKG -c android.intent.category.LAUNCHER 1" >/dev/null 2>&1
+      launch_game
       sleep 25
-      su -Z u:r:shell:s0 2000 -c "input keyevent KEYCODE_ENTER"
-      su -Z u:r:shell:s0 2000 -c "input keyevent KEYCODE_DPAD_CENTER"
+      game_keyevent KEYCODE_ENTER
+      game_keyevent KEYCODE_DPAD_CENTER
       sleep 5
       NEW_PID="$(pidof "$PKG" 2>/dev/null)"
       if [ -n "$NEW_PID" ] && [ "$NEW_PID" != "$OLD_PID" ]; then

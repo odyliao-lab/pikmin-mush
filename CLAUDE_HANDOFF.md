@@ -184,15 +184,16 @@ $adb = 'C:\Program Files\Netease\MuMuPlayer\nx_main\adb.exe'
 
 1. `CLAUDE_HANDOFF.md`：本文件。
 2. `SPEC_GLOBAL_FLEET.md`：未來全球化與多 Agent 規格。
-3. `README.md`：專案入口。
-4. `SPEC_autoscan.md`：Zygisk hook、RVA、TSV 與歷史單機規格。
-5. `site/lib/fleet.ts`：v2 Agent 認證、租約與派工核心。
-6. `site/lib/scan-plans.ts`：國家、城市、網格與冷卻規則。
-7. `site/lib/cloud.ts`、`site/db/schema.ts`：D1 schema 與資料存取。
-8. `phone_agent/agent.sh`：手機端 v2 協定與自動恢復。
-9. `site/app/api/agent/v2/**`：v2 task/control/ack。
-10. `site/app/admin/admin-client.tsx`：Fleet 管理後台。
-11. `DEV_HISTORY.md`：走過的死路；遇到相同問題時再讀。
+3. `SPEC_ON_DEVICE_DISPLAY.md`：手機免電腦 virtual display、開機、恢復與多機部署規格。
+4. `README.md`：專案入口。
+5. `SPEC_autoscan.md`：Zygisk hook、RVA、TSV 與歷史單機規格。
+6. `site/lib/fleet.ts`：v2 Agent 認證、租約與派工核心。
+7. `site/lib/scan-plans.ts`：國家、城市、網格與冷卻規則。
+8. `site/lib/cloud.ts`、`site/db/schema.ts`：D1 schema 與資料存取。
+9. `phone_agent/agent.sh`：手機端 v2 協定與自動恢復。
+10. `site/app/api/agent/v2/**`：v2 task/control/ack。
+11. `site/app/admin/admin-client.tsx`：Fleet 管理後台。
+12. `DEV_HISTORY.md`：走過的死路；遇到相同問題時再讀。
 
 ---
 
@@ -263,6 +264,25 @@ $adb = 'C:\Program Files\Netease\MuMuPlayer\nx_main\adb.exe'
 - 沒有新增 TSV rows 時，同座標重啟遊戲 session。
 - 上傳使用 byte offset；網路失敗不推進 offset。
 - ACK 失敗寫入 `scan.pending`，恢復後重送。
+
+### 7.5 手機自主虛擬顯示
+
+- `LOCAL_DISPLAY=1` 時，由 Magisk `service.sh` 在 boot completed 後啟動 display daemon。
+- scrcpy 4.1 device server 在手機本機建立 trusted、always-unlocked virtual display。
+- `localvd-drain` 只連手機本機 abstract socket，不需要 PC、ADB 或網路串流。
+- 遊戲在虛擬 display resumed，實體 display 可關閉或操作其他 App。
+- Server／drain 死亡時，daemon 驗證 PID 身分後重建 display 並更新 `game.display`。
+- Worker replacement 會等待舊程序與 display 完全消失，避免殘留 socket 或重複 display。
+- `service.sh` 會先等 display healthy 才啟動 Agent，避免遊戲競態回到 display 0。
+- 安裝失敗會自動設回 `LOCAL_DISPLAY=0`、停止 daemon、回到 display 0 並重啟 Agent；原始
+  安裝錯誤仍會向外拋出。
+- Windows 與 on-device owner 是雙向互斥；Windows scrcpy 身分必須同時符合 PID、程序名、
+  ADB serial 與 serial-scoped marker。
+- 舊版無 marker session 由 `windows-process-identity.ps1` 嚴格比對完整 virtual／screen-off
+  固定參數；活著但無法驗證的 scrcpy 在 start、stop 與 Supervisor recovery 都必須保留
+  state 並報錯，禁止另開 replacement。
+- 已通過 Doze、ADB 中斷、server SIGKILL 與兩次 reboot 實機驗證。
+- 完整架構、狀態機、安裝、故障診斷與第二 Agent 流程見 `SPEC_ON_DEVICE_DISPLAY.md`。
 
 ---
 
@@ -516,6 +536,22 @@ git rev-parse origin/main
 8. log 必須顯示 `started id=... version=...`
 
 不要同時啟動兩個相同 `AGENT_ID`，否則兩個程序會爭用同一 lease 與 offset。
+
+### 11.5 安裝手機自主 display
+
+每支新 ARM64 root 手機完成 Agent config/token 後執行：
+
+```powershell
+powershell.exe -NoProfile -ExecutionPolicy Bypass `
+  -File .\phone_agent\install-local-display.ps1 `
+  -Serial ANDROID_ADB_SERIAL
+```
+
+安裝器會保留 private config/token、編譯 native drain、同步部署並重啟新版 `agent.sh`、
+部署 scrcpy server、設定 `LOCAL_DISPLAY=1` 並等待 healthy。On-device daemon 與 Windows
+Supervisor 不可同時管理同一手機；若該 serial 的 Scheduled Task、已記錄的 Supervisor
+程序或手動 headless scrcpy 仍存在，安裝器會直接拒絕部署，必須先停止並移除。反方向
+安裝 Windows Supervisor 或手動啟動 `headless-agent.ps1` 時，只要 `LOCAL_DISPLAY=1` 也會拒絕。
 
 ---
 
