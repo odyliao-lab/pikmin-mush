@@ -66,10 +66,27 @@ until [ "$(getprop sys.boot_completed)" = "1" ]; do
   sleep 5
 done
 
+# A locked Android 13 keyguard can leave Pikmin "resumed" on the trusted
+# virtual display while blocking its map/login flow. This is harmless on
+# devices without a secure credential and keeps unattended reboot recovery
+# from becoming a false-online, zero-output scanner.
+wm dismiss-keyguard >/dev/null 2>&1 || true
+
 if [ -f "$MODDIR/config" ]; then
   # shellcheck disable=SC1090
   . "$MODDIR/config"
 fi
+
+case "${WIFI_ADB_PORT:-0}" in
+  ''|0|*[!0-9]*) ;;
+  *)
+    setprop persist.adb.tcp.port "$WIFI_ADB_PORT"
+    setprop service.adb.tcp.port "$WIFI_ADB_PORT"
+    stop adbd
+    start adbd
+    log_service "Wi-Fi ADB requested on port $WIFI_ADB_PORT"
+    ;;
+esac
 
 if [ "${LOCAL_DISPLAY:-0}" = "1" ] && [ -x "$MODDIR/local-display.sh" ]; then
   if timeout -k 3 20 "$MODDIR/local-display.sh" start-daemon >>"$BOOT_LOG" 2>&1; then

@@ -5,3 +5,14 @@ TOKEN=''
 POLL_SECONDS='2'
 # 1 = create and supervise a trusted virtual display entirely on the phone.
 LOCAL_DISPLAY='0'
+# Event-driven map refresh. A timeout of 0 immediately uses the verified
+# cold-restart marker path, which is the current production default.
+MAP_REFRESH_EXPERIMENT='1'
+MAP_REFRESH_TIMEOUT_SECONDS='0'
+MAP_REFRESH_SETTLE_SECONDS='3'
+MAP_REFRESH_FALLBACK_TIMEOUT_SECONDS='40'
+# Default 720x1600 virtual-display coordinates for the two touch-only login
+# buttons that may appear after a reboot. Leave at 0 on other display sizes.
+STARTUP_TAP_X='360'
+STARTUP_CONTINUE_Y='752'
+STARTUP_LOGIN_CONTINUE_Y='860'

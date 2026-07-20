@@ -2,7 +2,7 @@
 param(
     [Parameter(Mandatory = $true)]
     [string]$Serial,
-    [string]$AdbPath = 'C:\Program Files\Netease\MuMuPlayer\nx_main\adb.exe',
+    [string]$AdbPath = "$env:LOCALAPPDATA\CodexTools\android-platform-tools\platform-tools\adb.exe",
     [string]$ScrcpyServerPath = "$env:LOCALAPPDATA\CodexTools\scrcpy-v4.1\scrcpy-server",
     [string]$NdkPath = "$env:LOCALAPPDATA\CodexTools\android-ndk\android-ndk-r27d"
 )
@@ -149,11 +149,22 @@ cp $stageDirectory/localvd-drain $moduleDirectory/localvd-drain
 cp $stageDirectory/scrcpy-server $moduleDirectory/scrcpy-server
 chmod 755 $moduleDirectory/local-display.sh $moduleDirectory/service.sh $moduleDirectory/agent.sh $moduleDirectory/action.sh $moduleDirectory/localvd-drain
 chmod 644 $moduleDirectory/scrcpy-server
-if grep -q ^LOCAL_DISPLAY= $moduleDirectory/config; then
-  sed -i "s/^LOCAL_DISPLAY=.*/LOCAL_DISPLAY=1/" $moduleDirectory/config
-else
-  echo LOCAL_DISPLAY=1 >> $moduleDirectory/config
-fi
+for setting in \
+  LOCAL_DISPLAY=1 \
+  MAP_REFRESH_EXPERIMENT=1 \
+  MAP_REFRESH_TIMEOUT_SECONDS=0 \
+  MAP_REFRESH_SETTLE_SECONDS=3 \
+  MAP_REFRESH_FALLBACK_TIMEOUT_SECONDS=40 \
+  STARTUP_TAP_X=360 \
+  STARTUP_CONTINUE_Y=752 \
+  STARTUP_LOGIN_CONTINUE_Y=860; do
+  key=`${setting%%=*}
+  if grep -q "^`$key=" $moduleDirectory/config; then
+    sed -i "s/^`$key=.*/`$setting/" $moduleDirectory/config
+  else
+    echo "`$setting" >> $moduleDirectory/config
+  fi
+done
 rm -rf $stageDirectory
 sh $moduleDirectory/service.sh
 "@ -replace "`r", ''
