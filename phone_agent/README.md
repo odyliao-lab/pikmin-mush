@@ -13,6 +13,13 @@
 5. 遊戲卡住時，Agent 以 Android shell SELinux context 重啟遊戲並驗證 PID。
 6. 網路失敗時不推進 offset；恢復後自動續傳及重送完成 ACK。
 
+啟用 `MAP_REFRESH_EXPERIMENT=1` 後，每個掃描點不再盲等固定秒數，而是等待
+native hook 寫出的 map-query／map-object marker；目前實機穩定設定為
+`MAP_REFRESH_TIMEOUT_SECONDS=0`，直接使用冷啟動 marker 流程。開機服務會先嘗試
+解除無密碼 Keyguard；若重啟後仍停在 Pikmin 的兩個「繼續」畫面，720x1600
+virtual display 可使用 `STARTUP_TAP_X=360`、`STARTUP_CONTINUE_Y=752` 與
+`STARTUP_LOGIN_CONTINUE_Y=860` 自動恢復。
+
 所有 Agent API 都要求 `Authorization: Bearer <token>` 與 `X-Agent-Id`。
 `primary` 保留既有 Token；新節點由網站後台建立獨立憑證，Token 只顯示一次。
 正式 Token 不應提交版本庫。

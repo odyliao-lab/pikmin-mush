@@ -12,6 +12,8 @@ CHUNK="$MODDIR/upload.chunk"
 RESPONSE="$MODDIR/curl.response"
 SCAN_PENDING="$MODDIR/scan.pending"
 DISPLAY_FILE="$MODDIR/game.display"
+SCAN_READY="$APP_FILES/scan.ready"
+QUERY_READY="$APP_FILES/map_query.ready"
 
 if [ ! -f "$CONFIG" ]; then
   echo "[agent] missing $CONFIG"
@@ -20,6 +22,13 @@ fi
 . "$CONFIG"
 
 POLL_SECONDS="${POLL_SECONDS:-2}"
+MAP_REFRESH_EXPERIMENT="${MAP_REFRESH_EXPERIMENT:-0}"
+MAP_REFRESH_TIMEOUT_SECONDS="${MAP_REFRESH_TIMEOUT_SECONDS:-18}"
+MAP_REFRESH_SETTLE_SECONDS="${MAP_REFRESH_SETTLE_SECONDS:-3}"
+MAP_REFRESH_FALLBACK_TIMEOUT_SECONDS="${MAP_REFRESH_FALLBACK_TIMEOUT_SECONDS:-40}"
+STARTUP_TAP_X="${STARTUP_TAP_X:-0}"
+STARTUP_CONTINUE_Y="${STARTUP_CONTINUE_Y:-0}"
+STARTUP_LOGIN_CONTINUE_Y="${STARTUP_LOGIN_CONTINUE_Y:-0}"
 AGENT_ID="${AGENT_ID:-primary}"
 AGENT_VERSION="${AGENT_VERSION:-2.0.0}"
 [ -n "$TOKEN" ] || TOKEN="$(cat "$MODDIR/token" 2>/dev/null)"
@@ -112,6 +121,20 @@ game_keyevent() {
   fi
 }
 
+game_tap() {
+  TAP_X="$1"
+  TAP_Y="$2"
+  [ "$TAP_X" -gt 0 ] 2>/dev/null || return 1
+  [ "$TAP_Y" -gt 0 ] 2>/dev/null || return 1
+  DISPLAY_ID="$(game_display_id)"
+  if [ -n "$DISPLAY_ID" ]; then
+    su -Z u:r:shell:s0 2000 -c "input -d $DISPLAY_ID tap $TAP_X $TAP_Y" \
+      >/dev/null 2>&1
+  else
+    su -Z u:r:shell:s0 2000 -c "input tap $TAP_X $TAP_Y" >/dev/null 2>&1
+  fi
+}
+
 game_is_resumed() {
   su -Z u:r:shell:s0 2000 -c "dumpsys activity activities" 2>/dev/null |
     grep -E 'topResumedActivity|ResumedActivity:' |
@@ -169,16 +192,82 @@ interruptible_wait() {
   return 0
 }
 
+refresh_marker_matches() {
+  MARKER_FILE="$1"
+  EXPECTED_TOKEN="$2"
+  [ -s "$MARKER_FILE" ] || return 1
+  MARKER_TOKEN="$(cut -f1 "$MARKER_FILE" 2>/dev/null)"
+  [ "$MARKER_TOKEN" = "$EXPECTED_TOKEN" ]
+}
+
+wait_for_map_refresh() {
+  REFRESH_TOKEN="$1"
+  REFRESH_JOB="$2"
+  REFRESH_LEFT="$(number_or_zero "${3:-$MAP_REFRESH_TIMEOUT_SECONDS}")"
+  REFRESH_PHASE="${4:-direct}"
+  REFRESH_TOTAL="$REFRESH_LEFT"
+  QUERY_SEEN_AT=0
+  while [ "$REFRESH_LEFT" -gt 0 ]; do
+    if refresh_marker_matches "$SCAN_READY" "$REFRESH_TOKEN"; then
+      echo "[scan] $REFRESH_PHASE refresh ready target=$REFRESH_TOKEN source=object"
+      return 0
+    fi
+    if refresh_marker_matches "$QUERY_READY" "$REFRESH_TOKEN"; then
+      [ "$QUERY_SEEN_AT" -eq 0 ] && QUERY_SEEN_AT="$REFRESH_LEFT"
+      QUERY_AGE=$((QUERY_SEEN_AT - REFRESH_LEFT))
+      if [ "$QUERY_AGE" -ge "$(number_or_zero "$MAP_REFRESH_SETTLE_SECONDS")" ]; then
+        echo "[scan] $REFRESH_PHASE refresh ready target=$REFRESH_TOKEN source=query"
+        return 0
+      fi
+    fi
+    sleep 1
+    REFRESH_LEFT=$((REFRESH_LEFT - 1))
+    REFRESH_ELAPSED=$((REFRESH_TOTAL - REFRESH_LEFT))
+    if [ "$REFRESH_PHASE" = "fallback" ] && [ "$REFRESH_ELAPSED" -eq 10 ]; then
+      game_keyevent KEYCODE_ENTER
+      game_keyevent KEYCODE_DPAD_CENTER
+    fi
+    # After a reboot, Pikmin may stay on the two touch-only "continue" screens
+    # even though Android reports the Unity activity as resumed. Only tap while
+    # the fallback still has no map-query/object marker, so normal scans are not
+    # disturbed once the map is actually ready.
+    if [ "$REFRESH_PHASE" = "fallback" ] && [ "$REFRESH_ELAPSED" -eq 15 ]; then
+      game_tap "$STARTUP_TAP_X" "$STARTUP_CONTINUE_Y" || true
+    fi
+    if [ "$REFRESH_PHASE" = "fallback" ] && [ "$REFRESH_ELAPSED" -eq 22 ]; then
+      game_tap "$STARTUP_TAP_X" "$STARTUP_LOGIN_CONTINUE_Y" || true
+    fi
+    if [ $((REFRESH_LEFT % 10)) -eq 0 ]; then
+      CONTROL="$(scan_control)"
+      case "$CONTROL" in
+        pause|stop) return 2 ;;
+      esac
+    fi
+  done
+  echo "[scan] $REFRESH_PHASE refresh timeout target=$REFRESH_TOKEN"
+  return 1
+}
+
 restart_game_for_scan() {
   RESTART_JOB="$1"
+  RESTART_TOKEN="$2"
   echo "[scan] no new rows, restarting game session at current GPS"
   su -Z u:r:shell:s0 2000 -c "am force-stop $PKG" >/dev/null 2>&1
-  interruptible_wait 2 "$RESTART_JOB" || return 2
+  sleep 2
+  if [ "$MAP_REFRESH_EXPERIMENT" = "1" ]; then
+    rm -f "$SCAN_READY" "$QUERY_READY"
+  fi
   launch_game
-  interruptible_wait 25 "$RESTART_JOB" || return 2
-  game_keyevent KEYCODE_ENTER
-  game_keyevent KEYCODE_DPAD_CENTER
-  interruptible_wait 5 "$RESTART_JOB" || return 2
+  if [ "$MAP_REFRESH_EXPERIMENT" = "1" ]; then
+    wait_for_map_refresh "$RESTART_TOKEN" "$RESTART_JOB" \
+      "$MAP_REFRESH_FALLBACK_TIMEOUT_SECONDS" fallback || return $?
+    sleep 1
+  else
+    interruptible_wait 25 "$RESTART_JOB" || return 2
+    game_keyevent KEYCODE_ENTER
+    game_keyevent KEYCODE_DPAD_CENTER
+    interruptible_wait 5 "$RESTART_JOB" || return 2
+  fi
   [ -n "$(pidof "$PKG" 2>/dev/null)" ]
 }
 
@@ -236,25 +325,50 @@ execute_scan_task() {
   SCAN_JOB_ID="$JOB_ID"
   SCAN_TARGET_ID="$TASK_TARGET_ID"
   SCAN_LEASE="$TASK_LEASE"
+  TASK_STARTED_AT="$(date +%s)"
 
   ensure_game_running
   BEFORE_SIZE="$(file_size)"
   BEFORE_LINES="$(useful_line_count)"
-  echo "$TASK_LAT,$TASK_LNG" >"$TELEPORT"
-  if [ "$(cat "$TELEPORT" 2>/dev/null)" != "$TASK_LAT,$TASK_LNG" ]; then
+  if [ "$MAP_REFRESH_EXPERIMENT" = "1" ] && [ "$TASK_COOLDOWN" -gt 0 ]; then
+    echo "[scan] cross-city cooldown ${TASK_COOLDOWN}s before direct refresh"
+    interruptible_wait "$TASK_COOLDOWN" "$JOB_ID" || return
+    TASK_COOLDOWN=0
+  fi
+  TELEPORT_VALUE="$TASK_LAT,$TASK_LNG"
+  if [ "$MAP_REFRESH_EXPERIMENT" = "1" ]; then
+    # A lease retry may receive the same target and coordinates. Use a fresh
+    # per-attempt token so the native watcher reapplies GPS and emits new markers.
+    REFRESH_TOKEN="$(date +%s)$(printf '%05d' $((TASK_TARGET_ID % 100000)))"
+    TELEPORT_VALUE="$TASK_LAT,$TASK_LNG,$REFRESH_TOKEN"
+  fi
+  if [ "$MAP_REFRESH_EXPERIMENT" = "1" ]; then
+    rm -f "$SCAN_READY" "$QUERY_READY"
+  fi
+  echo "$TELEPORT_VALUE" >"$TELEPORT"
+  if [ "$(cat "$TELEPORT" 2>/dev/null)" != "$TELEPORT_VALUE" ]; then
     echo "[scan] GPS write failed job=$JOB_ID point=$TASK_INDEX"
     send_scan_ack "$JOB_ID" "$TASK_TARGET_ID" "$TASK_LEASE" 0 0 0
     return
   fi
   echo "[scan] $TASK_COUNTRY-$TASK_CITY $((TASK_INDEX + 1))/$TASK_TOTAL GPS=$TASK_LAT,$TASK_LNG"
-  sleep 3
+  sleep 1
   game_keyevent KEYCODE_ENTER
   game_keyevent KEYCODE_DPAD_CENTER
   if [ "$TASK_COOLDOWN" -gt 0 ]; then
     echo "[scan] cross-city cooldown ${TASK_COOLDOWN}s"
     interruptible_wait "$TASK_COOLDOWN" "$JOB_ID" || return
   fi
-  interruptible_wait "$TASK_DWELL" "$JOB_ID" || return
+  REFRESH_OK=0
+  if [ "$MAP_REFRESH_EXPERIMENT" = "1" ]; then
+    wait_for_map_refresh "$REFRESH_TOKEN" "$JOB_ID" \
+      "$MAP_REFRESH_TIMEOUT_SECONDS" direct
+    REFRESH_RESULT=$?
+    [ "$REFRESH_RESULT" -eq 2 ] && return
+    [ "$REFRESH_RESULT" -eq 0 ] && REFRESH_OK=1
+  else
+    interruptible_wait "$TASK_DWELL" "$JOB_ID" || return
+  fi
   upload_new
   AFTER_SIZE="$(file_size)"
   AFTER_LINES="$(useful_line_count)"
@@ -262,8 +376,22 @@ execute_scan_task() {
   NEW_ROWS=$((AFTER_LINES - BEFORE_LINES))
   [ "$NEW_BYTES" -lt 0 ] && NEW_BYTES=0
   [ "$NEW_ROWS" -lt 0 ] && NEW_ROWS=0
-  if [ "$NEW_ROWS" -eq 0 ]; then
-    if restart_game_for_scan "$JOB_ID"; then
+  if [ "$MAP_REFRESH_EXPERIMENT" = "1" ] && [ "$REFRESH_OK" -eq 0 ]; then
+    echo "[scan] direct refresh unavailable; using cold restart fallback"
+    if restart_game_for_scan "$JOB_ID" "$REFRESH_TOKEN"; then
+      upload_new
+      AFTER_SIZE="$(file_size)"
+      AFTER_LINES="$(useful_line_count)"
+      NEW_BYTES=$((AFTER_SIZE - BEFORE_SIZE))
+      NEW_ROWS=$((AFTER_LINES - BEFORE_LINES))
+      [ "$NEW_BYTES" -lt 0 ] && NEW_BYTES=0
+      [ "$NEW_ROWS" -lt 0 ] && NEW_ROWS=0
+      echo "[scan] fallback captured rows=+$NEW_ROWS bytes=+$NEW_BYTES"
+    else
+      echo "[scan] fallback restart failed or was interrupted"
+    fi
+  elif [ "$MAP_REFRESH_EXPERIMENT" != "1" ] && [ "$NEW_ROWS" -eq 0 ]; then
+    if restart_game_for_scan "$JOB_ID" ""; then
       upload_new
       AFTER_SIZE="$(file_size)"
       AFTER_LINES="$(useful_line_count)"
@@ -281,7 +409,14 @@ execute_scan_task() {
     "$JOB_ID" "$TASK_TARGET_ID" "$TASK_LEASE" "$NEW_ROWS" "$NEW_BYTES" >"$SCAN_PENDING"
   if send_scan_ack "$JOB_ID" "$TASK_TARGET_ID" "$TASK_LEASE" "$NEW_ROWS" "$NEW_BYTES" 1; then
     rm -f "$SCAN_PENDING"
-    echo "[scan] completed point=$((TASK_INDEX + 1)) rows=+$NEW_ROWS bytes=+$NEW_BYTES"
+    TASK_FINISHED_AT="$(date +%s)"
+    TASK_ELAPSED=$((TASK_FINISHED_AT - TASK_STARTED_AT))
+    if [ "$MAP_REFRESH_EXPERIMENT" = "1" ]; then
+      [ "$REFRESH_OK" -eq 1 ] && TASK_MODE="direct" || TASK_MODE="fallback"
+    else
+      TASK_MODE="legacy"
+    fi
+    echo "[scan] completed point=$((TASK_INDEX + 1)) rows=+$NEW_ROWS bytes=+$NEW_BYTES mode=$TASK_MODE elapsed=${TASK_ELAPSED}s"
   else
     echo "[scan] ACK pending job=$JOB_ID point=$TASK_INDEX"
   fi
