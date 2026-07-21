@@ -341,7 +341,7 @@ export default function AdminClient({
       <section className={styles.fleetPanel}>
         <div className={styles.panelTitle}>
           <div><span>AGENT FLEET</span><h2>全球掃描節點</h2></div>
-          <small>區域標籤是派工偏好；空白節點可接手任何國家。</small>
+          <small>有區域標籤的節點只掃描指定地區，並依標籤順序派工；空白節點支援全球。</small>
         </div>
         <div className={styles.agentGrid}>
           {dashboard?.agents.map((agent) => (
@@ -381,7 +381,7 @@ export default function AdminClient({
                     <button type="button" disabled={busy}
                       onClick={() => setEditingAgentId("")}>取消</button>
                   </div>
-                  <small>新偏好會在目前掃描點完成後生效；北歐無待掃點時會接手其他地區。</small>
+                  <small>新設定會在目前掃描點完成後生效，並依左到右順序掃描指定地區。</small>
                 </div>
               )}
               <div className={styles.agentActions}>

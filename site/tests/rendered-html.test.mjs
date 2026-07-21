@@ -80,6 +80,8 @@ test("includes durable multi-agent leases, v2 protocol routes, and migrations", 
   assert.match(fleet, /lease_token/);
   assert.match(fleet, /CASE country/);
   assert.match(fleet, /tags\.map\(\(_.*, index\) => `WHEN \? THEN \$\{index\}`\)/);
+  assert.match(fleet, /AND country IN/);
+  assert.match(fleet, /\.\.\.tags, \.\.\.tags/);
   assert.match(task, /claimTask/);
   assert.match(ack, /completeTask/);
   assert.match(migration, /CREATE TABLE `scan_agents`/);

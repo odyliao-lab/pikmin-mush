@@ -307,16 +307,19 @@ async function candidateTarget(job: ScanJobRow, agent: ScanAgentRow) {
   const tags = parseTags(agent);
   const location = agent.current_lat == null ? null :
     { lat: Number(agent.current_lat), lng: Number(agent.current_lng) };
+  const tagFilter = tags.length
+    ? `AND country IN (${tags.map(() => "?").join(",")})`
+    : "";
   const whereTags = tags.length
     ? `CASE country ${tags.map((_, index) => `WHEN ? THEN ${index}`).join(" ")} ELSE ${tags.length} END,`
     : "";
   const distanceOrder = location
     ? `((lat-?)*(lat-?) + (lng-?)*(lng-?)),`
     : "";
-  const params: unknown[] = [job.id, Number(job.cycle), ...tags];
+  const params: unknown[] = [job.id, Number(job.cycle), ...tags, ...tags];
   if (location) params.push(location.lat, location.lat, location.lng, location.lng);
   return db.prepare(`SELECT * FROM scan_targets
-    WHERE job_id=? AND cycle=? AND status='queued'
+    WHERE job_id=? AND cycle=? AND status='queued' ${tagFilter}
     ORDER BY ${whereTags} ${distanceOrder} sequence ASC LIMIT 1`)
     .bind(...params).first<ScanTargetRow>();
 }
