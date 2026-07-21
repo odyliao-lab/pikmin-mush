@@ -308,7 +308,7 @@ async function candidateTarget(job: ScanJobRow, agent: ScanAgentRow) {
   const location = agent.current_lat == null ? null :
     { lat: Number(agent.current_lat), lng: Number(agent.current_lng) };
   const whereTags = tags.length
-    ? `CASE WHEN country IN (${tags.map(() => "?").join(",")}) THEN 0 ELSE 1 END,`
+    ? `CASE country ${tags.map((_, index) => `WHEN ? THEN ${index}`).join(" ")} ELSE ${tags.length} END,`
     : "";
   const distanceOrder = location
     ? `((lat-?)*(lat-?) + (lng-?)*(lng-?)),`
