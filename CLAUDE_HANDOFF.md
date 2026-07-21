@@ -277,8 +277,13 @@ $adb = "$env:LOCALAPPDATA\CodexTools\android-platform-tools\platform-tools\adb.e
   仍會啟動並使用 display 0 fallback，避免 framework status 卡住後整台永久離線。
 - Magisk 模組提供 `action.sh`；手機端按模組 **Action** 可冷重啟 display 與唯一 Agent，
   不需要 USB 或 ADB，結果寫入 `manual-recovery.log`。
+- 新建 display 時必須先 force-stop 既有 Pikmin task，再用 `am start --display N` 重建；Android
+  不保證單純的 start 會把 display 0 上的既有 task 搬移到目標 display。
 - 安裝失敗會自動設回 `LOCAL_DISPLAY=0`、停止 daemon、回到 display 0 並重啟 Agent；原始
   安裝錯誤仍會向外拋出。
+- Autonomous installer 在 compile/push/mutation 前取得手機端唯一 owner lock。主機被中止後
+  預設必須 fail closed；僅可在確認前次手機 installer 已結束後使用 `-RecoverStaleInstall`，
+  且 PID cmdline 仍符合 lock owner 時仍須拒絕清鎖。
 - Windows 與 on-device owner 是雙向互斥；Windows scrcpy 身分必須同時符合 PID、程序名、
   ADB serial 與 serial-scoped marker。
 - 舊版無 marker session 由 `windows-process-identity.ps1` 嚴格比對完整 virtual／screen-off
@@ -555,6 +560,8 @@ powershell.exe -NoProfile -ExecutionPolicy Bypass `
 Supervisor 不可同時管理同一手機；若該 serial 的 Scheduled Task、已記錄的 Supervisor
 程序或手動 headless scrcpy 仍存在，安裝器會直接拒絕部署，必須先停止並移除。反方向
 安裝 Windows Supervisor 或手動啟動 `headless-agent.ps1` 時，只要 `LOCAL_DISPLAY=1` 也會拒絕。
+安裝期間另有手機端 owner lock；若主機程序意外中止，先確認遠端 installer 已退出，再以
+`-RecoverStaleInstall` 明確復原，禁止直接刪除 lock 或立即重跑造成固定 staging 交錯。
 
 ---
 

@@ -12,9 +12,26 @@ powershell.exe -NoProfile -ExecutionPolicy Bypass `
 ```
 
 This installs the current `agent.sh`, a Magisk-booted phone watchdog, and the display assets,
-then sets `LOCAL_DISPLAY=1` in the private phone config. It stops the old Agent and starts the
-new Agent only after the trusted virtual display is healthy. USB may then remain disconnected.
+then sets `LOCAL_DISPLAY=1` in the private phone config. It stops the old Agent, starts the
+display watchdog with a bounded health probe, and starts one Agent with display-0 fallback while
+the display daemon continues recovery. USB may then remain disconnected.
 See `SPEC_ON_DEVICE_DISPLAY.md` for architecture, recovery, and verified tests.
+
+The installer acquires a phone-side lock before compiling, staging, or changing phone state.
+If the host process is interrupted, a later run fails closed instead of overlapping the still
+running remote installer. After confirming that the earlier installer has ended, recover a stale
+lock explicitly:
+
+```powershell
+powershell.exe -NoProfile -ExecutionPolicy Bypass `
+  -File .\phone_agent\install-local-display.ps1 `
+  -Serial ANDROID_ADB_SERIAL `
+  -RecoverStaleInstall
+```
+
+The recovery switch still refuses to clear the lock when its recorded, identity-matching phone
+installer process is alive. A new virtual display also force-stops and recreates the Pikmin task
+on the target display; a healthy existing display remains idempotent and does not restart the game.
 
 Boot recovery is bounded: every framework display probe has a timeout, and a display that is
 still recovering after the boot wait no longer prevents the cloud Agent from starting. The

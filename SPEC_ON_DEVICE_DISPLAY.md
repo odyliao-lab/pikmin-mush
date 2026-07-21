@@ -328,21 +328,36 @@ powershell.exe -NoProfile -ExecutionPolicy Bypass `
    headless scrcpy session 仍存在，立即中止，不對手機做任何部署。scrcpy 偵測同時比對
    `--serial` 與 serial-scoped `--window-title` marker；舊版 virtual／screen-off 只有在完整
    固定參數與正確 serial 全部符合時才視為受管理 session。
-3. 使用 NDK 編譯 PIE ARM64 `localvd-drain`。
-4. 推送到固定 staging directory。
-5. 先停止舊 manager 與 cmdline 身分相符的舊 Agent，避免雙 owner 與舊 Agent 繼續把遊戲
+3. 在手機以 atomic directory 取得唯一 owner install lock；取得 lock 後才允許編譯、staging
+   或修改手機狀態，因此主機端程序被終止時，仍在手機執行的 `su -c` 不會和第二次部署交錯。
+4. 使用 NDK 編譯 PIE ARM64 `localvd-drain`。
+5. 推送到固定 staging directory。
+6. 先停止舊 manager 與 cmdline 身分相符的舊 Agent，避免雙 owner 與舊 Agent 繼續把遊戲
    啟動到 display 0。
-6. 複製 `agent.sh`、manager、service、`action.sh`、drain 與 scrcpy server 到 Magisk module。
-7. 保留既有 config、token、offset、log 與 TSV。
-8. 設定 `LOCAL_DISPLAY=1`。
-9. 透過新版 `service.sh` 啟動 display；在有界等待內確認 healthy，逾時則讓 daemon
-   背景續修並啟動使用 fallback 的新版 `agent.sh`。
-10. 最多等待 90 秒直到 `status` healthy。
+7. 複製 `agent.sh`、manager、service、`action.sh`、drain 與 scrcpy server 到 Magisk module。
+8. 保留既有 config、token、offset、log 與 TSV。
+9. 設定 `LOCAL_DISPLAY=1`。
+10. 透過新版 `service.sh` 啟動 display；新 display 會先 force-stop 舊 Pikmin task，再以
+    `am start --display N` 重建到目標 display。service 使用有界 probe；daemon 可在背景續修，
+    Agent 在 display 尚未恢復時使用 display 0 fallback。
+11. 最多等待 90 秒直到 `status` healthy，最後只由相同 owner install ID 釋放 lock。
 
 步驟 5 之後的任何錯誤都會進入自動 rollback：保留原始安裝錯誤供呼叫端診斷，同時嘗試
 設定 `LOCAL_DISPLAY=0`、停止 daemon/workers、移除 `game.display`、把 Pikmin Activity 拉回
 display 0，並直接啟動且驗證 Agent。若 rollback 本身有步驟失敗，另以 warning 回報，但
 最後仍拋出原始安裝錯誤，不以 rollback 訊息覆蓋根因。
+
+若主機程序被外部終止，`finally` 無法釋放 lock。此時預設的下一次安裝必須拒絕執行；先確認
+前一次手機端 installer 已結束，再明確執行：
+
+```powershell
+.\phone_agent\install-local-display.ps1 `
+  -Serial ANDROID_ADB_SERIAL `
+  -RecoverStaleInstall
+```
+
+此開關會比對 lock 內的 PID、owner ID 與 `/proc/<pid>/cmdline`；身分相符的程序仍存活時不會
+清除 lock。不可用手動 `rm -rf` 取代這個檢查。
 
 ### 13.3 scrcpy 升級注意
 
@@ -392,9 +407,10 @@ powershell.exe -NoProfile -ExecutionPolicy Bypass `
 | Root/ABI | `su -c id` 為 uid 0；ABI 有對應 drain binary。 |
 | Cold start | 90 秒內 manager status healthy。 |
 | Install rollback | 注入 server／drain 啟動失敗；最後為 `LOCAL_DISPLAY=0`、無 local daemon、遊戲在 display 0、Agent 存活，且呼叫端收到原始錯誤。 |
+| Interrupted installer | 在遠端 `su -c` 執行中終止主機安裝器；第二次安裝在 compile/push 前拒絕，遠端程序結束後只有 `-RecoverStaleInstall` 可清除 stale lock。 |
 | Owner mutex | Windows headless 存活時 autonomous installer 拒絕；local flag／daemon／display 任一存在時 Windows start 拒絕。 |
 | Display flags | display 為 trusted/always-unlocked，owner shell UID 2000。 |
-| Game launch | Pikmin 是該 display 的 `topResumedActivity`。 |
+| Game launch | 測試開始時即使 Pikmin task 位於 display 0，新建 display 後也只在目標 display 成為 `topResumedActivity`。 |
 | Physical screen | Display 0 可關閉；virtual display 維持 `ON`。 |
 | Doze | `mWakefulness=Dozing` 時遊戲仍 resumed。 |
 | ADB loss | 停止 ADB server／拔線後至少一個完整掃描週期。 |

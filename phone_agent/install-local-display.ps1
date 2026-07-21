@@ -4,13 +4,16 @@ param(
     [string]$Serial,
     [string]$AdbPath = "$env:LOCALAPPDATA\CodexTools\android-platform-tools\platform-tools\adb.exe",
     [string]$ScrcpyServerPath = "$env:LOCALAPPDATA\CodexTools\scrcpy-v4.1\scrcpy-server",
-    [string]$NdkPath = "$env:LOCALAPPDATA\CodexTools\android-ndk\android-ndk-r27d"
+    [string]$NdkPath = "$env:LOCALAPPDATA\CodexTools\android-ndk\android-ndk-r27d",
+    [switch]$RecoverStaleInstall
 )
 
 $ErrorActionPreference = 'Stop'
 $scriptDirectory = Split-Path -Parent $MyInvocation.MyCommand.Path
 $moduleDirectory = '/data/adb/modules/pikmin_scanner_agent'
 $stageDirectory = '/data/local/tmp/pikmin-local-display-install'
+$installLockDirectory = '/data/local/tmp/pikmin-local-display-install.lock'
+$installId = [guid]::NewGuid().ToString('N')
 $safeSerial = $Serial -replace '[^A-Za-z0-9_.-]', '_'
 $supervisorTaskName = "Pikmin Scanner Supervisor - $safeSerial"
 $supervisorStatePath = Join-Path $env:LOCALAPPDATA "CodexTools\pikmin-supervisor\$safeSerial\state.json"
@@ -99,20 +102,49 @@ if ($headlessProcess) {
     throw "Windows headless scrcpy is still running for ${Serial} (PID $($headlessProcess.ProcessId)). Stop it before installation."
 }
 
-& $compiler -O2 -Wall -Wextra -Werror -fPIE -pie `
-    (Join-Path $scriptDirectory 'localvd-drain.c') -o $drainOutput
-if ($LASTEXITCODE -ne 0) { throw 'Failed to build localvd-drain.' }
-
-Invoke-Adb shell "rm -rf $stageDirectory && mkdir -p $stageDirectory"
-Invoke-Adb push (Join-Path $scriptDirectory 'local-display.sh') "$stageDirectory/local-display.sh"
-Invoke-Adb push (Join-Path $scriptDirectory 'service.sh') "$stageDirectory/service.sh"
-Invoke-Adb push (Join-Path $scriptDirectory 'agent.sh') "$stageDirectory/agent.sh"
-Invoke-Adb push (Join-Path $scriptDirectory 'action.sh') "$stageDirectory/action.sh"
-Invoke-Adb push $drainOutput "$stageDirectory/localvd-drain"
-Invoke-Adb push $ScrcpyServerPath "$stageDirectory/scrcpy-server"
+$staleRecovery = if ($RecoverStaleInstall) {
+@"
+if test -d $installLockDirectory; then
+  lock_owner=`$(cat $installLockDirectory/owner 2>/dev/null || true)
+  lock_pid=`$(cat $installLockDirectory/pid 2>/dev/null || true)
+  if test -n "`$lock_owner" && test -n "`$lock_pid" &&
+      kill -0 "`$lock_pid" 2>/dev/null &&
+      grep -Fq "`$lock_owner" /proc/`$lock_pid/cmdline 2>/dev/null; then
+    echo "An installer is still active (pid=`$lock_pid owner=`$lock_owner)." >&2
+    exit 1
+  fi
+  rm -rf $installLockDirectory
+fi
+"@
+} else {
+@"
+if test -d $installLockDirectory; then
+  echo "An install lock already exists at $installLockDirectory." >&2
+  echo "Confirm the earlier installer has stopped, then rerun with -RecoverStaleInstall." >&2
+  exit 1
+fi
+"@
+}
+$acquireLockCommand = @"
+set -e
+$staleRecovery
+if ! mkdir $installLockDirectory 2>/dev/null; then
+  echo "Another installer acquired $installLockDirectory." >&2
+  exit 1
+fi
+chmod 700 $installLockDirectory
+echo $installId > $installLockDirectory/owner
+"@ -replace "`r", ''
+$releaseLockCommand = @"
+if test "`$(cat $installLockDirectory/owner 2>/dev/null || true)" = "$installId"; then
+  rm -rf $installLockDirectory
+fi
+"@ -replace "`r", ''
 
 $installCommand = @"
 set -e
+test "`$(cat $installLockDirectory/owner 2>/dev/null || true)" = "$installId"
+echo `$`$ > $installLockDirectory/pid
 test -d $moduleDirectory
 chmod 755 $stageDirectory/local-display.sh $stageDirectory/localvd-drain
 PIKMIN_LOCAL_DISPLAY_DIR=$stageDirectory $stageDirectory/local-display.sh stop
@@ -225,28 +257,54 @@ exit "`$rollback_failed"
 "@ -replace "`r", ''
 
 $mutationStarted = $false
+$lockAcquired = $false
 try {
-    $mutationStarted = $true
-    Invoke-Root $installCommand
+    Invoke-Root $acquireLockCommand
+    $lockAcquired = $true
 
-    $healthy = $false
-    for ($attempt = 0; $attempt -lt 45; $attempt++) {
-        Start-Sleep -Seconds 2
-        & $AdbPath -s $Serial shell `
-            "su -c 'PIKMIN_LOCAL_DISPLAY_DIR=$moduleDirectory $moduleDirectory/local-display.sh status'"
-        if ($LASTEXITCODE -eq 0) { $healthy = $true; break }
+    & $compiler -O2 -Wall -Wextra -Werror -fPIE -pie `
+        (Join-Path $scriptDirectory 'localvd-drain.c') -o $drainOutput
+    if ($LASTEXITCODE -ne 0) { throw 'Failed to build localvd-drain.' }
+
+    Invoke-Adb shell "rm -rf $stageDirectory && mkdir -p $stageDirectory"
+    Invoke-Adb push (Join-Path $scriptDirectory 'local-display.sh') "$stageDirectory/local-display.sh"
+    Invoke-Adb push (Join-Path $scriptDirectory 'service.sh') "$stageDirectory/service.sh"
+    Invoke-Adb push (Join-Path $scriptDirectory 'agent.sh') "$stageDirectory/agent.sh"
+    Invoke-Adb push (Join-Path $scriptDirectory 'action.sh') "$stageDirectory/action.sh"
+    Invoke-Adb push $drainOutput "$stageDirectory/localvd-drain"
+    Invoke-Adb push $ScrcpyServerPath "$stageDirectory/scrcpy-server"
+
+    try {
+        $mutationStarted = $true
+        Invoke-Root $installCommand
+
+        $healthy = $false
+        for ($attempt = 0; $attempt -lt 45; $attempt++) {
+            Start-Sleep -Seconds 2
+            & $AdbPath -s $Serial shell `
+                "su -c 'PIKMIN_LOCAL_DISPLAY_DIR=$moduleDirectory $moduleDirectory/local-display.sh status'"
+            if ($LASTEXITCODE -eq 0) { $healthy = $true; break }
+        }
+        if (-not $healthy) { throw 'Local display did not become healthy within 90 seconds.' }
+    } catch {
+        $installError = $_
+        if ($mutationStarted) {
+            try {
+                Invoke-Root $rollbackCommand
+                Write-Warning 'Installation failed; rolled back to LOCAL_DISPLAY=0 and restarted the Agent on display 0.'
+            } catch {
+                Write-Warning "Installation rollback also failed: $($_.Exception.Message)"
+            }
+        }
+        throw $installError
     }
-    if (-not $healthy) { throw 'Local display did not become healthy within 90 seconds.' }
-} catch {
-    $installError = $_
-    if ($mutationStarted) {
+} finally {
+    if ($lockAcquired) {
         try {
-            Invoke-Root $rollbackCommand
-            Write-Warning 'Installation failed; rolled back to LOCAL_DISPLAY=0 and restarted the Agent on display 0.'
+            Invoke-Root $releaseLockCommand
         } catch {
-            Write-Warning "Installation rollback also failed: $($_.Exception.Message)"
+            Write-Warning "Could not release install lock owned by ${installId}: $($_.Exception.Message)"
         }
     }
-    throw $installError
 }
 Write-Host "Installed autonomous local display on $Serial."

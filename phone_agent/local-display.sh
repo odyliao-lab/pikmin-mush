@@ -163,6 +163,10 @@ case "$ACTION" in
 
     echo "$display_id" > "$DISPLAY_FILE"
     chmod 600 "$DISPLAY_FILE"
+    # Android may keep an existing task on display 0. Recreate the task so the
+    # requested display is authoritative instead of relying on task migration.
+    am force-stop "$PACKAGE" >/dev/null 2>&1 || true
+    sleep 2
     am start --display "$display_id" -n "$PACKAGE/$ACTIVITY" >/dev/null
     echo "Local display started (id=$display_id)."
     ;;
