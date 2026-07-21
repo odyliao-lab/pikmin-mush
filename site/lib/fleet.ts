@@ -198,17 +198,28 @@ export async function materializeTargets(
   const now = Date.now();
   const cycle = options.cycle ?? Number(job.cycle);
   const completedBefore = Math.max(0, options.completedBefore ?? 0);
-  for (let offset = 0; offset < targets.length; offset += 75) {
-    await db.batch(targets.slice(offset, offset + 75).map((target, index) =>
-      db.prepare(`INSERT OR IGNORE INTO scan_targets (
+  const rowsPerInsert = 7;
+  const statementsPerBatch = 50;
+  let statements = [] as ReturnType<typeof db.prepare>[];
+  for (let offset = 0; offset < targets.length; offset += rowsPerInsert) {
+    const chunk = targets.slice(offset, offset + rowsPerInsert);
+    const placeholders = chunk.map(() => "(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)").join(",");
+    const values = chunk.flatMap((target, index) => [
+      jobId, offset + index, cycle, target.country, target.city,
+      target.lat, target.lng, target.regionIndex, target.pointIndex,
+      target.cooldownS, offset + index < completedBefore ? "completed" : "queued",
+      now, now, offset + index < completedBefore ? now : 0,
+    ]);
+    statements.push(db.prepare(`INSERT OR IGNORE INTO scan_targets (
         job_id, sequence, cycle, country, city, lat, lng, region_index,
         point_index, base_cooldown_s, status, created_at, updated_at, completed_at
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`)
-        .bind(jobId, offset + index, cycle, target.country, target.city,
-          target.lat, target.lng, target.regionIndex, target.pointIndex,
-          target.cooldownS, offset + index < completedBefore ? "completed" : "queued",
-          now, now, offset + index < completedBefore ? now : 0)));
+      ) VALUES ${placeholders}`).bind(...values));
+    if (statements.length >= statementsPerBatch) {
+      await db.batch(statements);
+      statements = [];
+    }
   }
+  if (statements.length) await db.batch(statements);
 }
 
 async function ensureJobTargets(job: ScanJobRow) {
@@ -216,7 +227,7 @@ async function ensureJobTargets(job: ScanJobRow) {
   const count = await db.prepare(
     "SELECT COUNT(*) AS count FROM scan_targets WHERE job_id=?",
   ).bind(job.id).first<{ count: number }>();
-  if (Number(count?.count ?? 0) > 0) return;
+  if (Number(count?.count ?? 0) >= Number(job.total_points)) return;
   let completedBefore = Math.max(0, Number(job.current_index));
   if (!completedBefore) {
     const scanner = await db.prepare(
