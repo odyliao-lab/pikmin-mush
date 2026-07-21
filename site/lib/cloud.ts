@@ -307,6 +307,11 @@ export async function upsertMushrooms(rows: MushroomRow[]) {
       challenger_count=excluded.challenger_count,
       challenger_capacity=excluded.challenger_capacity,
       total_power=excluded.total_power,
+      first_seen=CASE
+        WHEN excluded.start_ms > 0 AND mushrooms.start_ms <> excluded.start_ms
+          THEN excluded.first_seen
+        ELSE mushrooms.first_seen
+      END,
       start_ms=excluded.start_ms`;
   for (let offset = 0; offset < usefulRows.length; offset += 50) {
     const statements = usefulRows.slice(offset, offset + 50).map((row) =>

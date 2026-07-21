@@ -6,7 +6,7 @@ export async function POST(request: Request) {
   if (!adminAuthorized(request)) return noStoreJson({ error: "forbidden" }, 403);
   if (!sameOrigin(request)) return noStoreJson({ error: "invalid origin" }, 403);
   await ensureSchema();
-  let body: { agentId?: unknown; action?: unknown };
+  let body: { agentId?: unknown; action?: unknown; regionTags?: unknown };
   try {
     body = await request.json();
   } catch {
@@ -15,11 +15,28 @@ export async function POST(request: Request) {
   const agentId = String(body.agentId ?? "");
   const action = String(body.action ?? "");
   if (!/^[a-z0-9][a-z0-9._-]{0,63}$/.test(agentId) ||
-      !["enable", "disable", "pause", "resume"].includes(action)) {
+      !["enable", "disable", "pause", "resume", "update-regions"].includes(action)) {
     return noStoreJson({ error: "invalid action" }, 400);
   }
   const db = runtime().DB;
   const now = Date.now();
+
+  if (action === "update-regions") {
+    if (!Array.isArray(body.regionTags)) {
+      return noStoreJson({ error: "區域偏好格式不正確" }, 400);
+    }
+    const regionTags = [...new Set(body.regionTags
+      .map(String).map((value) => value.trim()).filter(Boolean))]
+      .slice(0, 40);
+    if (regionTags.some((value) => value.length > 48)) {
+      return noStoreJson({ error: "單一國家名稱不可超過 48 個字元" }, 400);
+    }
+    const result = await db.prepare(
+      "UPDATE scan_agents SET region_tags_json=?, updated_at=? WHERE id=?",
+    ).bind(JSON.stringify(regionTags), now, agentId).run();
+    if (!result.meta.changes) return noStoreJson({ error: "Agent 不存在" }, 404);
+    return noStoreJson({ ok: true, region_tags: regionTags });
+  }
 
   // 暫停／繼續掃描：只切換 paused 旗標，保留憑證與 lease；Agent 仍在線但停止派工，
   // 進行中的掃描會在下一次 control polling 收到 pause 而停下（見 v2/control）。

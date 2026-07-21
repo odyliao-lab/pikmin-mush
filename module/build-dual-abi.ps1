@@ -1,8 +1,8 @@
 [CmdletBinding()]
 param(
     [string]$NdkPath = "$env:LOCALAPPDATA\CodexTools\android-ndk\android-ndk-r27d",
-    [string]$CmakePath = "$env:LOCALAPPDATA\CodexTools\android-build-tools\cmake\data\bin\cmake.exe",
-    [string]$NinjaPath = "$env:LOCALAPPDATA\CodexTools\android-build-tools\bin\ninja.exe",
+    [string]$CmakePath = '',
+    [string]$NinjaPath = '',
     [string]$BuildRoot = ''
 )
 
@@ -11,6 +11,22 @@ $scriptDirectory = Split-Path -Parent $MyInvocation.MyCommand.Path
 if (-not $BuildRoot) { $BuildRoot = Join-Path $scriptDirectory '..\build_zygisk\dual-abi' }
 $sourcePath = Join-Path $scriptDirectory 'cpp'
 $toolchainPath = Join-Path $NdkPath 'build\cmake\android.toolchain.cmake'
+if (-not $CmakePath) {
+    $bundledCmake = "$env:LOCALAPPDATA\CodexTools\android-build-tools\cmake\data\bin\cmake.exe"
+    $CmakePath = if (Test-Path -LiteralPath $bundledCmake) {
+        $bundledCmake
+    } else {
+        (Get-Command cmake -ErrorAction Stop).Source
+    }
+}
+if (-not $NinjaPath) {
+    $bundledNinja = "$env:LOCALAPPDATA\CodexTools\android-build-tools\bin\ninja.exe"
+    $NinjaPath = if (Test-Path -LiteralPath $bundledNinja) {
+        $bundledNinja
+    } else {
+        (Get-Command ninja -ErrorAction Stop).Source
+    }
+}
 
 foreach ($requiredPath in @($CmakePath, $NinjaPath, $toolchainPath)) {
     if (-not (Test-Path -LiteralPath $requiredPath)) {

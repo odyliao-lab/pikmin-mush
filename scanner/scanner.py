@@ -22,7 +22,9 @@ from urllib.error import HTTPError, URLError
 ADB_LOCK = threading.Lock()
 
 # ----------------- CONFIG -----------------
-ADB = r"C:\Program Files\Netease\MuMuPlayer\nx_main\adb.exe"
+ADB = os.path.expandvars(
+    r"%LOCALAPPDATA%\CodexTools\android-platform-tools\platform-tools\adb.exe"
+)
 PKG = "com.nianticlabs.pikmin"
 DEV_TSV = f"/data/user/0/{PKG}/files/mushrooms.tsv"
 DEV_TELE = f"/data/user/0/{PKG}/files/teleport.txt"

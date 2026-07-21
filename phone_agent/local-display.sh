@@ -7,6 +7,7 @@ BASE_DIR="${PIKMIN_LOCAL_DISPLAY_DIR:-$(CDPATH= cd -- "$(dirname -- "$0")" && pw
 RUNTIME_DIR="${PIKMIN_LOCAL_DISPLAY_RUNTIME:-/data/local/tmp/pikmin-local-display-runtime}"
 SERVER_JAR="$BASE_DIR/scrcpy-server"
 DRAIN_BIN="$BASE_DIR/localvd-drain"
+APP_PROCESS="${PIKMIN_APP_PROCESS:-/system/bin/app_process}"
 SERVER_PID_FILE="$RUNTIME_DIR/server.pid"
 DRAIN_PID_FILE="$RUNTIME_DIR/drain.pid"
 DAEMON_PID_FILE="$RUNTIME_DIR/daemon.pid"
@@ -18,13 +19,14 @@ SCID="50494b4d"
 SOCKET_NAME="scrcpy_$SCID"
 SIZE="${PIKMIN_LOCAL_DISPLAY_SIZE:-720x1600}"
 DPI="${PIKMIN_LOCAL_DISPLAY_DPI:-320}"
+STATUS_TIMEOUT_SECONDS="${PIKMIN_LOCAL_DISPLAY_STATUS_TIMEOUT:-8}"
 PACKAGE="com.nianticlabs.pikmin"
 ACTIVITY="com.nianticproject.ichigo.IchigoUnityPlayerActivity"
 
 alive() {
   pid="$(cat "$1" 2>/dev/null || true)"
   [ -n "$pid" ] && kill -0 "$pid" 2>/dev/null || return 1
-  command_line="$(tr '\000' ' ' <"/proc/$pid/cmdline" 2>/dev/null || true)"
+  command_line="$(tr '\000' ' ' 2>/dev/null <"/proc/$pid/cmdline" || true)"
   case "$1" in
     *server.pid) echo "$command_line" | grep -Eq 'scrcpy.Server|local-display.sh internal-server' ;;
     *drain.pid) echo "$command_line" | grep -Eq 'localvd-drain|local-display.sh internal-drain' ;;
@@ -34,7 +36,9 @@ alive() {
 }
 
 display_present() {
-  [ -n "$1" ] && dumpsys display 2>/dev/null | grep -Eq "mDisplayId=$1([^0-9]|$)"
+  [ -n "$1" ] &&
+    timeout -k 2 "$STATUS_TIMEOUT_SECONDS" dumpsys display 2>/dev/null |
+      grep -Eq "mDisplayId=$1([^0-9]|$)"
 }
 
 stop_worker() {
@@ -89,7 +93,7 @@ case "$ACTION" in
   internal-server)
     echo $$ > "$SERVER_PID_FILE"
     export CLASSPATH="$SERVER_JAR"
-    exec app_process / com.genymobile.scrcpy.Server 4.1 \
+    exec "$APP_PROCESS" / com.genymobile.scrcpy.Server 4.1 \
       scid="$SCID" tunnel_forward=true log_level=info \
       video_bit_rate=100000 max_fps=1 audio=false control=false \
       send_device_meta=false send_frame_meta=false send_dummy_byte=false \
@@ -115,6 +119,7 @@ case "$ACTION" in
 
     [ -r "$SERVER_JAR" ] || { echo "Missing $SERVER_JAR" >&2; exit 1; }
     [ -x "$DRAIN_BIN" ] || { echo "Missing executable $DRAIN_BIN" >&2; exit 1; }
+    [ -x "$APP_PROCESS" ] || { echo "Missing executable $APP_PROCESS" >&2; exit 1; }
 
     mkdir -p "$RUNTIME_DIR"
     chmod 700 "$RUNTIME_DIR"

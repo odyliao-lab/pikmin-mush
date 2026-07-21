@@ -431,8 +431,43 @@ void il2cpp_dump(const char *outDir) {
 #include <ctime>
 #include <map>
 
-// RVA of MapManager.RegisterMapObject(MapObjectBase) — libil2cpp v148 (versionCode 1782528808)
-#define RVA_RegisterMapObject 0xCB4596C
+// Pikmin Bloom v149.0 / versionCode 1784082813.
+// These RVAs and prologue signatures are version-locked. Refuse to install any hook
+// when the loaded libil2cpp does not match, so a future game update fails closed
+// instead of patching an unrelated function.
+#define TARGET_PIKMIN_VERSION "149.0"
+#define TARGET_PIKMIN_VERSION_CODE 1784082813
+#define RVA_RegisterMapObject 0xCBCF00C
+#define RVA_LocationController_Update 0x704C184
+#define RVA_SetOverride 0x704C9DC
+#define RVA_MapQueryManager_OnMapQueryResponse 0xC8D8D78
+
+static const uint8_t SIG_RegisterMapObject[] = {
+    0xFE, 0x67, 0xBC, 0xA9, 0xF8, 0x5F, 0x01, 0xA9,
+    0xF6, 0x57, 0x02, 0xA9, 0xF4, 0x4F, 0x03, 0xA9
+};
+static const uint8_t SIG_LocationController_Update[] = {
+    0xFF, 0x03, 0x03, 0xD1, 0xE8, 0x3B, 0x00, 0xFD,
+    0xFE, 0x67, 0x08, 0xA9, 0xF8, 0x5F, 0x09, 0xA9
+};
+static const uint8_t SIG_SetOverride[] = {
+    0xFF, 0xC3, 0x01, 0xD1, 0xFE, 0x23, 0x00, 0xF9,
+    0xF6, 0x57, 0x05, 0xA9, 0xF4, 0x4F, 0x06, 0xA9
+};
+static const uint8_t SIG_MapQueryManager_OnMapQueryResponse[] = {
+    0xFE, 0x5F, 0xBD, 0xA9, 0xF6, 0x57, 0x01, 0xA9,
+    0xF4, 0x4F, 0x02, 0xA9, 0xB5, 0x3A, 0x01, 0xD0
+};
+
+static bool matches_target_signature(const char *name, const void *target,
+                                     const uint8_t *expected, size_t expected_size) {
+    if (!target || memcmp(target, expected, expected_size) != 0) {
+        LOGE("[HOOK] %s signature mismatch; expected Pikmin %s (%d), refusing hooks",
+             name, TARGET_PIKMIN_VERSION, TARGET_PIKMIN_VERSION_CODE);
+        return false;
+    }
+    return true;
+}
 // ProtoBasedMapObject.initialMapObjectProto (raw MapObjectProto*) @0x68
 #define OFF_ProtoPtr 0x68
 // MapObjectProto: id_@0x18(string), point_@0x20(PointProto*), object_@0x30(oneof*), objectCase_@0x38(int)
@@ -449,6 +484,54 @@ void il2cpp_dump(const char *outDir) {
 #define OBJCASE_PoiMushroom 22
 
 static char g_mush_path[512] = {0};    // 每次寫入才開檔，避免外部 rm 造成寫入遺失
+static char g_scan_ready_path[512] = {0};
+static char g_query_ready_path[512] = {0};
+static volatile double g_cur_lat = 0, g_cur_lng = 0;
+static volatile bool g_have_target = false;
+static volatile bool g_refresh_pending = false;
+static volatile long long g_target_token = 0;
+static volatile long long g_applied_token = -1;
+static volatile long long g_query_written_token = -1;
+static long long g_generated_token = 0;
+static void *g_map_manager = nullptr;
+static const MethodInfo *g_recalculate_viewports_method = nullptr;
+
+static void write_refresh_marker(const char *path, long long token, const char *reason) {
+    if (!path[0] || token <= 0) return;
+    FILE *f = fopen(path, "w");
+    if (!f) return;
+    fprintf(f, "%lld\t%s\t%.7f\t%.7f\t%ld\n",
+            token, reason, g_cur_lat, g_cur_lng, (long) time(nullptr));
+    fclose(f);
+}
+
+static bool near_current_target(double lat, double lng) {
+    // Map queries cover a wider area than the 400 m mushroom display radius.
+    // A two-degree-hundredth window rejects objects left over from the prior city
+    // while accepting the first object batch around the new target.
+    double lat_diff = lat - g_cur_lat;
+    double lng_diff = lng - g_cur_lng;
+    if (lat_diff < 0) lat_diff = -lat_diff;
+    if (lng_diff < 0) lng_diff = -lng_diff;
+    return lat_diff <= 0.02 && lng_diff <= 0.03;
+}
+
+static void capture_map_manager(void *thiz) {
+    if (g_map_manager || !thiz) return;
+    Il2CppClass *klass = il2cpp_object_get_class((Il2CppObject *) thiz);
+    const char *name = klass ? il2cpp_class_get_name(klass) : nullptr;
+    if (!name || strcmp(name, "MapManager") != 0) return;
+    const MethodInfo *recalculate = il2cpp_class_get_method_from_name(
+        klass, "InternalRequestRecalculateViewportGroups", 2);
+    if (!recalculate) {
+        LOGW("[REFRESH] MapManager viewport recalculation metadata unavailable");
+        return;
+    }
+    g_map_manager = thiz;
+    g_recalculate_viewports_method = recalculate;
+    LOGI("[REFRESH] captured MapManager this=%p", thiz);
+}
+
 struct SeenMushroom {
     long long finish_ms;
     long logged_at;
@@ -478,6 +561,7 @@ typedef void (*RegisterMapObject_t)(void *thiz, void *obj, void *method);
 static RegisterMapObject_t orig_RegisterMapObject = nullptr;
 
 static void hooked_RegisterMapObject(void *thiz, void *obj, void *method) {
+    capture_map_manager(thiz);
     if (obj) {
         const char *cname = "?";
         if (il2cpp_object_get_class && il2cpp_class_get_name) {
@@ -493,6 +577,13 @@ static void hooked_RegisterMapObject(void *thiz, void *obj, void *method) {
                 void *point = *(void **) ((uint8_t *) proto + OFF_Proto_Point);
                 double lat = point ? *(double *) ((uint8_t *) point + OFF_Point_Lat) : 0;
                 double lng = point ? *(double *) ((uint8_t *) point + OFF_Point_Lng) : 0;
+                if (g_refresh_pending && point && near_current_target(lat, lng)) {
+                    long long token = g_target_token;
+                    write_refresh_marker(g_scan_ready_path, token, "object");
+                    g_refresh_pending = false;
+                    LOGI("[REFRESH] target=%lld ready from map object %.7f,%.7f",
+                         token, lat, lng);
+                }
                 int objCase = *(int *) ((uint8_t *) proto + OFF_Proto_ObjectCase);
                 char cluster[128] = "";
                 int cooldown = 0, level = 0, ctype = 0;
@@ -547,9 +638,6 @@ static void hooked_RegisterMapObject(void *thiz, void *obj, void *method) {
 #include <pthread.h>
 #include <unistd.h>
 
-#define RVA_LocationController_Update 0x6FCB738     // 捕捉 controller 實例
-#define RVA_SetOverride 0x6FCC32C                   // LocationController.SetDeviceLocationOverrideForDebug(Nullable<LatLngAlt>)
-
 // Nullable<LatLngAlt> 佈局(.NET: {bool hasValue; T value})，8-align → value@0x08
 // LatLngAlt: LatLng{lat@0,lng@8}, alt@0x10
 struct NullableLatLngAlt {
@@ -562,18 +650,57 @@ struct NullableLatLngAlt {
 
 typedef void (*SetOverride_t)(void *thiz, void *nullablePtr, void *method);
 static SetOverride_t fn_SetOverride = nullptr;
+typedef void (*MapQueryResponse_t)(void *thiz, void *buffer, void *method);
+static MapQueryResponse_t orig_MapQueryResponse = nullptr;
+static void *g_gmo_manager = nullptr;
+static const MethodInfo *g_clear_cache_method = nullptr;
 
 static void *g_locController = nullptr;
 static char g_teleport_path[512] = {0};
-static volatile double g_cur_lat = 0, g_cur_lng = 0;
-static volatile bool g_have_target = false;
 static double g_applied_lat = 1e9, g_applied_lng = 1e9;
 
 typedef void (*LCUpdate_t)(void *thiz, void *method);
 static LCUpdate_t orig_LCUpdate = nullptr;
 
+static void capture_gmo_manager(void *map_query_manager) {
+    if (g_gmo_manager || !map_query_manager) return;
+    // MapQueryManager.onMapQueryResponseReceived @ 0x18 is a managed delegate.
+    // Il2CppDelegate.m_target @ 0x20 is the GmoManager subscriber.
+    void *callback = *(void **) ((uint8_t *) map_query_manager + 0x18);
+    void *target = callback ? *(void **) ((uint8_t *) callback + 0x20) : nullptr;
+    if (!target) return;
+    Il2CppClass *klass = il2cpp_object_get_class((Il2CppObject *) target);
+    const char *name = klass ? il2cpp_class_get_name(klass) : nullptr;
+    if (!name || strcmp(name, "GmoManager") != 0) {
+        LOGW("[REFRESH] map query callback target is %s, not GmoManager",
+             name ? name : "(null)");
+        return;
+    }
+    const MethodInfo *clear_cache =
+        il2cpp_class_get_method_from_name(klass, "ClearCache", 0);
+    if (!clear_cache) {
+        LOGW("[REFRESH] GmoManager.ClearCache metadata unavailable");
+        return;
+    }
+    g_gmo_manager = target;
+    g_clear_cache_method = clear_cache;
+    LOGI("[REFRESH] captured GmoManager this=%p via MapQuery delegate", target);
+}
+
+static void hooked_MapQueryResponse(void *thiz, void *buffer, void *method) {
+    capture_gmo_manager(thiz);
+    if (orig_MapQueryResponse) orig_MapQueryResponse(thiz, buffer, method);
+    long long token = g_target_token;
+    if (g_refresh_pending && token > 0 && token != g_query_written_token) {
+        g_query_written_token = token;
+        write_refresh_marker(g_query_ready_path, token, "query");
+        LOGI("[REFRESH] target=%lld map query response received", token);
+    }
+}
+
 // 在遊戲主執行緒(Update hook 內)呼叫遊戲原生的覆蓋 API
 static void hooked_LCUpdate(void *thiz, void *method) {
+    long long applied_refresh_token = 0;
     if (thiz) {
         if (!g_locController) {
             g_locController = thiz;
@@ -585,16 +712,54 @@ static void hooked_LCUpdate(void *thiz, void *method) {
             LOGI("[TP] captured controller this=%p class=%s", thiz, cn);
         }
         if (g_have_target && thiz == g_locController && fn_SetOverride &&
-            (g_cur_lat != g_applied_lat || g_cur_lng != g_applied_lng)) {
+            (g_cur_lat != g_applied_lat || g_cur_lng != g_applied_lng ||
+             g_target_token != g_applied_token)) {
             NullableLatLngAlt nv;
             memset(&nv, 0, sizeof(nv));
             nv.hasValue = 1; nv.lat = g_cur_lat; nv.lng = g_cur_lng; nv.alt = 0;
             fn_SetOverride(thiz, &nv, nullptr);
             g_applied_lat = g_cur_lat; g_applied_lng = g_cur_lng;
-            LOGI("[TP] SetOverride applied %.7f,%.7f", nv.lat, nv.lng);
+            g_applied_token = g_target_token;
+            applied_refresh_token = g_target_token;
+            g_refresh_pending = true;
+            g_query_written_token = -1;
+            if (g_gmo_manager && g_clear_cache_method) {
+                Il2CppException *exc = nullptr;
+                il2cpp_runtime_invoke(g_clear_cache_method, g_gmo_manager, nullptr, &exc);
+                if (!exc) {
+                    LOGI("[REFRESH] target=%lld ClearCache requested at %.7f,%.7f",
+                         g_target_token, nv.lat, nv.lng);
+                } else {
+                    LOGW("[REFRESH] target=%lld ClearCache raised an exception",
+                         g_target_token);
+                }
+            } else {
+                LOGW("[REFRESH] target=%lld GmoManager unavailable; Agent will fall back",
+                     g_target_token);
+            }
+            LOGI("[TP] SetOverride applied %.7f,%.7f target=%lld",
+                 nv.lat, nv.lng, g_target_token);
         }
     }
     if (orig_LCUpdate) orig_LCUpdate(thiz, method);
+    // LocationController.Update publishes the newly overridden DeviceLocation.
+    // Recalculate only after that publication so MapManager observes the new GPS,
+    // not the previous frame's location.
+    if (applied_refresh_token && g_map_manager && g_recalculate_viewports_method) {
+        uint8_t recalculate_immediately = 1;
+        uint8_t force_reposition = 1;
+        void *params[] = {&recalculate_immediately, &force_reposition};
+        Il2CppException *exc = nullptr;
+        il2cpp_runtime_invoke(g_recalculate_viewports_method, g_map_manager,
+                              params, &exc);
+        if (!exc) {
+            LOGI("[REFRESH] target=%lld post-location viewport refresh requested",
+                 applied_refresh_token);
+        } else {
+            LOGW("[REFRESH] target=%lld post-location viewport refresh raised an exception",
+                 applied_refresh_token);
+        }
+    }
 }
 
 static void *teleport_thread(void *) {
@@ -607,10 +772,14 @@ static void *teleport_thread(void *) {
                 for (char *p = buf; *p; ++p) { if (*p == '\n' || *p == '\r') { *p = 0; break; } }
                 if (buf[0] && strcmp(buf, last) != 0) {
                     double lat, lng;
-                    if (sscanf(buf, "%lf,%lf", &lat, &lng) == 2) {
+                    long long token = 0;
+                    int parsed = sscanf(buf, "%lf,%lf,%lld", &lat, &lng, &token);
+                    if (parsed >= 2) {
+                        if (parsed < 3 || token <= 0) token = ++g_generated_token;
                         g_cur_lat = lat; g_cur_lng = lng; g_have_target = true;
+                        g_target_token = token;
                         strncpy(last, buf, sizeof(last) - 1);
-                        LOGI("[TP] target -> %.7f,%.7f", lat, lng);
+                        LOGI("[TP] target -> %.7f,%.7f token=%lld", lat, lng, token);
                     }
                 }
             }
@@ -626,10 +795,25 @@ void install_hooks(const char *game_data_dir) {
         LOGE("[HOOK] il2cpp_base is 0, abort");
         return;
     }
+    void *target = (void *) (il2cpp_base + RVA_RegisterMapObject);
+    void *upd = (void *) (il2cpp_base + RVA_LocationController_Update);
+    void *set_override = (void *) (il2cpp_base + RVA_SetOverride);
+    if (!matches_target_signature("RegisterMapObject", target, SIG_RegisterMapObject,
+                                  sizeof(SIG_RegisterMapObject)) ||
+        !matches_target_signature("LocationController.Update", upd,
+                                  SIG_LocationController_Update,
+                                  sizeof(SIG_LocationController_Update)) ||
+        !matches_target_signature("SetDeviceLocationOverrideForDebug", set_override,
+                                  SIG_SetOverride, sizeof(SIG_SetOverride))) {
+        return;
+    }
+    LOGI("[HOOK] verified Pikmin %s (%d) libil2cpp signatures",
+         TARGET_PIKMIN_VERSION, TARGET_PIKMIN_VERSION_CODE);
     snprintf(g_mush_path, sizeof(g_mush_path), "%s/files/mushrooms.tsv", game_data_dir);
+    snprintf(g_scan_ready_path, sizeof(g_scan_ready_path), "%s/files/scan.ready", game_data_dir);
+    snprintf(g_query_ready_path, sizeof(g_query_ready_path), "%s/files/map_query.ready", game_data_dir);
     LOGI("[HOOK] mush log=%s", g_mush_path);
 
-    void *target = (void *) (il2cpp_base + RVA_RegisterMapObject);
     LOGI("[HOOK] RegisterMapObject target=%p (base=%" PRIx64 " + rva=%x)",
          target, il2cpp_base, RVA_RegisterMapObject);
     A64HookFunction(target, (void *) hooked_RegisterMapObject, (void **) &orig_RegisterMapObject);
@@ -637,10 +821,21 @@ void install_hooks(const char *game_data_dir) {
 
     // 自動瞬移
     snprintf(g_teleport_path, sizeof(g_teleport_path), "%s/files/teleport.txt", game_data_dir);
-    fn_SetOverride = (SetOverride_t) (il2cpp_base + RVA_SetOverride);
-    void *upd = (void *) (il2cpp_base + RVA_LocationController_Update);
+    fn_SetOverride = (SetOverride_t) set_override;
     A64HookFunction(upd, (void *) hooked_LCUpdate, (void **) &orig_LCUpdate);
     LOGI("[TP] Update hooked at %p, SetOverride=%p, control=%s", upd, (void *) fn_SetOverride, g_teleport_path);
+
+    void *map_query_response =
+        (void *) (il2cpp_base + RVA_MapQueryManager_OnMapQueryResponse);
+    if (matches_target_signature("MapQueryManager.OnMapQueryResponse", map_query_response,
+                                 SIG_MapQueryManager_OnMapQueryResponse,
+                                 sizeof(SIG_MapQueryManager_OnMapQueryResponse))) {
+        A64HookFunction(map_query_response, (void *) hooked_MapQueryResponse,
+                        (void **) &orig_MapQueryResponse);
+        LOGI("[REFRESH] experimental map refresh hooks installed");
+    } else {
+        LOGW("[REFRESH] experimental hooks unavailable; cold restart fallback remains");
+    }
     pthread_t th;
     pthread_create(&th, nullptr, teleport_thread, nullptr);
 }

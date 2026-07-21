@@ -59,7 +59,7 @@ $data.status
 目前 ADB：
 
 ```text
-C:\Program Files\Netease\MuMuPlayer\nx_main\adb.exe
+C:\Users\Ody\AppData\Local\CodexTools\android-platform-tools\platform-tools\adb.exe
 ```
 
 目前序號：
@@ -71,7 +71,7 @@ C:\Program Files\Netease\MuMuPlayer\nx_main\adb.exe
 檢查：
 
 ```powershell
-$adb = 'C:\Program Files\Netease\MuMuPlayer\nx_main\adb.exe'
+$adb = "$env:LOCALAPPDATA\CodexTools\android-platform-tools\platform-tools\adb.exe"
 & $adb -s 7lw8ibvghe6dtof6 get-state
 & $adb -s 7lw8ibvghe6dtof6 shell `
   "su -c 'ps -ef | grep pikmin_scanner_agent | grep -v grep'"
@@ -273,7 +273,10 @@ $adb = 'C:\Program Files\Netease\MuMuPlayer\nx_main\adb.exe'
 - 遊戲在虛擬 display resumed，實體 display 可關閉或操作其他 App。
 - Server／drain 死亡時，daemon 驗證 PID 身分後重建 display 並更新 `game.display`。
 - Worker replacement 會等待舊程序與 display 完全消失，避免殘留 socket 或重複 display。
-- `service.sh` 會先等 display healthy 才啟動 Agent，避免遊戲競態回到 display 0。
+- `service.sh` 以有界 probe 等待 display healthy；逾時時 daemon 繼續背景修復，Agent
+  仍會啟動並使用 display 0 fallback，避免 framework status 卡住後整台永久離線。
+- Magisk 模組提供 `action.sh`；手機端按模組 **Action** 可冷重啟 display 與唯一 Agent，
+  不需要 USB 或 ADB，結果寫入 `manual-recovery.log`。
 - 新建 display 時必須先 force-stop 既有 Pikmin task，再用 `am start --display N` 重建；Android
   不保證單純的 start 會把 display 0 上的既有 task 搬移到目標 display。
 - 安裝失敗會自動設回 `LOCAL_DISPLAY=0`、停止 daemon、回到 display 0 並重啟 Agent；原始
@@ -675,7 +678,8 @@ Agent 標籤不會禁止它接其他國家。需要 hard assignment 時必須新
 
 ### Zygisk RVA 綁遊戲版本
 
-目前 hook 基於 Pikmin Bloom v148 / versionCode 1782528808。遊戲更新後 RVA 可能全部失效。
+目前 hook 基於 Pikmin Bloom v149.0 / versionCode 1784082813，並在掛 hook 前驗證三個目標
+函式的 prologue 簽章。遊戲更新後 RVA 可能全部失效；簽章不符時模組會 fail closed。
 完整細節見 `SPEC_autoscan.md`。
 
 ### g_seen / TSV

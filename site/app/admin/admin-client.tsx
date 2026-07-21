@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
-import { CITY_CHOICES, COUNTRY_PACK_LABELS } from "../../lib/scan-plans";
+import { COUNTRY_PACK_LABELS } from "../../lib/scan-plans";
 import styles from "./admin.module.css";
 
 type Job = {
@@ -61,6 +61,14 @@ type Dashboard = {
 };
 
 const ACTIVE = new Set(["queued", "running", "paused"]);
+const NORDIC_REGION_NAMES = COUNTRY_PACK_LABELS
+  .filter((pack) => pack.region === "北歐")
+  .map((pack) => pack.name);
+const COUNTRY_PACK_GROUPS = [...new Set(COUNTRY_PACK_LABELS.map((pack) => pack.region))]
+  .map((region) => ({
+    region,
+    packs: COUNTRY_PACK_LABELS.filter((pack) => pack.region === region),
+  }));
 
 function statusLabel(status: string) {
   return ({
@@ -90,7 +98,6 @@ export default function AdminClient({
 }) {
   const [dashboard, setDashboard] = useState<Dashboard | null>(null);
   const [mode, setMode] = useState<"auto" | "custom">("auto");
-  const [cityIds, setCityIds] = useState<string[]>([]);
   const [packs, setPacks] = useState<string[]>(["日本"]);
   const [radiusKm, setRadiusKm] = useState(2);
   const [gridStepM, setGridStepM] = useState(600);
@@ -105,6 +112,8 @@ export default function AdminClient({
   const [notice, setNotice] = useState("");
   const [agentName, setAgentName] = useState("");
   const [agentRegions, setAgentRegions] = useState("");
+  const [editingAgentId, setEditingAgentId] = useState("");
+  const [editingAgentRegions, setEditingAgentRegions] = useState("");
   const [credential, setCredential] = useState<{ id: string; token: string } | null>(null);
 
   const refresh = useCallback(async () => {
@@ -140,16 +149,6 @@ export default function AdminClient({
       points = Math.max(1, Math.floor(latKm * 1000 / gridStepM) + 1) *
         Math.max(1, Math.floor(lngKm * 1000 / gridStepM) + 1);
     } else {
-      for (const id of cityIds) {
-        const city = CITY_CHOICES.find((entry) => entry[0] === id);
-        if (!city) continue;
-        cities += 1;
-        const latKm = (city[4] - city[3]) * 111.32;
-        const lngKm = (city[6] - city[5]) * 111.32 *
-          Math.abs(Math.cos(((city[3] + city[4]) / 2) * Math.PI / 180));
-        points += Math.max(1, Math.floor(latKm * 1000 / gridStepM) + 1) *
-          Math.max(1, Math.floor(lngKm * 1000 / gridStepM) + 1);
-      }
       for (const pack of packs) {
         const count = COUNTRY_PACK_LABELS.find((item) => item.name === pack)?.count ?? 0;
         cities += count;
@@ -158,7 +157,7 @@ export default function AdminClient({
     }
     const seconds = points * (dwellS + hopDelayS) + Math.max(0, cities - 1) * cooldownS;
     return { cities, points, hours: seconds / 3600 };
-  }, [cityIds, cooldownS, custom, dwellS, gridStepM, hopDelayS, mode, packs, radiusKm]);
+  }, [cooldownS, custom, dwellS, gridStepM, hopDelayS, mode, packs, radiusKm]);
 
   const toggle = (value: string, current: string[], setter: (next: string[]) => void) => {
     setter(current.includes(value) ? current.filter((item) => item !== value) : [...current, value]);
@@ -172,7 +171,7 @@ export default function AdminClient({
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          mode, cityIds, countryPacks: packs, radiusKm, gridStepM,
+          mode, countryPacks: packs, radiusKm, gridStepM,
           dwellS, hopDelayS, cooldownS, loop, custom,
         }),
       });
@@ -244,6 +243,30 @@ export default function AdminClient({
       });
       const result = await response.json();
       if (!response.ok) throw new Error(result.error ?? "Agent 操作失敗");
+      await refresh();
+    } catch (error) {
+      setNotice(error instanceof Error ? error.message : String(error));
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const saveAgentRegions = async (agent: Agent) => {
+    setBusy(true);
+    setNotice("");
+    try {
+      const regionTags = editingAgentRegions.split(",")
+        .map((value) => value.trim()).filter(Boolean);
+      const response = await fetch("/api/admin/agents/action", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ agentId: agent.id, action: "update-regions", regionTags }),
+      });
+      const result = await response.json();
+      if (!response.ok) throw new Error(result.error ?? "區域偏好更新失敗");
+      setEditingAgentId("");
+      setEditingAgentRegions("");
+      setNotice(`${agent.name} 已更新為「優先指定國家、其餘任務候補」`);
       await refresh();
     } catch (error) {
       setNotice(error instanceof Error ? error.message : String(error));
@@ -341,7 +364,34 @@ export default function AdminClient({
                 {agent.version ? `・v${agent.version}` : ""}
               </small>
               <p>{agent.region_tags.length ? agent.region_tags.join("・") : "全球支援"}</p>
+              {editingAgentId === agent.id && (
+                <div className={styles.agentRegionEditor}>
+                  <label>
+                    <span>優先國家（逗號分隔；空白代表全球支援）</span>
+                    <input value={editingAgentRegions}
+                      onChange={(event) => setEditingAgentRegions(event.target.value)} />
+                  </label>
+                  <div>
+                    <button type="button" disabled={busy}
+                      onClick={() => setEditingAgentRegions(NORDIC_REGION_NAMES.join(","))}>
+                      套用北歐五國
+                    </button>
+                    <button type="button" className={styles.agentResume} disabled={busy}
+                      onClick={() => saveAgentRegions(agent)}>儲存偏好</button>
+                    <button type="button" disabled={busy}
+                      onClick={() => setEditingAgentId("")}>取消</button>
+                  </div>
+                  <small>新偏好會在目前掃描點完成後生效；北歐無待掃點時會接手其他地區。</small>
+                </div>
+              )}
               <div className={styles.agentActions}>
+                <button className={styles.agentToggle} disabled={busy}
+                  onClick={() => {
+                    setEditingAgentId(editingAgentId === agent.id ? "" : agent.id);
+                    setEditingAgentRegions(agent.region_tags.join(","));
+                  }}>
+                  {editingAgentId === agent.id ? "關閉區域設定" : "修改區域"}
+                </button>
                 {agent.enabled
                   ? <button
                       className={`${styles.agentToggle} ${agent.paused ? styles.agentResume : ""}`}
@@ -396,25 +446,21 @@ export default function AdminClient({
             <>
               <fieldset>
                 <legend>國家城市包（可複選）</legend>
-                <div className={styles.choiceGrid}>
-                  {COUNTRY_PACK_LABELS.map((pack) => (
-                    <label key={pack.name} className={packs.includes(pack.name) ? styles.checked : ""}>
-                      <input type="checkbox" checked={packs.includes(pack.name)}
-                        onChange={() => toggle(pack.name, packs, setPacks)} />
-                      <span>{pack.name}</span><small>{pack.region}・{pack.count} 城市</small>
-                    </label>
-                  ))}
-                </div>
-              </fieldset>
-              <fieldset>
-                <legend>獨立主要城市（可複選）</legend>
-                <div className={styles.cityGrid}>
-                  {CITY_CHOICES.map((city) => (
-                    <label key={city[0]}>
-                      <input type="checkbox" checked={cityIds.includes(city[0])}
-                        onChange={() => toggle(city[0], cityIds, setCityIds)} />
-                      <span>{city[1]}</span>
-                    </label>
+                <div className={styles.packGroups}>
+                  {COUNTRY_PACK_GROUPS.map((group) => (
+                    <section className={styles.packGroup} key={group.region}>
+                      <h3>{group.region}</h3>
+                      <div className={styles.choiceGrid}>
+                        {group.packs.map((pack) => (
+                          <label key={pack.name}
+                            className={packs.includes(pack.name) ? styles.checked : ""}>
+                            <input type="checkbox" checked={packs.includes(pack.name)}
+                              onChange={() => toggle(pack.name, packs, setPacks)} />
+                            <span>{pack.name}</span><small>{pack.count} 城市</small>
+                          </label>
+                        ))}
+                      </div>
+                    </section>
                   ))}
                 </div>
               </fieldset>

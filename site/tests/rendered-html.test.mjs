@@ -20,6 +20,8 @@ test("ships the public mushroom map and protected scan console", async () => {
   assert.match(map, /api\/mushrooms/);
   assert.doesNotMatch(map, /id="lv1"/);
   assert.match(map, /\[2,3,4\]/);
+  assert.match(map, /DEFAULT_HIDDEN_TYPES=new Set\(\['15'\]\)/);
+  assert.match(map, /!DEFAULT_HIDDEN_TYPES\.has\(v\)/);
   assert.match(adminPage, /requireChatGPTUser\("\/admin"\)/);
   assert.match(adminPage, /isAdminEmail/);
   assert.match(adminClient, /建立掃描工作/);
@@ -28,6 +30,8 @@ test("ships the public mushroom map and protected scan console", async () => {
   assert.match(adminClient, /持續循環/);
   assert.match(adminClient, /全球掃描節點/);
   assert.match(adminClient, /api\/admin\/agents\/enroll/);
+  assert.doesNotMatch(adminClient, /獨立主要城市|CITY_CHOICES|cityIds/);
+  assert.match(adminClient, /COUNTRY_PACK_GROUPS/);
   assert.match(layout, /Pikmin 蘑菇探險隊/);
 });
 
@@ -57,6 +61,20 @@ test("includes durable multi-agent leases, v2 protocol routes, and migrations", 
   assert.match(cloud, /CREATE TABLE IF NOT EXISTS scan_jobs/);
   assert.match(cloud, /ADMIN_EMAILS/);
   assert.match(plan, /COUNTRY_PACK_CATALOG/);
+  assert.match(plan, /name: "瑞典", region: "北歐"/);
+  assert.match(plan, /name: "挪威", region: "北歐"/);
+  assert.match(plan, /name: "丹麥", region: "北歐"/);
+  assert.match(plan, /name: "芬蘭", region: "北歐"/);
+  assert.match(plan, /name: "冰島", region: "北歐"/);
+  assert.match(plan, /name: "阿拉伯聯合大公國", region: "中東"/);
+  assert.match(plan, /name: "德國", region: "中歐"/);
+  assert.match(plan, /name: "義大利", region: "南歐"/);
+  assert.match(plan, /name: "埃及", region: "北非"/);
+  assert.match(plan, /name: "哥斯大黎加", region: "中美洲"/);
+  assert.match(plan, /name: "美國東部", region: "北美洲"/);
+  assert.match(plan, /name: "美國中部", region: "北美洲"/);
+  assert.match(plan, /name: "美國西部", region: "北美洲"/);
+  assert.doesNotMatch(plan, /CITY_CHOICES|cityIds/);
   assert.match(plan, /buildScanPlan/);
   assert.match(fleet, /releaseExpiredLeases/);
   assert.match(fleet, /lease_token/);
@@ -70,8 +88,10 @@ test("includes durable multi-agent leases, v2 protocol routes, and migrations", 
   assert.match(schema, /paused: integer\("paused"\)/);
   assert.match(fleet, /if \(agent\.paused\)/);
   assert.match(control, /if \(agent\.paused\) return plain\("pause\\n"\)/);
-  assert.match(agentAction, /\["enable", "disable", "pause", "resume"\]/);
+  assert.match(agentAction, /\["enable", "disable", "pause", "resume", "update-regions"\]/);
+  assert.match(agentAction, /region_tags_json=\?/);
   assert.match(adminClient, /繼續掃描/);
+  assert.match(adminClient, /套用北歐五國/);
   assert.match(pauseMigration, /ADD `paused` integer DEFAULT 0 NOT NULL/);
   assert.match(cloud, /SELECT paused FROM scan_agents LIMIT 1/);
   await access(new URL("dist/server/index.js", root));

@@ -29,9 +29,19 @@ export async function GET() {
     rows: value.rows + agent.uploaded_rows,
     bytes: value.bytes + agent.uploaded_bytes,
   }), { rows: 0, bytes: 0 });
+  const publicMushrooms = mushrooms.results.map((mushroom) => {
+    const firstSeen = Number(mushroom.first_seen ?? 0);
+    const challengeStarted = Math.floor(Number(mushroom.start_ms ?? 0) / 1000);
+    return {
+      ...mushroom,
+      // Older rows kept the first time this POI was ever observed. A newer
+      // challenge at the same POI must sort and notify as a new discovery.
+      discovered_at: Math.max(firstSeen, challengeStarted),
+    };
+  });
   return noStoreJson({
     updated: Math.floor(now / 1000),
-    count: mushrooms.results.length,
+    count: publicMushrooms.length,
     status: {
       ...status,
       cloud_updated_at: Number(scanner?.updated_at ?? 0),
@@ -47,6 +57,6 @@ export async function GET() {
       current_location: primary?.current_location ?? null,
     },
     agents,
-    mushrooms: mushrooms.results,
+    mushrooms: publicMushrooms,
   });
 }

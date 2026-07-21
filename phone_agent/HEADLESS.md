@@ -12,8 +12,9 @@ powershell.exe -NoProfile -ExecutionPolicy Bypass `
 ```
 
 This installs the current `agent.sh`, a Magisk-booted phone watchdog, and the display assets,
-then sets `LOCAL_DISPLAY=1` in the private phone config. It stops the old Agent and starts the
-new Agent only after the trusted virtual display is healthy. USB may then remain disconnected.
+then sets `LOCAL_DISPLAY=1` in the private phone config. It stops the old Agent, starts the
+display watchdog with a bounded health probe, and starts one Agent with display-0 fallback while
+the display daemon continues recovery. USB may then remain disconnected.
 See `SPEC_ON_DEVICE_DISPLAY.md` for architecture, recovery, and verified tests.
 
 The installer acquires a phone-side lock before compiling, staging, or changing phone state.
@@ -31,6 +32,16 @@ powershell.exe -NoProfile -ExecutionPolicy Bypass `
 The recovery switch still refuses to clear the lock when its recorded, identity-matching phone
 installer process is alive. A new virtual display also force-stops and recreates the Pikmin task
 on the target display; a healthy existing display remains idempotent and does not restart the game.
+
+Boot recovery is bounded: every framework display probe has a timeout, and a display that is
+still recovering after the boot wait no longer prevents the cloud Agent from starting. The
+display daemon continues rebuilding in the background while the Agent uses its existing
+display-0 fallback.
+
+For phone-only manual recovery, open Magisk, find `Pikmin Scanner Agent`, and tap its
+**Action** button. The installed `action.sh` stops only cmdline-validated processes owned by
+this module, performs a cold display restart, starts exactly one Agent parent, and writes
+`manual-recovery.log`. This does not require USB, ADB, or the Windows Supervisor.
 
 The installer refuses to run while the serial-scoped Windows Supervisor Scheduled Task, a
 recorded live Supervisor process, or a manually started Windows headless scrcpy session exists.

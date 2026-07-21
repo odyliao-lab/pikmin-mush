@@ -19,7 +19,6 @@ export type ScanTarget = {
 
 export type ScanConfig = {
   mode: "auto" | "custom";
-  cityIds: string[];
   countryPacks: string[];
   radiusKm: number;
   gridStepM: number;
@@ -36,21 +35,6 @@ export type ScanConfig = {
 };
 
 type Center = [name: string, lat: number, lng: number];
-
-export const CITY_CHOICES = [
-  ["taipei", "台北 Taipei", "台灣", 25.020, 25.060, 121.500, 121.560],
-  ["tokyo", "東京 Tokyo", "日本", 35.655, 35.705, 139.720, 139.790],
-  ["seoul", "首爾 Seoul", "韓國", 37.545, 37.595, 126.950, 127.020],
-  ["hong-kong", "香港 Hong Kong", "中國", 22.265, 22.315, 114.145, 114.215],
-  ["singapore", "新加坡 Singapore", "新加坡", 1.270, 1.320, 103.825, 103.895],
-  ["bangkok", "曼谷 Bangkok", "泰國", 13.725, 13.775, 100.500, 100.570],
-  ["london", "倫敦 London", "英國", 51.485, 51.535, -0.155, -0.075],
-  ["paris", "巴黎 Paris", "法國", 48.835, 48.885, 2.315, 2.385],
-  ["new-york", "紐約 New York", "美國", 40.690, 40.740, -74.030, -73.950],
-  ["los-angeles", "洛杉磯 Los Angeles", "美國", 34.025, 34.075, -118.280, -118.210],
-  ["san-francisco", "舊金山 San Francisco", "美國", 37.750, 37.800, -122.450, -122.380],
-  ["sydney", "雪梨 Sydney", "澳洲", -33.895, -33.845, 151.175, 151.245],
-] as const;
 
 const JAPAN: Center[] = [
   ["札幌 Sapporo",43.0618,141.3545],["仙台 Sendai",38.2682,140.8694],
@@ -111,6 +95,211 @@ const ARGENTINA: Center[] = [
   ["聖菲 Santa Fe",-31.6333,-60.7000],["內烏肯 Neuquen",-38.9516,-68.0591],
 ];
 
+const SWEDEN: Center[] = [
+  ["斯德哥爾摩 Stockholm",59.3293,18.0686],["哥德堡 Gothenburg",57.7089,11.9746],
+  ["馬爾默 Malmo",55.6050,13.0038],["烏普薩拉 Uppsala",59.8586,17.6389],
+  ["韋斯特羅斯 Vasteras",59.6099,16.5448],["厄勒布魯 Orebro",59.2753,15.2134],
+];
+
+const NORWAY: Center[] = [
+  ["奧斯陸 Oslo",59.9139,10.7522],["卑爾根 Bergen",60.3913,5.3221],
+  ["特隆赫姆 Trondheim",63.4305,10.3951],["斯塔萬格 Stavanger",58.9700,5.7331],
+  ["特羅姆瑟 Tromso",69.6492,18.9553],["克里斯蒂安桑 Kristiansand",58.1467,7.9956],
+];
+
+const DENMARK: Center[] = [
+  ["哥本哈根 Copenhagen",55.6761,12.5683],["奧胡斯 Aarhus",56.1629,10.2039],
+  ["奧登斯 Odense",55.4038,10.4024],["奧爾堡 Aalborg",57.0488,9.9217],
+  ["埃斯比約 Esbjerg",55.4765,8.4594],
+];
+
+const FINLAND: Center[] = [
+  ["赫爾辛基 Helsinki",60.1699,24.9384],["埃斯波 Espoo",60.2055,24.6559],
+  ["坦佩雷 Tampere",61.4978,23.7610],["圖爾庫 Turku",60.4518,22.2666],
+  ["奧盧 Oulu",65.0121,25.4651],["于韋斯屈萊 Jyvaskyla",62.2426,25.7473],
+];
+
+const ICELAND: Center[] = [
+  ["雷克雅維克 Reykjavik",64.1466,-21.9426],["科帕沃于爾 Kopavogur",64.1110,-21.9087],
+  ["哈布納菲厄澤 Hafnarfjordur",64.0671,-21.9547],["阿克雷里 Akureyri",65.6885,-18.1262],
+];
+
+const UAE: Center[] = [
+  ["杜拜 Dubai",25.2048,55.2708],["阿布達比 Abu Dhabi",24.4539,54.3773],
+  ["沙迦 Sharjah",25.3463,55.4209],["艾因 Al Ain",24.1302,55.8023],
+];
+
+const SAUDI_ARABIA: Center[] = [
+  ["利雅德 Riyadh",24.7136,46.6753],["吉達 Jeddah",21.4858,39.1925],
+  ["麥加 Mecca",21.3891,39.8579],["麥地那 Medina",24.5247,39.5692],
+  ["達曼 Dammam",26.4207,50.0888],
+];
+
+const ISRAEL: Center[] = [
+  ["特拉維夫 Tel Aviv",32.0853,34.7818],["耶路撒冷 Jerusalem",31.7683,35.2137],
+  ["海法 Haifa",32.7940,34.9896],["貝爾謝巴 Beer Sheva",31.2520,34.7915],
+];
+
+const JORDAN: Center[] = [
+  ["安曼 Amman",31.9539,35.9106],["扎爾卡 Zarqa",32.0728,36.0880],
+  ["伊爾比德 Irbid",32.5568,35.8469],["亞喀巴 Aqaba",29.5321,35.0063],
+];
+
+const QATAR: Center[] = [
+  ["杜哈 Doha",25.2854,51.5310],["賴揚 Al Rayyan",25.2919,51.4244],
+  ["沃克拉 Al Wakrah",25.1659,51.5976],
+];
+
+const GERMANY: Center[] = [
+  ["柏林 Berlin",52.5200,13.4050],["漢堡 Hamburg",53.5511,9.9937],
+  ["慕尼黑 Munich",48.1351,11.5820],["科隆 Cologne",50.9375,6.9603],
+  ["法蘭克福 Frankfurt",50.1109,8.6821],["萊比錫 Leipzig",51.3397,12.3731],
+];
+
+const AUSTRIA: Center[] = [
+  ["維也納 Vienna",48.2082,16.3738],["格拉茲 Graz",47.0707,15.4395],
+  ["林茲 Linz",48.3069,14.2858],["薩爾斯堡 Salzburg",47.8095,13.0550],
+  ["因斯布魯克 Innsbruck",47.2692,11.4041],
+];
+
+const SWITZERLAND: Center[] = [
+  ["蘇黎世 Zurich",47.3769,8.5417],["日內瓦 Geneva",46.2044,6.1432],
+  ["巴塞爾 Basel",47.5596,7.5886],["伯恩 Bern",46.9480,7.4474],
+  ["洛桑 Lausanne",46.5197,6.6323],
+];
+
+const CZECHIA: Center[] = [
+  ["布拉格 Prague",50.0755,14.4378],["布爾諾 Brno",49.1951,16.6068],
+  ["俄斯特拉發 Ostrava",49.8209,18.2625],["比爾森 Plzen",49.7384,13.3736],
+];
+
+const POLAND: Center[] = [
+  ["華沙 Warsaw",52.2297,21.0122],["克拉科夫 Krakow",50.0647,19.9450],
+  ["羅茲 Lodz",51.7592,19.4560],["弗羅茨瓦夫 Wroclaw",51.1079,17.0385],
+  ["波茲南 Poznan",52.4064,16.9252],["格但斯克 Gdansk",54.3520,18.6466],
+];
+
+const HUNGARY: Center[] = [
+  ["布達佩斯 Budapest",47.4979,19.0402],["德布勒森 Debrecen",47.5316,21.6273],
+  ["塞格德 Szeged",46.2530,20.1414],["米什科爾茨 Miskolc",48.1035,20.7784],
+  ["佩奇 Pecs",46.0727,18.2323],
+];
+
+const ITALY: Center[] = [
+  ["羅馬 Rome",41.9028,12.4964],["米蘭 Milan",45.4642,9.1900],
+  ["拿坡里 Naples",40.8518,14.2681],["杜林 Turin",45.0703,7.6869],
+  ["波隆那 Bologna",44.4949,11.3426],["佛羅倫斯 Florence",43.7696,11.2558],
+  ["巴勒摩 Palermo",38.1157,13.3615],
+];
+
+const SPAIN: Center[] = [
+  ["馬德里 Madrid",40.4168,-3.7038],["巴塞隆納 Barcelona",41.3874,2.1686],
+  ["瓦倫西亞 Valencia",39.4699,-0.3763],["塞維亞 Seville",37.3891,-5.9845],
+  ["薩拉戈薩 Zaragoza",41.6488,-0.8891],["馬拉加 Malaga",36.7213,-4.4214],
+];
+
+const PORTUGAL: Center[] = [
+  ["里斯本 Lisbon",38.7223,-9.1393],["波多 Porto",41.1579,-8.6291],
+  ["布拉加 Braga",41.5454,-8.4265],["科英布拉 Coimbra",40.2033,-8.4103],
+  ["法魯 Faro",37.0194,-7.9304],
+];
+
+const GREECE: Center[] = [
+  ["雅典 Athens",37.9838,23.7275],["塞薩洛尼基 Thessaloniki",40.6401,22.9444],
+  ["帕特雷 Patras",38.2466,21.7346],["伊拉克利翁 Heraklion",35.3387,25.1442],
+  ["拉里薩 Larissa",39.6390,22.4191],
+];
+
+const CROATIA: Center[] = [
+  ["札格雷布 Zagreb",45.8150,15.9819],["斯普利特 Split",43.5081,16.4402],
+  ["里耶卡 Rijeka",45.3271,14.4422],["奧西耶克 Osijek",45.5550,18.6955],
+  ["杜布羅夫尼克 Dubrovnik",42.6507,18.0944],
+];
+
+const EGYPT: Center[] = [
+  ["開羅 Cairo",30.0444,31.2357],["亞歷山卓 Alexandria",31.2001,29.9187],
+  ["吉薩 Giza",30.0131,31.2089],["塞得港 Port Said",31.2653,32.3019],
+  ["路克索 Luxor",25.6872,32.6396],["亞斯文 Aswan",24.0889,32.8998],
+];
+
+const MOROCCO: Center[] = [
+  ["卡薩布蘭卡 Casablanca",33.5731,-7.5898],["拉巴特 Rabat",34.0209,-6.8416],
+  ["馬拉喀什 Marrakech",31.6295,-7.9811],["非斯 Fes",34.0181,-5.0078],
+  ["丹吉爾 Tangier",35.7595,-5.8340],["阿加迪爾 Agadir",30.4278,-9.5981],
+];
+
+const ALGERIA: Center[] = [
+  ["阿爾及爾 Algiers",36.7538,3.0588],["奧蘭 Oran",35.6971,-0.6308],
+  ["君士坦丁 Constantine",36.3650,6.6147],["安納巴 Annaba",36.9000,7.7667],
+  ["塞提夫 Setif",36.1900,5.4100],
+];
+
+const TUNISIA: Center[] = [
+  ["突尼斯 Tunis",36.8065,10.1815],["斯法克斯 Sfax",34.7406,10.7603],
+  ["蘇塞 Sousse",35.8256,10.6369],["凱魯萬 Kairouan",35.6781,10.0963],
+  ["比塞大 Bizerte",37.2744,9.8739],
+];
+
+const GUATEMALA: Center[] = [
+  ["瓜地馬拉市 Guatemala City",14.6349,-90.5069],
+  ["克薩爾特南戈 Quetzaltenango",14.8347,-91.5181],
+  ["埃斯昆特拉 Escuintla",14.3050,-90.7850],["安地瓜 Antigua",14.5586,-90.7295],
+];
+
+const HONDURAS: Center[] = [
+  ["德古西加巴 Tegucigalpa",14.0723,-87.1921],
+  ["聖佩德羅蘇拉 San Pedro Sula",15.5007,-88.0330],
+  ["拉塞瓦 La Ceiba",15.7703,-86.7919],["喬洛馬 Choloma",15.6144,-87.9530],
+];
+
+const EL_SALVADOR: Center[] = [
+  ["聖薩爾瓦多 San Salvador",13.6929,-89.2182],["聖安娜 Santa Ana",13.9942,-89.5597],
+  ["聖米格爾 San Miguel",13.4833,-88.1833],["聖塔特克拉 Santa Tecla",13.6769,-89.2797],
+];
+
+const NICARAGUA: Center[] = [
+  ["馬拿瓜 Managua",12.1140,-86.2362],["雷昂 Leon",12.4379,-86.8780],
+  ["格拉納達 Granada",11.9344,-85.9560],["馬薩亞 Masaya",11.9744,-86.0942],
+];
+
+const COSTA_RICA: Center[] = [
+  ["聖荷西 San Jose",9.9281,-84.0907],["阿拉胡埃拉 Alajuela",10.0163,-84.2116],
+  ["埃雷迪亞 Heredia",10.0024,-84.1165],["卡塔戈 Cartago",9.8644,-83.9194],
+  ["利韋里亞 Liberia",10.6346,-85.4400],
+];
+
+const PANAMA: Center[] = [
+  ["巴拿馬市 Panama City",8.9824,-79.5199],["科隆 Colon",9.3547,-79.9001],
+  ["戴維 David",8.4273,-82.4309],["聖地牙哥 Santiago",8.1004,-80.9830],
+  ["奇特雷 Chitre",7.9608,-80.4297],
+];
+
+const USA_EAST: Center[] = [
+  ["紐約 New York",40.7128,-74.0060],["波士頓 Boston",42.3601,-71.0589],
+  ["費城 Philadelphia",39.9526,-75.1652],["華盛頓 Washington DC",38.9072,-77.0369],
+  ["巴爾的摩 Baltimore",39.2904,-76.6122],["邁阿密 Miami",25.7617,-80.1918],
+  ["奧蘭多 Orlando",28.5383,-81.3792],["亞特蘭大 Atlanta",33.7490,-84.3880],
+  ["夏洛特 Charlotte",35.2271,-80.8431],["洛利 Raleigh",35.7796,-78.6382],
+  ["匹茲堡 Pittsburgh",40.4406,-79.9959],["水牛城 Buffalo",42.8864,-78.8784],
+];
+
+const USA_CENTRAL: Center[] = [
+  ["芝加哥 Chicago",41.8781,-87.6298],["休士頓 Houston",29.7604,-95.3698],
+  ["達拉斯 Dallas",32.7767,-96.7970],["奧斯汀 Austin",30.2672,-97.7431],
+  ["聖安東尼奧 San Antonio",29.4241,-98.4936],["明尼亞波利斯 Minneapolis",44.9778,-93.2650],
+  ["聖路易 St Louis",38.6270,-90.1994],["堪薩斯城 Kansas City",39.0997,-94.5786],
+  ["丹佛 Denver",39.7392,-104.9903],["奧克拉荷馬市 Oklahoma City",35.4676,-97.5164],
+  ["紐奧良 New Orleans",29.9511,-90.0715],["密爾瓦基 Milwaukee",43.0389,-87.9065],
+];
+
+const USA_WEST: Center[] = [
+  ["洛杉磯 Los Angeles",34.0522,-118.2437],["舊金山 San Francisco",37.7749,-122.4194],
+  ["聖地牙哥 San Diego",32.7157,-117.1611],["西雅圖 Seattle",47.6062,-122.3321],
+  ["波特蘭 Portland",45.5152,-122.6784],["拉斯維加斯 Las Vegas",36.1699,-115.1398],
+  ["鳳凰城 Phoenix",33.4484,-112.0740],["鹽湖城 Salt Lake City",40.7608,-111.8910],
+  ["沙加緬度 Sacramento",38.5816,-121.4944],["聖荷西 San Jose",37.3382,-121.8863],
+  ["檀香山 Honolulu",21.3099,-157.8581],["安克拉治 Anchorage",61.2181,-149.9003],
+];
 // 國家目錄是擴充的唯一入口。新增歐美國家時只需要加入一個定義，
 // 排程器、後台選項與 Agent 區域偏好都會自動沿用。
 export const COUNTRY_PACK_CATALOG = [
@@ -121,6 +310,40 @@ export const COUNTRY_PACK_CATALOG = [
   { id: "br", name: "巴西", region: "南美洲", cities: BRAZIL },
   { id: "ec", name: "厄瓜多", region: "南美洲", cities: ECUADOR },
   { id: "ar", name: "阿根廷", region: "南美洲", cities: ARGENTINA },
+  { id: "se", name: "瑞典", region: "北歐", cities: SWEDEN },
+  { id: "no", name: "挪威", region: "北歐", cities: NORWAY },
+  { id: "dk", name: "丹麥", region: "北歐", cities: DENMARK },
+  { id: "fi", name: "芬蘭", region: "北歐", cities: FINLAND },
+  { id: "is", name: "冰島", region: "北歐", cities: ICELAND },
+  { id: "ae", name: "阿拉伯聯合大公國", region: "中東", cities: UAE },
+  { id: "sa", name: "沙烏地阿拉伯", region: "中東", cities: SAUDI_ARABIA },
+  { id: "il", name: "以色列", region: "中東", cities: ISRAEL },
+  { id: "jo", name: "約旦", region: "中東", cities: JORDAN },
+  { id: "qa", name: "卡達", region: "中東", cities: QATAR },
+  { id: "de", name: "德國", region: "中歐", cities: GERMANY },
+  { id: "at", name: "奧地利", region: "中歐", cities: AUSTRIA },
+  { id: "ch", name: "瑞士", region: "中歐", cities: SWITZERLAND },
+  { id: "cz", name: "捷克", region: "中歐", cities: CZECHIA },
+  { id: "pl", name: "波蘭", region: "中歐", cities: POLAND },
+  { id: "hu", name: "匈牙利", region: "中歐", cities: HUNGARY },
+  { id: "it", name: "義大利", region: "南歐", cities: ITALY },
+  { id: "es", name: "西班牙", region: "南歐", cities: SPAIN },
+  { id: "pt", name: "葡萄牙", region: "南歐", cities: PORTUGAL },
+  { id: "gr", name: "希臘", region: "南歐", cities: GREECE },
+  { id: "hr", name: "克羅埃西亞", region: "南歐", cities: CROATIA },
+  { id: "eg", name: "埃及", region: "北非", cities: EGYPT },
+  { id: "ma", name: "摩洛哥", region: "北非", cities: MOROCCO },
+  { id: "dz", name: "阿爾及利亞", region: "北非", cities: ALGERIA },
+  { id: "tn", name: "突尼西亞", region: "北非", cities: TUNISIA },
+  { id: "gt", name: "瓜地馬拉", region: "中美洲", cities: GUATEMALA },
+  { id: "hn", name: "宏都拉斯", region: "中美洲", cities: HONDURAS },
+  { id: "sv", name: "薩爾瓦多", region: "中美洲", cities: EL_SALVADOR },
+  { id: "ni", name: "尼加拉瓜", region: "中美洲", cities: NICARAGUA },
+  { id: "cr", name: "哥斯大黎加", region: "中美洲", cities: COSTA_RICA },
+  { id: "pa", name: "巴拿馬", region: "中美洲", cities: PANAMA },
+  { id: "us-east", name: "美國東部", region: "北美洲", cities: USA_EAST },
+  { id: "us-central", name: "美國中部", region: "北美洲", cities: USA_CENTRAL },
+  { id: "us-west", name: "美國西部", region: "北美洲", cities: USA_WEST },
 ] as const;
 
 export const COUNTRY_PACKS: Record<string, Center[]> = Object.fromEntries(
@@ -155,7 +378,6 @@ export function normalizeScanConfig(input: unknown): ScanConfig {
     body.custom : {}) as Record<string, unknown>;
   const config: ScanConfig = {
     mode,
-    cityIds: Array.isArray(body.cityIds) ? body.cityIds.map(String) : [],
     countryPacks: Array.isArray(body.countryPacks) ? body.countryPacks.map(String) : [],
     radiusKm: bounded(body.radiusKm ?? 2, 0.5, 10, "城市半徑"),
     gridStepM: bounded(body.gridStepM ?? 600, 100, 2000, "網格間距"),
@@ -242,12 +464,6 @@ export function buildScanPlan(
   if (config.mode === "custom" && config.custom) {
     regions = [{ name: "自訂區域", country: "", ...config.custom }];
   } else {
-    for (const id of config.cityIds) {
-      const city = CITY_CHOICES.find((entry) => entry[0] === id);
-      if (!city) continue;
-      regions.push({ name: city[1], country: city[2], latMin: city[3],
-        latMax: city[4], lngMin: city[5], lngMax: city[6] });
-    }
     for (const packValue of config.countryPacks) {
       const definition = COUNTRY_PACK_CATALOG.find((pack) =>
         pack.id === packValue || pack.name === packValue);
@@ -259,7 +475,7 @@ export function buildScanPlan(
   }
   const unique = new Map(regions.map((region) => [`${region.country}\0${region.name}`, region]));
   regions = optimize([...unique.values()], currentLocation);
-  if (!regions.length) throw new Error("至少選擇一座城市或國家城市包");
+  if (!regions.length) throw new Error("至少選擇一個國家城市包");
 
   const targets: ScanTarget[] = [];
   let previous = currentLocation ?? null;

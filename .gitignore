@@ -31,6 +31,8 @@ site-deploy.tar.gz
 # Native build and reverse-engineering inputs
 build_zygisk/
 reference/dump.cs
+reference/v149_raw/
+reference/v149_work/
 
 # Local agent/workspace metadata
 .agents/

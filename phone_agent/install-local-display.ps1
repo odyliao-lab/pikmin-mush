@@ -2,7 +2,7 @@
 param(
     [Parameter(Mandatory = $true)]
     [string]$Serial,
-    [string]$AdbPath = 'C:\Program Files\Netease\MuMuPlayer\nx_main\adb.exe',
+    [string]$AdbPath = "$env:LOCALAPPDATA\CodexTools\android-platform-tools\platform-tools\adb.exe",
     [string]$ScrcpyServerPath = "$env:LOCALAPPDATA\CodexTools\scrcpy-v4.1\scrcpy-server",
     [string]$NdkPath = "$env:LOCALAPPDATA\CodexTools\android-ndk\android-ndk-r27d",
     [switch]$RecoverStaleInstall
@@ -27,6 +27,7 @@ foreach ($path in @($AdbPath, $ScrcpyServerPath, $compiler,
         (Join-Path $scriptDirectory 'localvd-drain.c'),
         (Join-Path $scriptDirectory 'agent.sh'),
         (Join-Path $scriptDirectory 'service.sh'),
+        (Join-Path $scriptDirectory 'action.sh'),
         $identityScript)) {
     if (-not (Test-Path -LiteralPath $path)) { throw "Required file not found: $path" }
 }
@@ -175,15 +176,27 @@ rm -f $moduleDirectory/agent.pid
 cp $stageDirectory/local-display.sh $moduleDirectory/local-display.sh
 cp $stageDirectory/service.sh $moduleDirectory/service.sh
 cp $stageDirectory/agent.sh $moduleDirectory/agent.sh
+cp $stageDirectory/action.sh $moduleDirectory/action.sh
 cp $stageDirectory/localvd-drain $moduleDirectory/localvd-drain
 cp $stageDirectory/scrcpy-server $moduleDirectory/scrcpy-server
-chmod 755 $moduleDirectory/local-display.sh $moduleDirectory/service.sh $moduleDirectory/agent.sh $moduleDirectory/localvd-drain
+chmod 755 $moduleDirectory/local-display.sh $moduleDirectory/service.sh $moduleDirectory/agent.sh $moduleDirectory/action.sh $moduleDirectory/localvd-drain
 chmod 644 $moduleDirectory/scrcpy-server
-if grep -q ^LOCAL_DISPLAY= $moduleDirectory/config; then
-  sed -i "s/^LOCAL_DISPLAY=.*/LOCAL_DISPLAY=1/" $moduleDirectory/config
-else
-  echo LOCAL_DISPLAY=1 >> $moduleDirectory/config
-fi
+for setting in \
+  LOCAL_DISPLAY=1 \
+  MAP_REFRESH_EXPERIMENT=1 \
+  MAP_REFRESH_TIMEOUT_SECONDS=0 \
+  MAP_REFRESH_SETTLE_SECONDS=3 \
+  MAP_REFRESH_FALLBACK_TIMEOUT_SECONDS=40 \
+  STARTUP_TAP_X=360 \
+  STARTUP_CONTINUE_Y=752 \
+  STARTUP_LOGIN_CONTINUE_Y=860; do
+  key=`${setting%%=*}
+  if grep -q "^`$key=" $moduleDirectory/config; then
+    sed -i "s/^`$key=.*/`$setting/" $moduleDirectory/config
+  else
+    echo "`$setting" >> $moduleDirectory/config
+  fi
+done
 rm -rf $stageDirectory
 sh $moduleDirectory/service.sh
 "@ -replace "`r", ''
@@ -228,7 +241,7 @@ fi
 am start --display 0 -n com.nianticlabs.pikmin/com.nianticproject.ichigo.IchigoUnityPlayerActivity >/dev/null 2>&1 || true
 if test "`$old_agent_still_alive" -eq 0 && test -x $moduleDirectory/agent.sh; then
   rm -f $moduleDirectory/agent.pid
-  nohup $moduleDirectory/agent.sh >>$moduleDirectory/agent.log 2>&1 &
+  nohup setsid $moduleDirectory/agent.sh >>$moduleDirectory/agent.log 2>&1 </dev/null &
   new_agent_pid=`$!
   echo "`$new_agent_pid" >$moduleDirectory/agent.pid
   sleep 1
@@ -257,6 +270,7 @@ try {
     Invoke-Adb push (Join-Path $scriptDirectory 'local-display.sh') "$stageDirectory/local-display.sh"
     Invoke-Adb push (Join-Path $scriptDirectory 'service.sh') "$stageDirectory/service.sh"
     Invoke-Adb push (Join-Path $scriptDirectory 'agent.sh') "$stageDirectory/agent.sh"
+    Invoke-Adb push (Join-Path $scriptDirectory 'action.sh') "$stageDirectory/action.sh"
     Invoke-Adb push $drainOutput "$stageDirectory/localvd-drain"
     Invoke-Adb push $ScrcpyServerPath "$stageDirectory/scrcpy-server"
 
