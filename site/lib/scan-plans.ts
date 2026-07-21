@@ -300,7 +300,6 @@ const USA_WEST: Center[] = [
   ["沙加緬度 Sacramento",38.5816,-121.4944],["聖荷西 San Jose",37.3382,-121.8863],
   ["檀香山 Honolulu",21.3099,-157.8581],["安克拉治 Anchorage",61.2181,-149.9003],
 ];
-
 // 國家目錄是擴充的唯一入口。新增歐美國家時只需要加入一個定義，
 // 排程器、後台選項與 Agent 區域偏好都會自動沿用。
 export const COUNTRY_PACK_CATALOG = [
