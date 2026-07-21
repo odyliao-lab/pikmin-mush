@@ -7,7 +7,7 @@ param(
     [ValidateSet('virtual', 'screen-off')]
     [string]$Mode = 'virtual',
     [string]$ConfigPath,
-    [string]$AdbPath = 'C:\Program Files\Netease\MuMuPlayer\nx_main\adb.exe'
+    [string]$AdbPath = "$env:LOCALAPPDATA\CodexTools\android-platform-tools\platform-tools\adb.exe"
 )
 
 $ErrorActionPreference = 'Stop'

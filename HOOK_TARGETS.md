@@ -1,10 +1,10 @@
-# 階段1 成果：Hook 目標與欄位偏移 (Pikmin Bloom v148, arm64)
+# Hook 目標與欄位偏移（Pikmin Bloom v149.0 / 1784082813, arm64）
 
 > 執行期位址 = libil2cpp.so 載入基址 + RVA。offset 欄是結構內欄位位移。
 > 版本相依：147/148 偏移不同，每次遊戲更新需重新 dump。
 
 ## 候選 hook 點
-1. **MapManager.RegisterMapObject(MapObjectBase obj)** — RVA `0xCB4596C`
+1. **MapManager.RegisterMapObject(MapObjectBase obj)** — RVA `0xCBCF00C`
    - Namespace: `Niantic.TokyoStudio.Map`，class `MapManager : MonoBehaviour`
    - 每個地圖物件註冊時呼叫（含蘑菇）。簽章 (this, MapObjectBase*)。最易 hook。
    - MapManager.mapObjects (Dictionary<string,MapObjectBase>) 偏移 0x78。
