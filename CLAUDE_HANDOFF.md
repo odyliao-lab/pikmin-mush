@@ -59,7 +59,7 @@ $data.status
 目前 ADB：
 
 ```text
-C:\Program Files\Netease\MuMuPlayer\nx_main\adb.exe
+C:\Users\Ody\AppData\Local\CodexTools\android-platform-tools\platform-tools\adb.exe
 ```
 
 目前序號：
@@ -71,7 +71,7 @@ C:\Program Files\Netease\MuMuPlayer\nx_main\adb.exe
 檢查：
 
 ```powershell
-$adb = 'C:\Program Files\Netease\MuMuPlayer\nx_main\adb.exe'
+$adb = "$env:LOCALAPPDATA\CodexTools\android-platform-tools\platform-tools\adb.exe"
 & $adb -s 7lw8ibvghe6dtof6 get-state
 & $adb -s 7lw8ibvghe6dtof6 shell `
   "su -c 'ps -ef | grep pikmin_scanner_agent | grep -v grep'"
@@ -671,7 +671,8 @@ Agent 標籤不會禁止它接其他國家。需要 hard assignment 時必須新
 
 ### Zygisk RVA 綁遊戲版本
 
-目前 hook 基於 Pikmin Bloom v148 / versionCode 1782528808。遊戲更新後 RVA 可能全部失效。
+目前 hook 基於 Pikmin Bloom v149.0 / versionCode 1784082813，並在掛 hook 前驗證三個目標
+函式的 prologue 簽章。遊戲更新後 RVA 可能全部失效；簽章不符時模組會 fail closed。
 完整細節見 `SPEC_autoscan.md`。
 
 ### g_seen / TSV

@@ -1,7 +1,7 @@
 {
   "serial": "ANDROID_ADB_SERIAL",
   "mode": "virtual",
-  "adbPath": "C:\\Program Files\\Netease\\MuMuPlayer\\nx_main\\adb.exe",
+  "adbPath": "C:\\Users\\YOUR_USER\\AppData\\Local\\CodexTools\\android-platform-tools\\platform-tools\\adb.exe",
   "scrcpyPath": "C:\\Users\\YOUR_USER\\AppData\\Local\\CodexTools\\scrcpy-v4.1\\scrcpy.exe",
   "pollSeconds": 10,
   "gameResumeGraceSeconds": 45,

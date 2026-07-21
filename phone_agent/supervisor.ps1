@@ -29,7 +29,9 @@ function Get-ConfigValue([string]$Name, $Default) {
     return $Default
 }
 
-$adbPath = [string](Get-ConfigValue 'adbPath' 'C:\Program Files\Netease\MuMuPlayer\nx_main\adb.exe')
+$adbPath = [string](Get-ConfigValue 'adbPath' (
+    Join-Path $env:LOCALAPPDATA 'CodexTools\android-platform-tools\platform-tools\adb.exe'
+))
 $scrcpyPath = [string](Get-ConfigValue 'scrcpyPath' "$env:LOCALAPPDATA\CodexTools\scrcpy-v4.1\scrcpy.exe")
 $effectiveMode = if ($Mode) { $Mode } else { [string](Get-ConfigValue 'mode' 'virtual') }
 $pollSeconds = [int](Get-ConfigValue 'pollSeconds' 10)

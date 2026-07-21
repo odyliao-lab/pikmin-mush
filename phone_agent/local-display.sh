@@ -7,6 +7,7 @@ BASE_DIR="${PIKMIN_LOCAL_DISPLAY_DIR:-$(CDPATH= cd -- "$(dirname -- "$0")" && pw
 RUNTIME_DIR="${PIKMIN_LOCAL_DISPLAY_RUNTIME:-/data/local/tmp/pikmin-local-display-runtime}"
 SERVER_JAR="$BASE_DIR/scrcpy-server"
 DRAIN_BIN="$BASE_DIR/localvd-drain"
+APP_PROCESS="${PIKMIN_APP_PROCESS:-/system/bin/app_process}"
 SERVER_PID_FILE="$RUNTIME_DIR/server.pid"
 DRAIN_PID_FILE="$RUNTIME_DIR/drain.pid"
 DAEMON_PID_FILE="$RUNTIME_DIR/daemon.pid"
@@ -92,7 +93,7 @@ case "$ACTION" in
   internal-server)
     echo $$ > "$SERVER_PID_FILE"
     export CLASSPATH="$SERVER_JAR"
-    exec app_process / com.genymobile.scrcpy.Server 4.1 \
+    exec "$APP_PROCESS" / com.genymobile.scrcpy.Server 4.1 \
       scid="$SCID" tunnel_forward=true log_level=info \
       video_bit_rate=100000 max_fps=1 audio=false control=false \
       send_device_meta=false send_frame_meta=false send_dummy_byte=false \
@@ -118,6 +119,7 @@ case "$ACTION" in
 
     [ -r "$SERVER_JAR" ] || { echo "Missing $SERVER_JAR" >&2; exit 1; }
     [ -x "$DRAIN_BIN" ] || { echo "Missing executable $DRAIN_BIN" >&2; exit 1; }
+    [ -x "$APP_PROCESS" ] || { echo "Missing executable $APP_PROCESS" >&2; exit 1; }
 
     mkdir -p "$RUNTIME_DIR"
     chmod 700 "$RUNTIME_DIR"

@@ -7,7 +7,7 @@ param(
     [string]$Mode = 'virtual',
 
     [string]$Serial,
-    [string]$AdbPath = 'C:\Program Files\Netease\MuMuPlayer\nx_main\adb.exe',
+    [string]$AdbPath = "$env:LOCALAPPDATA\CodexTools\android-platform-tools\platform-tools\adb.exe",
     [string]$ScrcpyPath = "$env:LOCALAPPDATA\CodexTools\scrcpy-v4.1\scrcpy.exe"
 )
 
