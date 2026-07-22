@@ -14,6 +14,7 @@ SCAN_PENDING="$MODDIR/scan.pending"
 DISPLAY_FILE="$MODDIR/game.display"
 SCAN_READY="$APP_FILES/scan.ready"
 QUERY_READY="$APP_FILES/map_query.ready"
+MAX_UPLOAD_CHUNK_BYTES=262144
 
 if [ ! -f "$CONFIG" ]; then
   echo "[agent] missing $CONFIG"
@@ -77,13 +78,15 @@ upload_new() {
   fi
   [ "$SIZE" -le "$OFFSET" ] && return 0
   COUNT=$((SIZE - OFFSET))
+  [ "$COUNT" -gt "$MAX_UPLOAD_CHUNK_BYTES" ] && COUNT="$MAX_UPLOAD_CHUNK_BYTES"
   dd if="$TSV" of="$CHUNK" bs=1 skip="$OFFSET" count="$COUNT" 2>/dev/null || return 1
   CODE="$(auth_curl -o "$RESPONSE" -w '%{http_code}' -X POST \
     -H 'Content-Type: application/octet-stream' \
     --data-binary "@$CHUNK" "$SERVER_URL/api/agent/upload" 2>/dev/null)"
   if [ "$CODE" = "200" ]; then
-    save_offset "$SIZE"
-    echo "[agent] uploaded $COUNT bytes, offset=$SIZE"
+    NEXT_OFFSET=$((OFFSET + COUNT))
+    save_offset "$NEXT_OFFSET"
+    echo "[agent] uploaded $COUNT bytes, offset=$NEXT_OFFSET"
     return 0
   fi
   echo "[agent] upload failed http=$CODE"

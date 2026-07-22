@@ -23,12 +23,20 @@ export async function GET() {
   } catch {
     status = {};
   }
+  const publicStatus = {
+    running: Boolean(status.running),
+    point: Number(status.point ?? 0),
+    total: Number(status.total ?? 0),
+    captured_total: Number(status.captured_total ?? 0),
+    new_at_point: Number(status.new_at_point ?? 0),
+    city: String(status.city ?? "").slice(0, 96),
+    country: String(status.country ?? "").slice(0, 96),
+    city_index: Number(status.city_index ?? 0),
+    city_total: Number(status.city_total ?? 0),
+    cycle: Number(status.cycle ?? 0),
+    source: String(status.source ?? "").slice(0, 48),
+  };
   const agents = agentsResult.results.map((agent) => publicAgent(agent, now));
-  const primary = agents.find((agent) => agent.id === "primary") ?? agents[0];
-  const totals = agents.reduce((value, agent) => ({
-    rows: value.rows + agent.uploaded_rows,
-    bytes: value.bytes + agent.uploaded_bytes,
-  }), { rows: 0, bytes: 0 });
   const publicMushrooms = mushrooms.results.map((mushroom) => {
     const firstSeen = Number(mushroom.first_seen ?? 0);
     const challengeStarted = Math.floor(Number(mushroom.start_ms ?? 0) / 1000);
@@ -43,7 +51,7 @@ export async function GET() {
     updated: Math.floor(now / 1000),
     count: publicMushrooms.length,
     status: {
-      ...status,
+      ...publicStatus,
       cloud_updated_at: Number(scanner?.updated_at ?? 0),
     },
     agent: {
@@ -51,12 +59,7 @@ export async function GET() {
       online: agents.some((agent) => agent.online),
       online_count: agents.filter((agent) => agent.online).length,
       total_count: agents.length,
-      last_seen: Math.floor(Number(primary?.last_seen ?? 0) / 1000),
-      uploaded_rows: totals.rows,
-      uploaded_bytes: totals.bytes,
-      current_location: primary?.current_location ?? null,
     },
-    agents,
     mushrooms: publicMushrooms,
   });
 }

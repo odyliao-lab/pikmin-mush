@@ -1,7 +1,7 @@
-import { authorized, ensureSchema, noStoreJson, runtime } from "../../../../lib/cloud";
+import { controllerAuthorized, ensureSchema, noStoreJson, runtime } from "../../../../lib/cloud";
 
 export async function GET(request: Request) {
-  if (!authorized(request)) return noStoreJson({ error: "unauthorized" }, 401);
+  if (!controllerAuthorized(request)) return noStoreJson({ error: "unauthorized" }, 401);
   await ensureSchema();
   const state = await runtime().DB.prepare(`SELECT seq, command_op,
     command_arg1, command_arg2, ack_seq, ack_ok, ack_message, last_seen,
