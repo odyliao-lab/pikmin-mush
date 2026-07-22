@@ -242,7 +242,7 @@ static int xdl_symtab_load_from_debugdata(xdl_t *self, int file_fd, size_t file_
 
   // get section headers
   shdrs = (ElfW(Shdr) *)xdl_read_memory_to_heap(debugdata, debugdata_sz, (size_t)ehdr->e_shoff,
-                                                ehdr->e_shentsize * ehdr->e_shnum);
+                                                (size_t)ehdr->e_shentsize * (size_t)ehdr->e_shnum);
   if (NULL == shdrs) goto end;
 
   // get .shstrtab
@@ -332,7 +332,7 @@ static int xdl_symtab_load(xdl_t *self) {
 
   // get section headers
   shdrs = (ElfW(Shdr) *)xdl_read_file_to_heap(file_fd, file_sz, (size_t)ehdr->e_shoff,
-                                              ehdr->e_shentsize * ehdr->e_shnum);
+                                              (size_t)ehdr->e_shentsize * (size_t)ehdr->e_shnum);
   if (NULL == shdrs) goto end;
 
   // get .shstrtab
