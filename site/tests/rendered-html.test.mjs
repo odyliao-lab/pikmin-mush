@@ -78,7 +78,7 @@ test("hardens uploads, public telemetry, controller credentials, and browser pol
 test("includes durable multi-agent leases, v2 protocol routes, and migrations", async () => {
   const [
     schema, cloud, plan, fleet, task, ack, control, agentAction, adminClient,
-    migration, pauseMigration, phoneAgent,
+    migration, pauseMigration, rotationMigration, phoneAgent, rotation, targets,
   ] = await Promise.all([
     readFile(new URL("db/schema.ts", root), "utf8"),
     readFile(new URL("lib/cloud.ts", root), "utf8"),
@@ -91,7 +91,10 @@ test("includes durable multi-agent leases, v2 protocol routes, and migrations", 
     readFile(new URL("app/admin/admin-client.tsx", root), "utf8"),
     readFile(new URL("drizzle/0003_fair_dragon_man.sql", root), "utf8"),
     readFile(new URL("drizzle/0005_military_red_hulk.sql", root), "utf8"),
+    readFile(new URL("drizzle/0006_naive_triton.sql", root), "utf8"),
     readFile(new URL("../phone_agent/agent.sh", root), "utf8"),
+    readFile(new URL("lib/rotation.ts", root), "utf8"),
+    readFile(new URL("lib/targets.ts", root), "utf8"),
   ]);
 
   assert.match(schema, /scanJobs/);
@@ -122,7 +125,7 @@ test("includes durable multi-agent leases, v2 protocol routes, and migrations", 
   assert.match(fleet, /tags\.map\(\(_.*, index\) => `WHEN \? THEN \$\{index\}`\)/);
   assert.match(fleet, /AND country IN/);
   assert.match(fleet, /\.\.\.tags, \.\.\.tags/);
-  assert.match(fleet, /rowsPerInsert = 7/);
+  assert.match(targets, /rowsPerInsert = 7/);
   assert.match(fleet, /count\?\.count.*>= Number\(job\.total_points\)/);
   assert.match(task, /claimTask/);
   assert.match(ack, /completeTask/);
@@ -133,13 +136,22 @@ test("includes durable multi-agent leases, v2 protocol routes, and migrations", 
   assert.match(phoneAgent, /interruptible_wait/);
   assert.match(schema, /paused: integer\("paused"\)/);
   assert.match(fleet, /if \(agent\.paused\)/);
+  assert.match(fleet, /rotation\.status !== "completed"/);
   assert.match(control, /if \(agent\.paused\) return plain\("pause\\n"\)/);
   assert.match(agentAction, /\["enable", "disable", "pause", "resume", "update-regions"\]/);
   assert.match(agentAction, /region_tags_json=\?/);
+  assert.match(agentAction, /每日自動換區已啟用/);
   assert.match(adminClient, /繼續掃描/);
   assert.match(adminClient, /套用北歐五國/);
   assert.match(pauseMigration, /ADD `paused` integer DEFAULT 0 NOT NULL/);
+  assert.match(rotationMigration, /CREATE TABLE `scan_rotation_runs`/);
   assert.match(cloud, /SELECT paused FROM scan_agents LIMIT 1/);
+  assert.match(schema, /scanRotationSettings/);
+  assert.match(schema, /scanRotationRuns/);
+  assert.match(cloud, /CREATE TABLE IF NOT EXISTS scan_rotation_runs/);
+  assert.match(rotation, /ensureDailyRotation/);
+  assert.match(rotation, /每日 07:30 自動換區/);
+  assert.match(rotation, /SELECT \* FROM scan_rotation_runs WHERE schedule_date=\?/);
   await access(new URL("dist/server/index.js", root));
 });
 

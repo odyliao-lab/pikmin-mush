@@ -43,6 +43,13 @@
       "when": 1784372082510,
       "tag": "0005_military_red_hulk",
       "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "6",
+      "when": 1784707567310,
+      "tag": "0006_naive_triton",
+      "breakpoints": true
     }
   ]
 }
