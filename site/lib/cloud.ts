@@ -38,6 +38,16 @@ async function patchColumns(db: RuntimeEnv["DB"]) {
       sql: "ALTER TABLE scan_agents ADD COLUMN paused INTEGER NOT NULL DEFAULT 0",
       verify: "SELECT paused FROM scan_agents LIMIT 1",
     },
+    { sql: "ALTER TABLE scan_agents ADD COLUMN game_version TEXT NOT NULL DEFAULT ''", verify: "SELECT game_version FROM scan_agents LIMIT 1" },
+    { sql: "ALTER TABLE scan_agents ADD COLUMN module_version TEXT NOT NULL DEFAULT ''", verify: "SELECT module_version FROM scan_agents LIMIT 1" },
+    { sql: "ALTER TABLE scan_agents ADD COLUMN last_data_at INTEGER NOT NULL DEFAULT 0", verify: "SELECT last_data_at FROM scan_agents LIMIT 1" },
+    { sql: "ALTER TABLE scan_agents ADD COLUMN last_target_at INTEGER NOT NULL DEFAULT 0", verify: "SELECT last_target_at FROM scan_agents LIMIT 1" },
+    { sql: "ALTER TABLE scan_agents ADD COLUMN no_data_streak INTEGER NOT NULL DEFAULT 0", verify: "SELECT no_data_streak FROM scan_agents LIMIT 1" },
+    { sql: "ALTER TABLE scan_agents ADD COLUMN previous_token_hash TEXT NOT NULL DEFAULT ''", verify: "SELECT previous_token_hash FROM scan_agents LIMIT 1" },
+    { sql: "ALTER TABLE scan_agents ADD COLUMN previous_token_expires_at INTEGER NOT NULL DEFAULT 0", verify: "SELECT previous_token_expires_at FROM scan_agents LIMIT 1" },
+    { sql: "ALTER TABLE scan_agents ADD COLUMN token_rotated_at INTEGER NOT NULL DEFAULT 0", verify: "SELECT token_rotated_at FROM scan_agents LIMIT 1" },
+    { sql: "ALTER TABLE scan_targets ADD COLUMN leased_at INTEGER NOT NULL DEFAULT 0", verify: "SELECT leased_at FROM scan_targets LIMIT 1" },
+    { sql: "ALTER TABLE scan_targets ADD COLUMN completed_agent_id TEXT NOT NULL DEFAULT ''", verify: "SELECT completed_agent_id FROM scan_targets LIMIT 1" },
   ];
   for (const addition of additions) {
     try {
@@ -99,7 +109,12 @@ export async function ensureSchema() {
       region_tags_json TEXT NOT NULL DEFAULT '[]',
       capabilities_json TEXT NOT NULL DEFAULT '{}',
       agent_version TEXT NOT NULL DEFAULT '',
+      game_version TEXT NOT NULL DEFAULT '',
+      module_version TEXT NOT NULL DEFAULT '',
       last_seen INTEGER NOT NULL DEFAULT 0,
+      last_data_at INTEGER NOT NULL DEFAULT 0,
+      last_target_at INTEGER NOT NULL DEFAULT 0,
+      no_data_streak INTEGER NOT NULL DEFAULT 0,
       current_lat REAL,
       current_lng REAL,
       current_job_id INTEGER,
@@ -107,6 +122,9 @@ export async function ensureSchema() {
       uploaded_rows INTEGER NOT NULL DEFAULT 0,
       uploaded_bytes INTEGER NOT NULL DEFAULT 0,
       partial_text TEXT NOT NULL DEFAULT '',
+      previous_token_hash TEXT NOT NULL DEFAULT '',
+      previous_token_expires_at INTEGER NOT NULL DEFAULT 0,
+      token_rotated_at INTEGER NOT NULL DEFAULT 0,
       created_at INTEGER NOT NULL,
       updated_at INTEGER NOT NULL
     )`),
@@ -166,6 +184,7 @@ export async function ensureSchema() {
       status TEXT NOT NULL DEFAULT 'queued',
       lease_agent_id TEXT NOT NULL DEFAULT '',
       lease_token TEXT NOT NULL DEFAULT '',
+      leased_at INTEGER NOT NULL DEFAULT 0,
       lease_expires_at INTEGER NOT NULL DEFAULT 0,
       attempts INTEGER NOT NULL DEFAULT 0,
       captured_rows INTEGER NOT NULL DEFAULT 0,
@@ -173,7 +192,8 @@ export async function ensureSchema() {
       error TEXT NOT NULL DEFAULT '',
       created_at INTEGER NOT NULL,
       updated_at INTEGER NOT NULL,
-      completed_at INTEGER NOT NULL DEFAULT 0
+      completed_at INTEGER NOT NULL DEFAULT 0,
+      completed_agent_id TEXT NOT NULL DEFAULT ''
     )`),
     db.prepare(`CREATE INDEX IF NOT EXISTS scan_targets_claim_idx
       ON scan_targets (job_id, status, cycle)`),
@@ -183,6 +203,22 @@ export async function ensureSchema() {
       ON scan_targets (lease_agent_id, status)`),
     db.prepare(`CREATE UNIQUE INDEX IF NOT EXISTS scan_targets_job_sequence_uidx
       ON scan_targets (job_id, sequence)`),
+    db.prepare(`CREATE TABLE IF NOT EXISTS scan_agent_events (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      agent_id TEXT NOT NULL,
+      event_type TEXT NOT NULL,
+      at INTEGER NOT NULL,
+      job_id INTEGER,
+      target_id INTEGER,
+      rows INTEGER NOT NULL DEFAULT 0,
+      bytes INTEGER NOT NULL DEFAULT 0,
+      duration_ms INTEGER NOT NULL DEFAULT 0,
+      detail TEXT NOT NULL DEFAULT ''
+    )`),
+    db.prepare(`CREATE INDEX IF NOT EXISTS scan_agent_events_agent_at_idx
+      ON scan_agent_events (agent_id, at)`),
+    db.prepare(`CREATE INDEX IF NOT EXISTS scan_agent_events_type_at_idx
+      ON scan_agent_events (event_type, at)`),
     db.prepare(`CREATE TABLE IF NOT EXISTS scan_rotation_settings (
       id INTEGER PRIMARY KEY,
       enabled INTEGER NOT NULL DEFAULT 1,

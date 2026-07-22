@@ -45,11 +45,17 @@ screenshots, logs, GitHub issues, or pull requests.
 
 ## Secret response
 
-If an Agent credential may have been disclosed, disable that Agent immediately,
-release its lease, enroll a replacement credential, update only that device,
-and then revoke the old record. If the legacy `AGENT_TOKEN` is affected, rotate
-the hosted value and primary device together. A suspected controller credential
-does not require rotating device credentials.
+If an Agent credential may have been disclosed, pause or disable that Agent,
+rotate its credential, update only that device, confirm the new credential is
+reporting, and immediately revoke the old token. A suspected controller
+credential does not require rotating device credentials.
+
+The admin console can rotate an enrolled Agent credential without changing its
+Agent ID. The new token is returned once; the prior hash is accepted for at most
+24 hours so a remote phone can be updated without an outage. Revoke the prior
+token immediately after the device is confirmed on the new credential. Rotation
+of `primary` migrates it away from the hosted legacy `AGENT_TOKEN`; after the
+grace window, the legacy value is no longer accepted for that Agent.
 
 Never commit production tokens. GitHub CLI authentication should use its normal
 credential store instead of `github_info.txt`.

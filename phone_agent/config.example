@@ -3,6 +3,9 @@ SERVER_URL='https://mush.odyliao.cc'
 AGENT_ID='primary'
 TOKEN=''
 POLL_SECONDS='2'
+# Normally auto-detected/reported by agent.sh. Override only for diagnostics.
+# GAME_VERSION='149.0'
+MODULE_VERSION='149.0'
 # 1 = create and supervise a trusted virtual display entirely on the phone.
 LOCAL_DISPLAY='0'
 # Event-driven map refresh. A timeout of 0 immediately uses the verified

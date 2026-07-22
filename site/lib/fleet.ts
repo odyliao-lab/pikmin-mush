@@ -2,6 +2,9 @@ import { ensureSchema, runtime, safeEqual } from "./cloud";
 import { activeJob, appendScanLog, parseJobConfig, parseJobPlan, type ScanJobRow } from "./scans";
 import { ensureDailyRotation } from "./rotation";
 import { materializeTargets } from "./targets";
+import {
+  HEARTBEAT_SAMPLE_MS, agentHealth, recordAgentEvent, versionCompatibility,
+} from "./metrics";
 
 export const PRIMARY_AGENT_ID = "primary";
 export const AGENT_ONLINE_MS = 15_000;
@@ -16,7 +19,12 @@ export type ScanAgentRow = {
   region_tags_json: string;
   capabilities_json: string;
   agent_version: string;
+  game_version: string;
+  module_version: string;
   last_seen: number;
+  last_data_at: number;
+  last_target_at: number;
+  no_data_streak: number;
   current_lat: number | null;
   current_lng: number | null;
   current_job_id: number | null;
@@ -24,6 +32,9 @@ export type ScanAgentRow = {
   uploaded_rows: number;
   uploaded_bytes: number;
   partial_text: string;
+  previous_token_hash: string;
+  previous_token_expires_at: number;
+  token_rotated_at: number;
   created_at: number;
   updated_at: number;
 };
@@ -43,6 +54,7 @@ export type ScanTargetRow = {
   status: string;
   lease_agent_id: string;
   lease_token: string;
+  leased_at: number;
   lease_expires_at: number;
   attempts: number;
   captured_rows: number;
@@ -51,6 +63,7 @@ export type ScanTargetRow = {
   created_at: number;
   updated_at: number;
   completed_at: number;
+  completed_agent_id: string;
 };
 
 function bearer(request: Request) {
@@ -92,18 +105,35 @@ export async function authorizeFleetAgent(request: Request) {
   const id = normalizeAgentId(request.headers.get("x-agent-id")) || PRIMARY_AGENT_ID;
   const token = bearer(request);
   if (!token) return null;
-  const legacy = runtime().AGENT_TOKEN ?? "";
-  if (id === PRIMARY_AGENT_ID && legacy.length >= 32 &&
-      safeEqual(token, legacy)) {
-    return runtime().DB.prepare("SELECT * FROM scan_agents WHERE id=? AND enabled=1")
-      .bind(id).first<ScanAgentRow>();
-  }
   const row = await runtime().DB.prepare(
     "SELECT * FROM scan_agents WHERE id=? AND enabled=1",
   ).bind(id).first<ScanAgentRow>();
+  if (!row) return null;
+  const legacy = runtime().AGENT_TOKEN ?? "";
+  if (id === PRIMARY_AGENT_ID && !row.token_hash && legacy.length >= 32 &&
+      safeEqual(token, legacy)) {
+    return row;
+  }
   if (!row?.token_hash) return null;
   const actual = await hashAgentToken(token);
-  return safeEqual(actual, row.token_hash) ? row : null;
+  const current = safeEqual(actual, row.token_hash);
+  const previous = Number(row.previous_token_expires_at) > Date.now() &&
+    Boolean(row.previous_token_hash) && safeEqual(actual, row.previous_token_hash);
+  return current || previous ? row : null;
+}
+
+export function issueAgentToken() {
+  return randomHex(32);
+}
+
+export function agentRequestVersions(request: Request) {
+  const clean = (name: string) => String(request.headers.get(name) ?? "")
+    .trim().replace(/[^a-zA-Z0-9._+-]/g, "").slice(0, 40);
+  return {
+    version: clean("x-agent-version"),
+    gameVersion: clean("x-game-version"),
+    moduleVersion: clean("x-module-version"),
+  };
 }
 
 export async function touchAgent(
@@ -114,6 +144,8 @@ export async function touchAgent(
     jobId?: number | null;
     targetId?: number | null;
     version?: string;
+    gameVersion?: string;
+    moduleVersion?: string;
   } = {},
 ) {
   const db = runtime().DB;
@@ -125,15 +157,29 @@ export async function touchAgent(
       current_job_id=CASE WHEN ?=1 THEN ? ELSE current_job_id END,
       current_target_id=CASE WHEN ?=1 THEN ? ELSE current_target_id END,
       agent_version=CASE WHEN ?='' THEN agent_version ELSE ? END,
+      game_version=CASE WHEN ?='' THEN game_version ELSE ? END,
+      module_version=CASE WHEN ?='' THEN module_version ELSE ? END,
       updated_at=?
-    WHERE id=? AND (last_seen<? OR ?=1 OR ?=1 OR (?<>'' AND agent_version<>?))`)
+    WHERE id=? AND (last_seen<? OR ?=1 OR ?=1
+      OR (?<>'' AND agent_version<>?)
+      OR (?<>'' AND game_version<>?)
+      OR (?<>'' AND module_version<>?))`)
     .bind(now, values.lat ?? null, values.lng ?? null,
       values.jobId !== undefined ? 1 : 0, values.jobId ?? null,
       values.targetId !== undefined ? 1 : 0, values.targetId ?? null,
-      values.version ?? "", values.version ?? "", now, agentId,
+      values.version ?? "", values.version ?? "",
+      values.gameVersion ?? "", values.gameVersion ?? "",
+      values.moduleVersion ?? "", values.moduleVersion ?? "", now, agentId,
       now - 5_000, values.jobId !== undefined ? 1 : 0,
-      values.targetId !== undefined ? 1 : 0, values.version ?? "", values.version ?? "")
+      values.targetId !== undefined ? 1 : 0,
+      values.version ?? "", values.version ?? "",
+      values.gameVersion ?? "", values.gameVersion ?? "",
+      values.moduleVersion ?? "", values.moduleVersion ?? "")
     .run();
+  await recordAgentEvent({
+    agentId, type: "heartbeat", at: now, throttleMs: HEARTBEAT_SAMPLE_MS,
+    jobId: values.jobId, targetId: values.targetId,
+  });
 }
 
 function distanceKm(
@@ -233,6 +279,14 @@ async function releaseExpiredLeases(jobId: number, now: number) {
       lease_token='', lease_expires_at=0, updated_at=?
       WHERE id=? AND status='leased' AND lease_expires_at<?`)
       .bind(now, target.id, now)));
+  for (const target of expired.results) {
+    if (target.lease_agent_id) {
+      await recordAgentEvent({
+        agentId: target.lease_agent_id, type: "lease_expired", at: now,
+        jobId, targetId: target.id,
+      });
+    }
+  }
   for (const target of expired.results.slice(0, 8)) {
     await appendScanLog(jobId, "warn",
       `Agent ${target.lease_agent_id || "unknown"} 租約逾時，掃描點已重新排隊`);
@@ -253,8 +307,9 @@ async function resetLoop(job: ScanJobRow) {
       job.id, job.cycle, job.id, job.id).run();
   if (!won.meta.changes) return false;
   await db.prepare(`UPDATE scan_targets SET cycle=?, status='queued',
-      lease_agent_id='', lease_token='', lease_expires_at=0, captured_rows=0,
-      captured_bytes=0, error='', completed_at=0, updated_at=?
+      lease_agent_id='', lease_token='', leased_at=0, lease_expires_at=0,
+      captured_rows=0, captured_bytes=0, error='', completed_at=0,
+      completed_agent_id='', updated_at=?
     WHERE job_id=?`).bind(nextCycle, now, job.id).run();
   await appendScanLog(job.id, "info", `第 ${nextCycle} 輪開始，多 Agent 重新分派`);
   return true;
@@ -324,6 +379,10 @@ export async function claimTask(agent: ScanAgentRow): Promise<ClaimedTask | null
     await touchAgent(agent.id);
     return null;
   }
+  if (!versionCompatibility(agent).compatible) {
+    await touchAgent(agent.id);
+    return null;
+  }
   const job = await activeJob();
   if (!job || job.status === "paused") {
     await touchAgent(agent.id);
@@ -344,13 +403,17 @@ export async function claimTask(agent: ScanAgentRow): Promise<ClaimedTask | null
       if (!candidate) break;
       leaseToken = randomHex(18);
       const claimed = await db.prepare(`UPDATE scan_targets SET
-          status='leased', lease_agent_id=?, lease_token=?, lease_expires_at=?,
+          status='leased', lease_agent_id=?, lease_token=?, leased_at=?, lease_expires_at=?,
           attempts=attempts+1, updated_at=?
         WHERE id=? AND status='queued'`)
-        .bind(agent.id, leaseToken, now + LEASE_MS, now, candidate.id).run();
+        .bind(agent.id, leaseToken, now, now + LEASE_MS, now, candidate.id).run();
       if (claimed.meta.changes) {
         target = { ...candidate, status: "leased", lease_agent_id: agent.id,
-          lease_token: leaseToken, lease_expires_at: now + LEASE_MS };
+          lease_token: leaseToken, leased_at: now, lease_expires_at: now + LEASE_MS };
+        await recordAgentEvent({
+          agentId: agent.id, type: "target_claimed", at: now,
+          jobId: job.id, targetId: candidate.id,
+        });
       }
     }
   }
@@ -440,9 +503,11 @@ export async function completeTask(
   const targetUpdate = await db.prepare(`UPDATE scan_targets SET status=?,
       lease_agent_id='', lease_token='', lease_expires_at=0,
       captured_rows=captured_rows+?, captured_bytes=captured_bytes+?,
-      error=?, updated_at=?, completed_at=CASE WHEN ? IN ('completed','failed') THEN ? ELSE 0 END
+      error=?, updated_at=?, completed_at=CASE WHEN ? IN ('completed','failed') THEN ? ELSE 0 END,
+      completed_agent_id=CASE WHEN ? IN ('completed','failed') THEN ? ELSE completed_agent_id END
     WHERE id=? AND status='leased' AND lease_agent_id=? AND lease_token=?`)
     .bind(status, input.rows, input.bytes, input.message, now, status, now,
+      status, agent.id,
       target.id, agent.id, input.leaseToken).run();
   if (!targetUpdate.meta.changes) return "stale" as const;
   await db.batch([
@@ -453,9 +518,28 @@ export async function completeTask(
       .bind(completedDelta, input.rows, input.bytes, target.country, target.city,
         target.lat, target.lng, message, now, job.id),
     db.prepare(`UPDATE scan_agents SET last_seen=?, current_lat=?, current_lng=?,
-      current_job_id=NULL, current_target_id=NULL, updated_at=? WHERE id=?`)
-      .bind(now, target.lat, target.lng, now, agent.id),
+      current_job_id=NULL, current_target_id=NULL,
+      last_target_at=CASE WHEN ?='completed' THEN ? ELSE last_target_at END,
+      last_data_at=CASE WHEN ?='completed' AND ?>0 THEN ? ELSE last_data_at END,
+      no_data_streak=CASE WHEN ?='completed' AND ?>0 THEN 0
+        WHEN ?='completed' THEN no_data_streak+1 ELSE no_data_streak END,
+      updated_at=? WHERE id=?`)
+      .bind(now, target.lat, target.lng, status, now, status, input.rows, now,
+        status, input.rows, status, now, agent.id),
   ]);
+  const durationMs = target.leased_at ? Math.max(0, now - Number(target.leased_at)) : 0;
+  await recordAgentEvent({
+    agentId: agent.id,
+    type: input.ok ? "target_completed" : "target_failed",
+    at: now, jobId: job.id, targetId: target.id, rows: input.rows,
+    bytes: input.bytes, durationMs, detail: input.message,
+  });
+  if (input.ok && input.rows === 0) {
+    await recordAgentEvent({
+      agentId: agent.id, type: "target_no_data", at: now,
+      jobId: job.id, targetId: target.id, durationMs,
+    });
+  }
   await appendScanLog(job.id, input.ok && input.rows ? "info" : input.ok ? "warn" : "error",
     `${agent.display_name}・${target.country ? `${target.country}-` : ""}${target.city} ` +
     `${target.sequence + 1}/${job.total_points}・擷取 +${input.rows} 行`);
@@ -494,5 +578,10 @@ export function publicAgent(row: ScanAgentRow, now = Date.now()) {
     uploaded_bytes: Number(row.uploaded_bytes),
     region_tags: regionTags,
     version: row.agent_version,
+    game_version: row.game_version,
+    module_version: row.module_version,
+    token_rotated_at: Number(row.token_rotated_at),
+    previous_token_expires_at: Number(row.previous_token_expires_at),
+    health: agentHealth(row, now),
   };
 }

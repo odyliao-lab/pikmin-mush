@@ -37,6 +37,57 @@ type Agent = {
   uploaded_bytes: number;
   region_tags: string[];
   version: string;
+  game_version: string;
+  module_version: string;
+  token_rotated_at: number;
+  previous_token_expires_at: number;
+  health: {
+    status: string;
+    message: string;
+    no_data_streak: number;
+    last_data_at: number;
+    last_target_at: number;
+    compatibility: {
+      status: string;
+      compatible: boolean;
+      reasons: string[];
+      required: { agent: string; game: string; module: string };
+    };
+  };
+};
+
+type SoakReport = {
+  generated_at: number;
+  window_start: number;
+  requested_hours: number;
+  observed_hours: number;
+  complete_window: boolean;
+  verdict: "collecting" | "pass" | "warn" | "fail";
+  fleet: {
+    agents: number;
+    online: number;
+    critical: number;
+    warning: number;
+    completed_targets: number;
+    failed_targets: number;
+    no_data_targets: number;
+    expired_leases: number;
+    captured_rows: number;
+    average_target_ms: number;
+  };
+  agents: Array<{
+    id: string;
+    name: string;
+    heartbeat_samples: number;
+    continuity_percent: number;
+    completed_targets: number;
+    failed_targets: number;
+    no_data_targets: number;
+    expired_leases: number;
+    captured_rows: number;
+    average_target_ms: number;
+    health: Agent["health"];
+  }>;
 };
 
 type Dashboard = {
@@ -130,11 +181,18 @@ export default function AdminClient({
   const [editingAgentId, setEditingAgentId] = useState("");
   const [editingAgentRegions, setEditingAgentRegions] = useState("");
   const [credential, setCredential] = useState<{ id: string; token: string } | null>(null);
+  const [soak, setSoak] = useState<SoakReport | null>(null);
 
   const refresh = useCallback(async () => {
     const response = await fetch("/api/admin/scans", { cache: "no-store" });
     if (!response.ok) throw new Error("後台狀態讀取失敗");
     setDashboard(await response.json());
+  }, []);
+
+  const refreshMetrics = useCallback(async () => {
+    const response = await fetch("/api/admin/metrics?hours=24", { cache: "no-store" });
+    if (!response.ok) throw new Error("24 小時報表讀取失敗");
+    setSoak(await response.json());
   }, []);
 
   useEffect(() => {
@@ -149,6 +207,19 @@ export default function AdminClient({
       window.clearInterval(timer);
     };
   }, [refresh]);
+
+  useEffect(() => {
+    const initial = window.setTimeout(() => {
+      refreshMetrics().catch((error) => setNotice(String(error)));
+    }, 0);
+    const timer = window.setInterval(() => {
+      refreshMetrics().catch(() => undefined);
+    }, 60_000);
+    return () => {
+      window.clearTimeout(initial);
+      window.clearInterval(timer);
+    };
+  }, [refreshMetrics]);
 
   const estimate = useMemo(() => {
     const squarePoints = (diameterKm: number) =>
@@ -247,7 +318,8 @@ export default function AdminClient({
     }
   };
 
-  const agentAction = async (agent: Agent, action: "enable" | "disable" | "pause" | "resume") => {
+  const agentAction = async (agent: Agent, action: "enable" | "disable" | "pause" | "resume" |
+    "rotate-token" | "revoke-old-token") => {
     setBusy(true);
     setNotice("");
     try {
@@ -258,6 +330,12 @@ export default function AdminClient({
       });
       const result = await response.json();
       if (!response.ok) throw new Error(result.error ?? "Agent 操作失敗");
+      if (action === "rotate-token") {
+        setCredential({ id: agent.id, token: result.token });
+        setNotice(`${agent.name} 已換發 Token；舊 Token 24 小時後失效`);
+      } else if (action === "revoke-old-token") {
+        setNotice(`${agent.name} 的舊 Token 已立即撤銷`);
+      }
       await refresh();
     } catch (error) {
       setNotice(error instanceof Error ? error.message : String(error));
@@ -294,6 +372,17 @@ export default function AdminClient({
   const active = Boolean(job && ACTIVE.has(job.status));
   const progress = job?.total_points
     ? Math.min(100, (job.current_index / job.total_points) * 100) : 0;
+  const soakLabel = soak?.verdict === "pass" ? "通過" : soak?.verdict === "warn" ? "注意" :
+    soak?.verdict === "fail" ? "異常" : "收集中";
+  const downloadSoak = () => {
+    if (!soak) return;
+    const blob = new Blob([JSON.stringify(soak, null, 2)], { type: "application/json" });
+    const link = document.createElement("a");
+    link.href = URL.createObjectURL(blob);
+    link.download = `pikmin-soak-${new Date(soak.generated_at).toISOString().slice(0, 10)}.json`;
+    link.click();
+    URL.revokeObjectURL(link.href);
+  };
 
   return (
     <main className={styles.page}>
@@ -336,6 +425,12 @@ export default function AdminClient({
           <strong>{dashboard?.rotation.enabled ? "07:30 啟用" : "未啟用"}</strong>
           <small>下次換區 {formatTime(dashboard?.rotation.next_switch_at ?? 0)}・台北時間</small>
         </article>
+        <article className={soak?.verdict === "pass" ? styles.healthGood :
+          soak?.verdict === "fail" ? styles.healthBad : undefined}>
+          <span>24 小時 Soak</span>
+          <strong>{soakLabel}</strong>
+          <small>{soak ? `已觀測 ${soak.observed_hours} 小時・完成 ${soak.fleet.completed_targets} 點` : "讀取中"}</small>
+        </article>
       </section>
 
       {job && (
@@ -357,6 +452,32 @@ export default function AdminClient({
           <div className={styles.progressTrack}><i style={{ width: `${progress}%` }} /></div>
         </section>
       )}
+
+      <section className={styles.metricsPanel}>
+        <div className={styles.panelTitle}>
+          <div><span>FLEET OBSERVABILITY</span><h2>24 小時穩定度與無資料偵測</h2></div>
+          <div className={styles.metricsActions}>
+            <button type="button" onClick={() => refreshMetrics()} disabled={busy}>重新整理</button>
+            <button type="button" onClick={downloadSoak} disabled={!soak}>下載 JSON</button>
+          </div>
+        </div>
+        <div className={styles.metricSummary}>
+          <div><span>觀測時間</span><strong>{soak?.observed_hours ?? 0} / 24h</strong></div>
+          <div><span>完成掃描點</span><strong>{soak?.fleet.completed_targets ?? 0}</strong></div>
+          <div><span>無資料掃描點</span><strong>{soak?.fleet.no_data_targets ?? 0}</strong></div>
+          <div><span>失敗／租約逾時</span><strong>{soak?.fleet.failed_targets ?? 0} / {soak?.fleet.expired_leases ?? 0}</strong></div>
+          <div><span>平均每點</span><strong>{Math.round((soak?.fleet.average_target_ms ?? 0) / 1000)} 秒</strong></div>
+        </div>
+        <div className={styles.metricAgents}>
+          {soak?.agents.map((agent) => (
+            <article key={agent.id} data-health={agent.health.status}>
+              <div><strong>{agent.name}</strong><span>{agent.health.status}</span></div>
+              <p>{agent.health.message}</p>
+              <small>心跳覆蓋 {agent.continuity_percent}%・完成 {agent.completed_targets}・無資料 {agent.no_data_targets}・失敗 {agent.failed_targets}</small>
+            </article>
+          ))}
+        </div>
+      </section>
 
       <section className={styles.fleetPanel}>
         <div className={styles.panelTitle}>
@@ -381,7 +502,10 @@ export default function AdminClient({
                   : agent.current_job_id
                     ? `工作 #${agent.current_job_id}・掃描點 #${agent.current_target_id}`
                     : "目前待命"}
-                {agent.version ? `・v${agent.version}` : ""}
+                {agent.version ? `・Agent ${agent.version}` : ""}
+              </small>
+              <small className={styles.agentHealth} data-health={agent.health.status}>
+                {agent.health.message}・遊戲 {agent.game_version || "未回報"}・模組 {agent.module_version || "未回報"}
               </small>
               <p>{dashboard.rotation.enabled
                 ? `今日自動分配：${dashboard.rotation.assignments
@@ -429,6 +553,18 @@ export default function AdminClient({
                   onClick={() => agentAction(agent, agent.enabled ? "disable" : "enable")}>
                   {agent.enabled ? "停用節點" : "啟用節點"}
                 </button>
+                <button className={styles.agentToggle} disabled={busy}
+                  onClick={() => window.confirm(`確定換發 ${agent.name} 的 Token？舊 Token 會保留 24 小時。`) &&
+                    agentAction(agent, "rotate-token")}>
+                  換發 Token
+                </button>
+                {agent.previous_token_expires_at > (dashboard?.now ?? 0) && (
+                  <button className={`${styles.agentToggle} ${styles.agentDanger}`} disabled={busy}
+                    onClick={() => window.confirm(`確定立即撤銷 ${agent.name} 的舊 Token？`) &&
+                      agentAction(agent, "revoke-old-token")}>
+                    撤銷舊 Token
+                  </button>
+                )}
               </div>
             </article>
           ))}

@@ -31,7 +31,10 @@ STARTUP_TAP_X="${STARTUP_TAP_X:-0}"
 STARTUP_CONTINUE_Y="${STARTUP_CONTINUE_Y:-0}"
 STARTUP_LOGIN_CONTINUE_Y="${STARTUP_LOGIN_CONTINUE_Y:-0}"
 AGENT_ID="${AGENT_ID:-primary}"
-AGENT_VERSION="${AGENT_VERSION:-2.0.0}"
+AGENT_VERSION="${AGENT_VERSION:-2.1.0}"
+GAME_VERSION="${GAME_VERSION:-$(dumpsys package "$PKG" 2>/dev/null |
+  sed -n 's/^[[:space:]]*versionName=//p' | head -n 1 | tr -d '\r')}"
+MODULE_VERSION="${MODULE_VERSION:-149.0}"
 [ -n "$TOKEN" ] || TOKEN="$(cat "$MODDIR/token" 2>/dev/null)"
 if [ -z "$TOKEN" ]; then
   echo "[agent] missing token"
@@ -46,7 +49,9 @@ auth_curl() {
   /system/bin/curl -fsS --connect-timeout 10 --max-time 45 \
     -H "Authorization: Bearer $TOKEN" \
     -H "X-Agent-Id: $AGENT_ID" \
-    -H "X-Agent-Version: $AGENT_VERSION" "$@"
+    -H "X-Agent-Version: $AGENT_VERSION" \
+    -H "X-Game-Version: $GAME_VERSION" \
+    -H "X-Module-Version: $MODULE_VERSION" "$@"
 }
 
 save_offset() {
@@ -493,7 +498,7 @@ execute_command() {
   save_seq "$seq"
 }
 
-echo "[agent] started id=$AGENT_ID version=$AGENT_VERSION server=$SERVER_URL"
+echo "[agent] started id=$AGENT_ID agent=$AGENT_VERSION game=${GAME_VERSION:-unknown} module=$MODULE_VERSION server=$SERVER_URL"
 while true; do
   upload_new
   if [ "$AGENT_ID" = "primary" ]; then
@@ -519,6 +524,7 @@ while true; do
             "${10}" "${11}" "${12}" "${13}" "${14}"
           ;;
         pause|wait|'') ;;
+        version-mismatch) echo "[scan] version mismatch: $3" ;;
         error) echo "[scan] cloud scan plan error job=$1" ;;
       esac
     fi
