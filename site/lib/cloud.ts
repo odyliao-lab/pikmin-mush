@@ -19,6 +19,7 @@ export type MushroomRow = {
 type RuntimeEnv = {
   DB: D1Database;
   AGENT_TOKEN?: string;
+  CONTROLLER_TOKEN?: string;
   ADMIN_EMAILS?: string;
 };
 
@@ -212,6 +213,12 @@ export function authorized(request: Request) {
     safeEqual(request.headers.get("authorization") ?? "", `Bearer ${token}`);
 }
 
+export function controllerAuthorized(request: Request) {
+  const token = runtime().CONTROLLER_TOKEN ?? "";
+  return token.length >= 32 &&
+    safeEqual(request.headers.get("authorization") ?? "", `Bearer ${token}`);
+}
+
 export function adminEmails() {
   return new Set((runtime().ADMIN_EMAILS ?? "")
     .split(",")
@@ -252,6 +259,36 @@ export function plain(value: string, status = 200) {
   });
 }
 
+export async function readBoundedUtf8(request: Request, maxBytes: number) {
+  const declared = request.headers.get("content-length");
+  if (declared && (!/^\d+$/.test(declared) || Number(declared) > maxBytes)) {
+    return { error: "payload too large" as const };
+  }
+  if (!request.body) return { text: "", bytes: 0 };
+  const reader = request.body.getReader();
+  const decoder = new TextDecoder("utf-8", { fatal: true });
+  let bytes = 0;
+  let text = "";
+  try {
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      bytes += value.byteLength;
+      if (bytes > maxBytes) {
+        await reader.cancel();
+        return { error: "payload too large" as const };
+      }
+      text += decoder.decode(value, { stream: true });
+    }
+    text += decoder.decode();
+    return { text, bytes };
+  } catch {
+    return { error: "invalid utf-8" as const };
+  } finally {
+    reader.releaseLock();
+  }
+}
+
 function integer(value: string | undefined) {
   const parsed = Number.parseInt(value ?? "", 10);
   return Number.isFinite(parsed) ? parsed : 0;
@@ -261,10 +298,11 @@ export function parseTsv(text: string): MushroomRow[] {
   const rows: MushroomRow[] = [];
   for (const line of text.split("\n")) {
     const fields = line.replace(/\r$/, "").split("\t");
-    if (fields.length < 4 || !fields[1]) continue;
+    if (fields.length < 4 || !fields[1] || fields[1].length > 256) continue;
     const lat = Number(fields[2]);
     const lng = Number(fields[3]);
-    if (!Number.isFinite(lat) || !Number.isFinite(lng)) continue;
+    if (!Number.isFinite(lat) || !Number.isFinite(lng) ||
+        lat < -90 || lat > 90 || lng < -180 || lng > 180) continue;
     const level = integer(fields[6]);
     if (!isUsefulMushroomLevel(level)) continue;
     const power = Number(fields[11] ?? 0);
@@ -272,15 +310,15 @@ export function parseTsv(text: string): MushroomRow[] {
       id: fields[1],
       lat,
       lng,
-      cluster: fields[4] ?? "",
-      cooldown: integer(fields[5]),
+      cluster: (fields[4] ?? "").slice(0, 256),
+      cooldown: Math.max(0, integer(fields[5])),
       level,
-      type: integer(fields[7]),
-      finish_ms: integer(fields[8]),
-      challenger_count: integer(fields[9]),
-      challenger_capacity: integer(fields[10]),
-      total_power: Number.isFinite(power) ? power : 0,
-      start_ms: integer(fields[12]),
+      type: Math.max(0, Math.min(10_000, integer(fields[7]))),
+      finish_ms: Math.max(0, integer(fields[8])),
+      challenger_count: Math.max(0, Math.min(10_000, integer(fields[9]))),
+      challenger_capacity: Math.max(0, Math.min(10_000, integer(fields[10]))),
+      total_power: Number.isFinite(power) ? Math.max(0, Math.min(1e15, power)) : 0,
+      start_ms: Math.max(0, integer(fields[12])),
     });
   }
   return rows;

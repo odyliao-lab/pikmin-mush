@@ -50,6 +50,8 @@ CHECKPOINT_FILE = os.path.join(HERE, "scan_checkpoint.json")
 DEVICE_BACKEND = "adb"
 AGENT_TOKEN_FILE = os.path.join(HERE, "agent_token.txt")
 AGENT_TOKEN = ""
+CONTROLLER_TOKEN_FILE = os.path.join(HERE, "controller_token.txt")
+CONTROLLER_TOKEN = ""
 CLOUD_API_URL = os.environ.get("PIKMIN_CLOUD_URL", "").strip().rstrip("/")
 AGENT_COND = threading.Condition(threading.RLock())
 AGENT_STATE = dict(last_seen=0.0, seq=0, ack_seq=0, command=None, ack_ok=False,
@@ -74,13 +76,23 @@ def load_agent_token(path):
             pass
     return token
 
+def load_existing_token(path, purpose):
+    try:
+        with open(path, encoding="utf-8") as f:
+            token = f.read().strip()
+    except OSError:
+        token = ""
+    if len(token) < 32:
+        raise RuntimeError(f"{purpose} token 檔案不存在或長度不足：{path}")
+    return token
+
 def cloud_request(path, method="GET", payload=None, timeout=30):
     """呼叫 Codex Sites 雲端中樞，不在錯誤訊息中暴露 bearer token。"""
     if not CLOUD_API_URL:
         raise RuntimeError("尚未設定 Codex Sites 雲端中樞網址")
     body = None if payload is None else json.dumps(payload, ensure_ascii=False).encode("utf-8")
     headers = {
-        "Authorization": f"Bearer {AGENT_TOKEN}",
+        "Authorization": f"Bearer {CONTROLLER_TOKEN}",
         "Accept": "application/json",
         # Codex Sites 的 Cloudflare 邊緣會封鎖 Python urllib 預設指紋
         # （HTTP 403 / Error 1010）。使用固定、可辨識的桌面客戶端 UA。
@@ -833,6 +845,8 @@ def parse_args():
                    help="手機控制後端：adb 或免 ADB 的手機 Agent")
     p.add_argument("--agent-token-file", default=AGENT_TOKEN_FILE,
                    help="手機 Agent bearer token 檔案")
+    p.add_argument("--controller-token-file", default=CONTROLLER_TOKEN_FILE,
+                   help="雲端 controller 專用 bearer token 檔案（不可與 Agent token 共用）")
     p.add_argument("--cloud-api-url", default=CLOUD_API_URL,
                    help="Codex Sites 雲端中樞網址；空白時維持本機 Agent 模式")
     return p.parse_args()
@@ -857,6 +871,9 @@ if __name__ == "__main__":
     AGENT_TOKEN_FILE = os.path.abspath(args.agent_token_file)
     AGENT_TOKEN = load_agent_token(AGENT_TOKEN_FILE)
     CLOUD_API_URL = args.cloud_api_url.strip().rstrip("/")
+    CONTROLLER_TOKEN_FILE = os.path.abspath(args.controller_token_file)
+    CONTROLLER_TOKEN = load_existing_token(
+        CONTROLLER_TOKEN_FILE, "Controller") if CLOUD_API_URL else ""
     PORT = args.port
     print(f"[device] backend={DEVICE_BACKEND}" +
           (f" cloud={CLOUD_API_URL}" if CLOUD_API_URL else ""))

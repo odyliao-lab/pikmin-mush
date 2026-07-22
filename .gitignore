@@ -1,5 +1,6 @@
 # Pikmin Scanner Agent authentication secret
 scanner/agent_token.txt
+scanner/controller_token.txt
 
 # Local credentials and environment
 github_info.txt
@@ -26,7 +27,7 @@ site/.wrangler/
 site/dist/
 site/.sites-*.log
 site/.git-site-backup/
-site-deploy.tar.gz
+site-deploy*.tar.gz
 
 # Native build and reverse-engineering inputs
 build_zygisk/

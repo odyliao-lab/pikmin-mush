@@ -1,11 +1,18 @@
-import { authorized, ensureSchema, noStoreJson, runtime } from "../../../../lib/cloud";
+import {
+  controllerAuthorized, ensureSchema, noStoreJson, readBoundedUtf8, runtime,
+} from "../../../../lib/cloud";
 
 export async function POST(request: Request) {
-  if (!authorized(request)) return noStoreJson({ error: "unauthorized" }, 401);
+  if (!controllerAuthorized(request)) return noStoreJson({ error: "unauthorized" }, 401);
   await ensureSchema();
   let body: { op?: string; args?: unknown[] };
   try {
-    body = await request.json();
+    const input = await readBoundedUtf8(request, 8_192);
+    if (input.error === "payload too large") {
+      return noStoreJson({ error: "payload too large" }, 413);
+    }
+    if (input.error) return noStoreJson({ error: "invalid utf-8" }, 400);
+    body = JSON.parse(input.text);
   } catch {
     return noStoreJson({ error: "invalid json" }, 400);
   }

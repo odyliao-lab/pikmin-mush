@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { createHash } from "node:crypto";
 import { access, readFile } from "node:fs/promises";
 import test from "node:test";
 import {
@@ -22,6 +23,9 @@ test("ships the public mushroom map and protected scan console", async () => {
   assert.match(map, /\[2,3,4\]/);
   assert.match(map, /DEFAULT_HIDDEN_TYPES=new Set\(\['15'\]\)/);
   assert.match(map, /!DEFAULT_HIDDEN_TYPES\.has\(v\)/);
+  assert.match(map, /integrity="sha256-/);
+  assert.match(map, /rel="noopener noreferrer"/);
+  assert.doesNotMatch(map, /onclick=/);
   assert.match(adminPage, /requireChatGPTUser\("\/admin"\)/);
   assert.match(adminPage, /isAdminEmail/);
   assert.match(adminClient, /建立掃描工作/);
@@ -33,6 +37,42 @@ test("ships the public mushroom map and protected scan console", async () => {
   assert.doesNotMatch(adminClient, /獨立主要城市|CITY_CHOICES|cityIds/);
   assert.match(adminClient, /COUNTRY_PACK_GROUPS/);
   assert.match(layout, /Pikmin 蘑菇探險隊/);
+});
+
+test("hardens uploads, public telemetry, controller credentials, and browser policy", async () => {
+  const [upload, publicApi, cloud, controller, phoneAgent, worker, map, headers] = await Promise.all([
+    readFile(new URL("app/api/agent/upload/route.ts", root), "utf8"),
+    readFile(new URL("app/api/mushrooms/route.ts", root), "utf8"),
+    readFile(new URL("lib/cloud.ts", root), "utf8"),
+    readFile(new URL("app/api/controller/command/route.ts", root), "utf8"),
+    readFile(new URL("../phone_agent/agent.sh", root), "utf8"),
+    readFile(new URL("worker/index.ts", root), "utf8"),
+    readFile(new URL("public/map.html", root), "utf8"),
+    readFile(new URL("public/_headers", root), "utf8"),
+  ]);
+
+  assert.match(cloud, /request\.body\.getReader\(\)/);
+  assert.match(cloud, /readBoundedUtf8/);
+  assert.match(upload, /MAX_UPLOAD_BYTES = 512_000/);
+  assert.match(upload, /MAX_PARTIAL_BYTES = 64_000/);
+  assert.doesNotMatch(upload, /request\.text\(\)/);
+  assert.doesNotMatch(publicApi, /\bagents,\s*\n/);
+  assert.doesNotMatch(publicApi, /current_location:/);
+  assert.match(publicApi, /const publicStatus =/);
+  assert.match(cloud, /CONTROLLER_TOKEN/);
+  assert.match(controller, /controllerAuthorized/);
+  assert.match(phoneAgent, /MAX_UPLOAD_CHUNK_BYTES=262144/);
+  assert.match(worker, /Strict-Transport-Security/);
+  assert.match(worker, /Content-Security-Policy/);
+  assert.match(headers, /Strict-Transport-Security/);
+  assert.match(headers, /Content-Security-Policy/);
+
+  const inlineScript = map.match(/<script>([\s\S]*)<\/script><\/body>/)?.[1];
+  assert.ok(inlineScript, "map inline script must remain detectable for CSP hashing");
+  const expected = `sha256-${createHash("sha256")
+    .update(inlineScript.replace(/\r\n/g, "\n")).digest("base64")}`;
+  assert.match(worker, new RegExp(expected.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")));
+  assert.match(headers, new RegExp(expected.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")));
 });
 
 test("includes durable multi-agent leases, v2 protocol routes, and migrations", async () => {
