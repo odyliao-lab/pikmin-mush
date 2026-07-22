@@ -69,7 +69,8 @@ test("hardens uploads, public telemetry, controller credentials, and browser pol
 
   const inlineScript = map.match(/<script>([\s\S]*)<\/script><\/body>/)?.[1];
   assert.ok(inlineScript, "map inline script must remain detectable for CSP hashing");
-  const expected = `sha256-${createHash("sha256").update(inlineScript).digest("base64")}`;
+  const expected = `sha256-${createHash("sha256")
+    .update(inlineScript.replace(/\r\n/g, "\n")).digest("base64")}`;
   assert.match(worker, new RegExp(expected.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")));
   assert.match(headers, new RegExp(expected.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")));
 });
