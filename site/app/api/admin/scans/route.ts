@@ -1,11 +1,13 @@
 import { adminAuthorized, ensureSchema, noStoreJson, runtime } from "../../../../lib/cloud";
 import { activeOrLatestJob, publicJob } from "../../../../lib/scans";
 import { publicAgent, type ScanAgentRow } from "../../../../lib/fleet";
+import { rotationStatus } from "../../../../lib/rotation";
 
 export async function GET(request: Request) {
   if (!adminAuthorized(request)) return noStoreJson({ error: "forbidden" }, 403);
   await ensureSchema();
   const db = runtime().DB;
+  const rotation = await rotationStatus();
   const job = await activeOrLatestJob();
   const [agentsResult, logs, targetCounts] = await Promise.all([
     db.prepare(`SELECT * FROM scan_agents ORDER BY enabled DESC, last_seen DESC, id`)
@@ -37,5 +39,6 @@ export async function GET(request: Request) {
     target_counts: Object.fromEntries(targetCounts.results.map((row) =>
       [String(row.status), Number(row.count)])),
     logs: logs.results,
+    rotation,
   });
 }

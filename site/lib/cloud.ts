@@ -183,12 +183,34 @@ export async function ensureSchema() {
       ON scan_targets (lease_agent_id, status)`),
     db.prepare(`CREATE UNIQUE INDEX IF NOT EXISTS scan_targets_job_sequence_uidx
       ON scan_targets (job_id, sequence)`),
+    db.prepare(`CREATE TABLE IF NOT EXISTS scan_rotation_settings (
+      id INTEGER PRIMARY KEY,
+      enabled INTEGER NOT NULL DEFAULT 1,
+      timezone TEXT NOT NULL DEFAULT 'Asia/Taipei',
+      switch_minute INTEGER NOT NULL DEFAULT 450,
+      config_json TEXT NOT NULL DEFAULT '{}',
+      updated_at INTEGER NOT NULL DEFAULT 0
+    )`),
+    db.prepare(`CREATE TABLE IF NOT EXISTS scan_rotation_runs (
+      schedule_date TEXT PRIMARY KEY,
+      status TEXT NOT NULL DEFAULT 'running',
+      job_id INTEGER,
+      assignments_json TEXT NOT NULL DEFAULT '[]',
+      message TEXT NOT NULL DEFAULT '',
+      created_at INTEGER NOT NULL,
+      updated_at INTEGER NOT NULL
+    )`),
+    db.prepare(`CREATE INDEX IF NOT EXISTS scan_rotation_runs_updated_at_idx
+      ON scan_rotation_runs (updated_at)`),
   ]);
   await patchColumns(db);
   const now = Date.now();
   await db.batch([
     db.prepare("INSERT OR IGNORE INTO agent_state (id) VALUES (1)"),
     db.prepare("INSERT OR IGNORE INTO scanner_status (id) VALUES (1)"),
+    db.prepare(`INSERT OR IGNORE INTO scan_rotation_settings (
+      id, enabled, timezone, switch_minute, config_json, updated_at
+    ) VALUES (1, 1, 'Asia/Taipei', 450, '{}', ?)` ).bind(now),
     db.prepare(`INSERT OR IGNORE INTO scan_agents (
       id, display_name, region_tags_json, last_seen, current_lat, current_lng,
       uploaded_rows, uploaded_bytes, partial_text, created_at, updated_at

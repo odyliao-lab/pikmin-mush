@@ -22,6 +22,12 @@ export async function POST(request: Request) {
   const now = Date.now();
 
   if (action === "update-regions") {
+    const rotation = await db.prepare(
+      "SELECT enabled FROM scan_rotation_settings WHERE id=1",
+    ).first<{ enabled: number }>();
+    if (rotation?.enabled) {
+      return noStoreJson({ error: "每日自動換區已啟用，區域由中央排程管理" }, 409);
+    }
     if (!Array.isArray(body.regionTags)) {
       return noStoreJson({ error: "區域偏好格式不正確" }, 400);
     }

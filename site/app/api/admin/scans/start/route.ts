@@ -3,7 +3,7 @@ import {
 } from "../../../../../lib/cloud";
 import { buildScanPlan, normalizeScanConfig } from "../../../../../lib/scan-plans";
 import { activeJob, appendScanLog } from "../../../../../lib/scans";
-import { materializeTargets } from "../../../../../lib/fleet";
+import { materializeTargets } from "../../../../../lib/targets";
 
 export async function POST(request: Request) {
   if (!adminAuthorized(request)) return noStoreJson({ error: "forbidden" }, 403);

@@ -129,3 +129,24 @@ export const scanTargets = sqliteTable("scan_targets", {
   index("scan_targets_agent_idx").on(table.leaseAgentId, table.status),
   uniqueIndex("scan_targets_job_sequence_uidx").on(table.jobId, table.sequence),
 ]);
+
+export const scanRotationSettings = sqliteTable("scan_rotation_settings", {
+  id: integer("id").primaryKey(),
+  enabled: integer("enabled").notNull().default(1),
+  timezone: text("timezone").notNull().default("Asia/Taipei"),
+  switchMinute: integer("switch_minute").notNull().default(450),
+  configJson: text("config_json").notNull().default("{}"),
+  updatedAt: integer("updated_at").notNull().default(0),
+});
+
+export const scanRotationRuns = sqliteTable("scan_rotation_runs", {
+  scheduleDate: text("schedule_date").primaryKey(),
+  status: text("status").notNull().default("running"),
+  jobId: integer("job_id"),
+  assignmentsJson: text("assignments_json").notNull().default("[]"),
+  message: text("message").notNull().default(""),
+  createdAt: integer("created_at").notNull(),
+  updatedAt: integer("updated_at").notNull(),
+}, (table) => [
+  index("scan_rotation_runs_updated_at_idx").on(table.updatedAt),
+]);

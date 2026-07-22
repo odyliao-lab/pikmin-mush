@@ -58,6 +58,21 @@ type Dashboard = {
   job: Job | null;
   target_counts: Record<string, number>;
   logs: Array<{ id: number; at: number; level: string; message: string }>;
+  rotation: {
+    enabled: boolean;
+    timezone: string;
+    schedule_date: string;
+    next_switch_at: number;
+    status: string;
+    job_id: number | null;
+    message: string;
+    assignments: Array<{
+      agentId: string;
+      label: string;
+      cityCount: number;
+      countries: string[];
+    }>;
+  };
 };
 
 const ACTIVE = new Set(["queued", "running", "paused"]);
@@ -316,6 +331,11 @@ export default function AdminClient({
           <strong>{dashboard?.target_counts?.leased ?? 0} 執行中</strong>
           <small>{dashboard?.target_counts?.queued ?? 0} 待派・{dashboard?.target_counts?.completed ?? 0} 完成</small>
         </article>
+        <article>
+          <span>每日自動換區</span>
+          <strong>{dashboard?.rotation.enabled ? "07:30 啟用" : "未啟用"}</strong>
+          <small>下次換區 {formatTime(dashboard?.rotation.next_switch_at ?? 0)}・台北時間</small>
+        </article>
       </section>
 
       {job && (
@@ -341,7 +361,7 @@ export default function AdminClient({
       <section className={styles.fleetPanel}>
         <div className={styles.panelTitle}>
           <div><span>AGENT FLEET</span><h2>全球掃描節點</h2></div>
-          <small>有區域標籤的節點只掃描指定地區，並依標籤順序派工；空白節點支援全球。</small>
+          <small>每日 07:30（台北時間）中央分配互不重疊的區域，10 天覆蓋全部既有國家包。</small>
         </div>
         <div className={styles.agentGrid}>
           {dashboard?.agents.map((agent) => (
@@ -363,7 +383,10 @@ export default function AdminClient({
                     : "目前待命"}
                 {agent.version ? `・v${agent.version}` : ""}
               </small>
-              <p>{agent.region_tags.length ? agent.region_tags.join("・") : "全球支援"}</p>
+              <p>{dashboard.rotation.enabled
+                ? `今日自動分配：${dashboard.rotation.assignments
+                    .find((item) => item.agentId === agent.id)?.label ?? "等待排程"}`
+                : agent.region_tags.length ? agent.region_tags.join("・") : "全球支援"}</p>
               {editingAgentId === agent.id && (
                 <div className={styles.agentRegionEditor}>
                   <label>
@@ -385,13 +408,15 @@ export default function AdminClient({
                 </div>
               )}
               <div className={styles.agentActions}>
-                <button className={styles.agentToggle} disabled={busy}
-                  onClick={() => {
-                    setEditingAgentId(editingAgentId === agent.id ? "" : agent.id);
-                    setEditingAgentRegions(agent.region_tags.join(","));
-                  }}>
-                  {editingAgentId === agent.id ? "關閉區域設定" : "修改區域"}
-                </button>
+                {!dashboard.rotation.enabled && (
+                  <button className={styles.agentToggle} disabled={busy}
+                    onClick={() => {
+                      setEditingAgentId(editingAgentId === agent.id ? "" : agent.id);
+                      setEditingAgentRegions(agent.region_tags.join(","));
+                    }}>
+                    {editingAgentId === agent.id ? "關閉區域設定" : "修改區域"}
+                  </button>
+                )}
                 {agent.enabled
                   ? <button
                       className={`${styles.agentToggle} ${agent.paused ? styles.agentResume : ""}`}
