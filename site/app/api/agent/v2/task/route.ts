@@ -1,13 +1,21 @@
-import { plain } from "../../../../../lib/cloud";
-import { authorizeFleetAgent, claimTask, touchAgent } from "../../../../../lib/fleet";
+import { plain, runtime } from "../../../../../lib/cloud";
+import {
+  agentRequestVersions, authorizeFleetAgent, claimTask, touchAgent, type ScanAgentRow,
+} from "../../../../../lib/fleet";
+import { versionCompatibility } from "../../../../../lib/metrics";
 import { cleanTsv } from "../../../../../lib/scans";
 
 export async function GET(request: Request) {
   const agent = await authorizeFleetAgent(request);
   if (!agent) return plain("0\tunauthorized\n", 401);
-  const version = (request.headers.get("x-agent-version") ?? "").slice(0, 40);
-  await touchAgent(agent.id, { version });
-  const task = await claimTask(agent);
+  await touchAgent(agent.id, agentRequestVersions(request));
+  const refreshed = await runtime().DB.prepare("SELECT * FROM scan_agents WHERE id=?")
+    .bind(agent.id).first<ScanAgentRow>() ?? agent;
+  const compatibility = versionCompatibility(refreshed);
+  if (!compatibility.compatible) {
+    return plain(`0\tversion-mismatch\t${compatibility.reasons.join("; ")}\n`);
+  }
+  const task = await claimTask(refreshed);
   if (!task) return plain("0\twait\n");
   return plain([
     task.job.id,

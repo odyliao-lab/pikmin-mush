@@ -45,7 +45,12 @@ export const scanAgents = sqliteTable("scan_agents", {
   regionTagsJson: text("region_tags_json").notNull().default("[]"),
   capabilitiesJson: text("capabilities_json").notNull().default("{}"),
   agentVersion: text("agent_version").notNull().default(""),
+  gameVersion: text("game_version").notNull().default(""),
+  moduleVersion: text("module_version").notNull().default(""),
   lastSeen: integer("last_seen").notNull().default(0),
+  lastDataAt: integer("last_data_at").notNull().default(0),
+  lastTargetAt: integer("last_target_at").notNull().default(0),
+  noDataStreak: integer("no_data_streak").notNull().default(0),
   currentLat: real("current_lat"),
   currentLng: real("current_lng"),
   currentJobId: integer("current_job_id"),
@@ -53,6 +58,9 @@ export const scanAgents = sqliteTable("scan_agents", {
   uploadedRows: integer("uploaded_rows").notNull().default(0),
   uploadedBytes: integer("uploaded_bytes").notNull().default(0),
   partialText: text("partial_text").notNull().default(""),
+  previousTokenHash: text("previous_token_hash").notNull().default(""),
+  previousTokenExpiresAt: integer("previous_token_expires_at").notNull().default(0),
+  tokenRotatedAt: integer("token_rotated_at").notNull().default(0),
   createdAt: integer("created_at").notNull(),
   updatedAt: integer("updated_at").notNull(),
 }, (table) => [
@@ -115,6 +123,7 @@ export const scanTargets = sqliteTable("scan_targets", {
   status: text("status").notNull().default("queued"),
   leaseAgentId: text("lease_agent_id").notNull().default(""),
   leaseToken: text("lease_token").notNull().default(""),
+  leasedAt: integer("leased_at").notNull().default(0),
   leaseExpiresAt: integer("lease_expires_at").notNull().default(0),
   attempts: integer("attempts").notNull().default(0),
   capturedRows: integer("captured_rows").notNull().default(0),
@@ -123,11 +132,28 @@ export const scanTargets = sqliteTable("scan_targets", {
   createdAt: integer("created_at").notNull(),
   updatedAt: integer("updated_at").notNull(),
   completedAt: integer("completed_at").notNull().default(0),
+  completedAgentId: text("completed_agent_id").notNull().default(""),
 }, (table) => [
   index("scan_targets_claim_idx").on(table.jobId, table.status, table.cycle),
   index("scan_targets_lease_idx").on(table.leaseExpiresAt),
   index("scan_targets_agent_idx").on(table.leaseAgentId, table.status),
   uniqueIndex("scan_targets_job_sequence_uidx").on(table.jobId, table.sequence),
+]);
+
+export const scanAgentEvents = sqliteTable("scan_agent_events", {
+  id: integer("id").primaryKey({ autoIncrement: true }),
+  agentId: text("agent_id").notNull(),
+  eventType: text("event_type").notNull(),
+  at: integer("at").notNull(),
+  jobId: integer("job_id"),
+  targetId: integer("target_id"),
+  rows: integer("rows").notNull().default(0),
+  bytes: integer("bytes").notNull().default(0),
+  durationMs: integer("duration_ms").notNull().default(0),
+  detail: text("detail").notNull().default(""),
+}, (table) => [
+  index("scan_agent_events_agent_at_idx").on(table.agentId, table.at),
+  index("scan_agent_events_type_at_idx").on(table.eventType, table.at),
 ]);
 
 export const scanRotationSettings = sqliteTable("scan_rotation_settings", {

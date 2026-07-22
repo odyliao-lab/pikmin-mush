@@ -1,5 +1,7 @@
 import { plain } from "../../../../../lib/cloud";
-import { authorizeFleetAgent, completeTask } from "../../../../../lib/fleet";
+import {
+  agentRequestVersions, authorizeFleetAgent, completeTask, touchAgent,
+} from "../../../../../lib/fleet";
 
 function count(value: string | null) {
   const number = Number.parseInt(value ?? "0", 10);
@@ -9,6 +11,7 @@ function count(value: string | null) {
 export async function POST(request: Request) {
   const agent = await authorizeFleetAgent(request);
   if (!agent) return plain("unauthorized\n", 401);
+  await touchAgent(agent.id, agentRequestVersions(request));
   const url = new URL(request.url);
   const result = await completeTask(agent, {
     jobId: count(url.searchParams.get("job_id")),

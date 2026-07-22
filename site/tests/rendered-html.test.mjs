@@ -138,7 +138,7 @@ test("includes durable multi-agent leases, v2 protocol routes, and migrations", 
   assert.match(fleet, /if \(agent\.paused\)/);
   assert.match(fleet, /rotation\.status !== "completed"/);
   assert.match(control, /if \(agent\.paused\) return plain\("pause\\n"\)/);
-  assert.match(agentAction, /\["enable", "disable", "pause", "resume", "update-regions"\]/);
+  assert.match(agentAction, /"rotate-token", "revoke-old-token"/);
   assert.match(agentAction, /region_tags_json=\?/);
   assert.match(agentAction, /每日自動換區已啟用/);
   assert.match(adminClient, /繼續掃描/);
@@ -153,6 +153,51 @@ test("includes durable multi-agent leases, v2 protocol routes, and migrations", 
   assert.match(rotation, /每日 07:30 自動換區/);
   assert.match(rotation, /SELECT \* FROM scan_rotation_runs WHERE schedule_date=\?/);
   await access(new URL("dist/server/index.js", root));
+});
+
+test("adds fleet metrics, viewport pagination, version gates, and safe token rotation", async () => {
+  const [
+    schema, migration, metrics, metricsRoute, mushroomsApi, map, fleet,
+    agentAction, adminClient, phoneAgent,
+  ] = await Promise.all([
+    readFile(new URL("db/schema.ts", root), "utf8"),
+    readFile(new URL("drizzle/0007_condemned_nekra.sql", root), "utf8"),
+    readFile(new URL("lib/metrics.ts", root), "utf8"),
+    readFile(new URL("app/api/admin/metrics/route.ts", root), "utf8"),
+    readFile(new URL("app/api/mushrooms/route.ts", root), "utf8"),
+    readFile(new URL("public/map.html", root), "utf8"),
+    readFile(new URL("lib/fleet.ts", root), "utf8"),
+    readFile(new URL("app/api/admin/agents/action/route.ts", root), "utf8"),
+    readFile(new URL("app/admin/admin-client.tsx", root), "utf8"),
+    readFile(new URL("../phone_agent/agent.sh", root), "utf8"),
+  ]);
+
+  assert.match(schema, /scanAgentEvents/);
+  assert.match(schema, /previousTokenExpiresAt/);
+  assert.match(migration, /CREATE TABLE `scan_agent_events`/);
+  assert.match(migration, /ADD `completed_agent_id`/);
+  assert.match(metrics, /buildSoakReport/);
+  assert.match(metrics, /NO_DATA_WARN_STREAK = 12/);
+  assert.match(metrics, /REQUIRED_GAME_VERSION = "149\.0"/);
+  assert.match(metricsRoute, /adminAuthorized/);
+  assert.match(metricsRoute, /buildSoakReport/);
+  assert.match(mushroomsApi, /parseBbox/);
+  assert.match(mushroomsApi, /decodeCursor/);
+  assert.match(mushroomsApi, /legacy-full/);
+  assert.match(mushroomsApi, /MAX_PAGE_SIZE = 1_000/);
+  assert.match(map, /viewportBbox/);
+  assert.match(map, /MAX_VIEW_ROWS=3000/);
+  assert.match(map, /map\.on\('moveend'/);
+  assert.match(map, /AbortController/);
+  assert.match(fleet, /previous_token_expires_at.*Date\.now\(\)/s);
+  assert.match(fleet, /versionCompatibility/);
+  assert.match(agentAction, /previous_token_hash/);
+  assert.match(agentAction, /24 \* 60 \* 60_000/);
+  assert.match(adminClient, /24 小時穩定度與無資料偵測/);
+  assert.match(adminClient, /換發 Token/);
+  assert.match(phoneAgent, /X-Game-Version/);
+  assert.match(phoneAgent, /X-Module-Version/);
+  assert.match(phoneAgent, /version-mismatch/);
 });
 
 test("excludes level 1 mushrooms throughout the ingest and public API paths", async () => {
@@ -171,7 +216,7 @@ test("excludes level 1 mushrooms throughout the ingest and public API paths", as
   assert.equal(isUsefulMushroomLevel(4), true);
   assert.match(cloud, /isUsefulMushroomLevel\(level\)/);
   assert.match(cloud, /rows\.filter\(\(row\) => isUsefulMushroomLevel\(row\.level\)\)/);
-  assert.match(api, /WHERE level >= \?/);
+  assert.match(api, /"level >= \?"/);
   assert.match(phoneAgent, /\$7 \+ 0 >= 2/);
   assert.match(hook, /should_log = level >= 2/);
   assert.match(scanner, /WHERE level>=2/);

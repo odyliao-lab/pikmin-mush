@@ -21,8 +21,13 @@ virtual display 可使用 `STARTUP_TAP_X=360`、`STARTUP_CONTINUE_Y=752` 與
 `STARTUP_LOGIN_CONTINUE_Y=860` 自動恢復。
 
 所有 Agent API 都要求 `Authorization: Bearer <token>` 與 `X-Agent-Id`。
+Agent 2.1 另回報 `X-Agent-Version`、`X-Game-Version` 與 `X-Module-Version`；
+雲端偵測到遊戲或 native module 與 149.0 不相容時不再派工，並在後台顯示原因。
 `primary` 保留既有 Token；新節點由網站後台建立獨立憑證，Token 只顯示一次。
 正式 Token 不應提交版本庫。
+
+後台換發 Token 時，新 Token 只顯示一次，舊 Token 預設保留最多 24 小時。
+在緩衝期內更新手機端 `token` 並重啟 Agent，確認新 Token 已持續回報後即可在後台提前撤銷舊 Token。
 
 ## 手機安裝位置
 

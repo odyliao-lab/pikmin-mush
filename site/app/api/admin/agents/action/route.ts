@@ -1,6 +1,7 @@
 import {
   adminAuthorized, ensureSchema, noStoreJson, runtime, sameOrigin,
 } from "../../../../../lib/cloud";
+import { hashAgentToken, issueAgentToken } from "../../../../../lib/fleet";
 
 export async function POST(request: Request) {
   if (!adminAuthorized(request)) return noStoreJson({ error: "forbidden" }, 403);
@@ -15,11 +16,41 @@ export async function POST(request: Request) {
   const agentId = String(body.agentId ?? "");
   const action = String(body.action ?? "");
   if (!/^[a-z0-9][a-z0-9._-]{0,63}$/.test(agentId) ||
-      !["enable", "disable", "pause", "resume", "update-regions"].includes(action)) {
+      !["enable", "disable", "pause", "resume", "update-regions",
+        "rotate-token", "revoke-old-token"].includes(action)) {
     return noStoreJson({ error: "invalid action" }, 400);
   }
   const db = runtime().DB;
   const now = Date.now();
+
+  if (action === "rotate-token") {
+    const agent = await db.prepare(
+      "SELECT id, token_hash FROM scan_agents WHERE id=?",
+    ).bind(agentId).first<{ id: string; token_hash: string }>();
+    if (!agent) return noStoreJson({ error: "Agent 不存在" }, 404);
+    const token = issueAgentToken();
+    const tokenHash = await hashAgentToken(token);
+    const legacy = agentId === "primary" ? runtime().AGENT_TOKEN ?? "" : "";
+    const previousHash = agent.token_hash ||
+      (legacy.length >= 32 ? await hashAgentToken(legacy) : "");
+    const graceExpiresAt = previousHash ? now + 24 * 60 * 60_000 : 0;
+    await db.prepare(`UPDATE scan_agents SET token_hash=?, previous_token_hash=?,
+        previous_token_expires_at=?, token_rotated_at=?, updated_at=? WHERE id=?`)
+      .bind(tokenHash, previousHash, graceExpiresAt, now, now, agentId).run();
+    return noStoreJson({
+      ok: true, agent_id: agentId, token,
+      previous_token_expires_at: graceExpiresAt,
+      warning: "新 Token 只顯示這一次；舊 Token 最多保留 24 小時供裝置換發。",
+    });
+  }
+
+  if (action === "revoke-old-token") {
+    const result = await db.prepare(`UPDATE scan_agents SET previous_token_hash='',
+        previous_token_expires_at=0, updated_at=? WHERE id=?`)
+      .bind(now, agentId).run();
+    if (!result.meta.changes) return noStoreJson({ error: "Agent 不存在" }, 404);
+    return noStoreJson({ ok: true, previous_token_expires_at: 0 });
+  }
 
   if (action === "update-regions") {
     const rotation = await db.prepare(

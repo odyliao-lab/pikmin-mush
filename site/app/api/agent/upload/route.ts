@@ -1,7 +1,10 @@
 import {
   ensureSchema, parseTsv, plain, readBoundedUtf8, runtime, upsertMushrooms,
 } from "../../../../lib/cloud";
-import { authorizeFleetAgent, touchAgent } from "../../../../lib/fleet";
+import {
+  agentRequestVersions, authorizeFleetAgent, touchAgent,
+} from "../../../../lib/fleet";
+import { recordAgentEvent } from "../../../../lib/metrics";
 
 const MAX_UPLOAD_BYTES = 512_000;
 const MAX_PARTIAL_BYTES = 64_000;
@@ -41,9 +44,10 @@ export async function POST(request: Request) {
       partial_text = ?,
       uploaded_rows = uploaded_rows + ?,
       uploaded_bytes = uploaded_bytes + ?,
+      last_data_at = CASE WHEN ?>0 THEN ? ELSE last_data_at END,
       last_seen = ?, updated_at = ?
     WHERE id = ?`)
-    .bind(partial, rows.length, body.bytes,
+    .bind(partial, rows.length, body.bytes, rows.length, Date.now(),
       Date.now(), Date.now(), agent.id)
     .run();
   if (agent.id === "primary") {
@@ -52,6 +56,9 @@ export async function POST(request: Request) {
         last_seen=? WHERE id=1`)
       .bind(rows.length, body.bytes, Date.now()).run();
   }
-  await touchAgent(agent.id);
+  await recordAgentEvent({
+    agentId: agent.id, type: "upload", rows: rows.length, bytes: body.bytes,
+  });
+  await touchAgent(agent.id, agentRequestVersions(request));
   return plain(`accepted=${rows.length}\n`);
 }
