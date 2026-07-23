@@ -7,7 +7,10 @@ import { materializeTargets } from "./targets";
 import { planDailyRotation, rotationWindow } from "./rotation-plan.mjs";
 
 const LOCK_STALE_MS = 5 * 60_000;
-const AGENT_ACTIVE_MS = 5 * 60_000;
+// A cross-country target can include a 120-second cooldown plus a cold game
+// restart. Do not rebuild thousands of targets merely because an otherwise
+// healthy phone spends more than five minutes between polls.
+const AGENT_ACTIVE_MS = 30 * 60_000;
 
 type RotationSettingRow = {
   enabled: number;
