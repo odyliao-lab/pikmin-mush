@@ -72,6 +72,59 @@ const INDIA: Center[] = [
   ["勒克瑙 Lucknow",26.8467,80.9462],["科欽 Kochi",9.9312,76.2673],
 ];
 
+const SOUTH_KOREA: Center[] = [
+  ["首爾 Seoul",37.5665,126.9780],["釜山 Busan",35.1796,129.0756],
+  ["仁川 Incheon",37.4563,126.7052],["大邱 Daegu",35.8714,128.6014],
+  ["大田 Daejeon",36.3504,127.3845],["光州 Gwangju",35.1595,126.8526],
+  ["蔚山 Ulsan",35.5384,129.3114],["濟州 Jeju",33.4996,126.5312],
+];
+
+const TAIWAN: Center[] = [
+  ["台北 Taipei",25.0330,121.5654],["新北 New Taipei",25.0114,121.4618],
+  ["桃園 Taoyuan",24.9937,121.3010],["新竹 Hsinchu",24.8138,120.9675],
+  ["台中 Taichung",24.1477,120.6736],["台南 Tainan",22.9999,120.2269],
+  ["高雄 Kaohsiung",22.6273,120.3014],["花蓮 Hualien",23.9911,121.6112],
+];
+
+const THAILAND: Center[] = [
+  ["曼谷 Bangkok",13.7563,100.5018],["清邁 Chiang Mai",18.7883,98.9853],
+  ["芭達雅 Pattaya",12.9236,100.8825],["普吉 Phuket",7.8804,98.3923],
+  ["呵叻 Nakhon Ratchasima",14.9799,102.0978],["孔敬 Khon Kaen",16.4419,102.8350],
+  ["合艾 Hat Yai",7.0084,100.4747],["烏隆他尼 Udon Thani",17.4138,102.7870],
+];
+
+const MALAYSIA: Center[] = [
+  ["吉隆坡 Kuala Lumpur",3.1390,101.6869],["喬治市 George Town",5.4141,100.3288],
+  ["新山 Johor Bahru",1.4927,103.7414],["怡保 Ipoh",4.5975,101.0901],
+  ["馬六甲 Melaka",2.1896,102.2501],["古晉 Kuching",1.5533,110.3592],
+  ["亞庇 Kota Kinabalu",5.9804,116.0735],["莎阿南 Shah Alam",3.0738,101.5183],
+];
+
+const SINGAPORE: Center[] = [
+  ["新加坡 Singapore",1.3521,103.8198],
+];
+
+const INDONESIA: Center[] = [
+  ["雅加達 Jakarta",-6.2088,106.8456],["泗水 Surabaya",-7.2575,112.7521],
+  ["萬隆 Bandung",-6.9175,107.6191],["棉蘭 Medan",3.5952,98.6722],
+  ["三寶壟 Semarang",-6.9667,110.4167],["日惹 Yogyakarta",-7.7956,110.3695],
+  ["望加錫 Makassar",-5.1477,119.4327],["登巴薩 Denpasar",-8.6705,115.2126],
+];
+
+const PHILIPPINES: Center[] = [
+  ["馬尼拉 Manila",14.5995,120.9842],["奎松市 Quezon City",14.6760,121.0437],
+  ["宿霧 Cebu",10.3157,123.8854],["達沃 Davao",7.1907,125.4553],
+  ["碧瑤 Baguio",16.4023,120.5960],["伊洛伊洛 Iloilo",10.7202,122.5621],
+  ["卡加延德奧羅 Cagayan de Oro",8.4542,124.6319],["巴科洛德 Bacolod",10.6840,122.9563],
+];
+
+const VIETNAM: Center[] = [
+  ["胡志明市 Ho Chi Minh City",10.8231,106.6297],["河內 Hanoi",21.0278,105.8342],
+  ["峴港 Da Nang",16.0544,108.2022],["海防 Hai Phong",20.8449,106.6881],
+  ["芹苴 Can Tho",10.0452,105.7469],["芽莊 Nha Trang",12.2388,109.1967],
+  ["順化 Hue",16.4637,107.5909],["大叻 Da Lat",11.9404,108.4583],
+];
+
 const BRAZIL: Center[] = [
   ["聖保羅 Sao Paulo",-23.5505,-46.6333],["里約熱內盧 Rio de Janeiro",-22.9068,-43.1729],
   ["巴西利亞 Brasilia",-15.7939,-47.8828],["薩爾瓦多 Salvador",-12.9777,-38.5016],
@@ -93,6 +146,49 @@ const ARGENTINA: Center[] = [
   ["拉普拉塔 La Plata",-34.9215,-57.9545],["圖庫曼 Tucuman",-26.8083,-65.2176],
   ["馬德普拉塔 Mar del Plata",-38.0055,-57.5426],["薩爾塔 Salta",-24.7821,-65.4232],
   ["聖菲 Santa Fe",-31.6333,-60.7000],["內烏肯 Neuquen",-38.9516,-68.0591],
+];
+
+const COLOMBIA: Center[] = [
+  ["波哥大 Bogota",4.7110,-74.0721],["麥德林 Medellin",6.2442,-75.5812],
+  ["卡利 Cali",3.4516,-76.5320],["巴蘭基亞 Barranquilla",10.9685,-74.7813],
+  ["卡塔赫納 Cartagena",10.3910,-75.4794],["布卡拉曼加 Bucaramanga",7.1193,-73.1227],
+  ["佩雷拉 Pereira",4.8087,-75.6906],["聖瑪爾塔 Santa Marta",11.2408,-74.1990],
+];
+
+const PERU: Center[] = [
+  ["利馬 Lima",-12.0464,-77.0428],["阿雷基帕 Arequipa",-16.4090,-71.5375],
+  ["特魯希略 Trujillo",-8.1116,-79.0288],["庫斯科 Cusco",-13.5319,-71.9675],
+  ["奇克拉約 Chiclayo",-6.7714,-79.8409],["皮烏拉 Piura",-5.1783,-80.6549],
+  ["伊基托斯 Iquitos",-3.7437,-73.2516],["萬卡約 Huancayo",-12.0651,-75.2049],
+];
+
+const CHILE: Center[] = [
+  ["聖地牙哥 Santiago",-33.4489,-70.6693],["瓦爾帕萊索 Valparaiso",-33.0472,-71.6127],
+  ["康塞普西翁 Concepcion",-36.8201,-73.0444],["安托法加斯塔 Antofagasta",-23.6509,-70.3975],
+  ["拉塞雷納 La Serena",-29.9027,-71.2519],["特木科 Temuco",-38.7359,-72.5904],
+  ["蒙特港 Puerto Montt",-41.4693,-72.9424],["蓬塔阿雷納斯 Punta Arenas",-53.1638,-70.9171],
+];
+
+const URUGUAY: Center[] = [
+  ["蒙特維多 Montevideo",-34.9011,-56.1645],["薩爾托 Salto",-31.3833,-57.9667],
+  ["派桑杜 Paysandu",-32.3214,-58.0756],["埃斯特角城 Punta del Este",-34.9698,-54.9515],
+];
+
+const PARAGUAY: Center[] = [
+  ["亞松森 Asuncion",-25.2637,-57.5759],["東方市 Ciudad del Este",-25.5167,-54.6167],
+  ["聖洛倫索 San Lorenzo",-25.3397,-57.5088],["恩卡納西翁 Encarnacion",-27.3306,-55.8667],
+];
+
+const BOLIVIA: Center[] = [
+  ["拉巴斯 La Paz",-16.4897,-68.1193],["聖克魯斯 Santa Cruz",-17.7833,-63.1821],
+  ["科恰班巴 Cochabamba",-17.4139,-66.1653],["蘇克雷 Sucre",-19.0196,-65.2619],
+  ["奧魯羅 Oruro",-17.9647,-67.1060],
+];
+
+const VENEZUELA: Center[] = [
+  ["卡拉卡斯 Caracas",10.4806,-66.9036],["馬拉開波 Maracaibo",10.6545,-71.6406],
+  ["瓦倫西亞 Valencia",10.1620,-68.0077],["巴基西梅托 Barquisimeto",10.0678,-69.3474],
+  ["馬拉凱 Maracay",10.2442,-67.6066],["圭亞那城 Ciudad Guayana",8.3663,-62.6497],
 ];
 
 const SWEDEN: Center[] = [
@@ -216,6 +312,65 @@ const CROATIA: Center[] = [
   ["杜布羅夫尼克 Dubrovnik",42.6507,18.0944],
 ];
 
+const UNITED_KINGDOM: Center[] = [
+  ["倫敦 London",51.5074,-0.1278],["伯明罕 Birmingham",52.4862,-1.8904],
+  ["曼徹斯特 Manchester",53.4808,-2.2426],["利物浦 Liverpool",53.4084,-2.9916],
+  ["里茲 Leeds",53.8008,-1.5491],["格拉斯哥 Glasgow",55.8642,-4.2518],
+  ["愛丁堡 Edinburgh",55.9533,-3.1883],["布里斯托 Bristol",51.4545,-2.5879],
+  ["紐卡索 Newcastle",54.9783,-1.6178],["貝爾法斯特 Belfast",54.5973,-5.9301],
+];
+
+const FRANCE: Center[] = [
+  ["巴黎 Paris",48.8566,2.3522],["馬賽 Marseille",43.2965,5.3698],
+  ["里昂 Lyon",45.7640,4.8357],["土魯斯 Toulouse",43.6047,1.4442],
+  ["尼斯 Nice",43.7102,7.2620],["南特 Nantes",47.2184,-1.5536],
+  ["史特拉斯堡 Strasbourg",48.5734,7.7521],["蒙彼利埃 Montpellier",43.6108,3.8767],
+  ["波爾多 Bordeaux",44.8378,-0.5792],["里爾 Lille",50.6292,3.0573],
+];
+
+const NETHERLANDS: Center[] = [
+  ["阿姆斯特丹 Amsterdam",52.3676,4.9041],["鹿特丹 Rotterdam",51.9244,4.4777],
+  ["海牙 The Hague",52.0705,4.3007],["烏特勒支 Utrecht",52.0907,5.1214],
+  ["恩荷芬 Eindhoven",51.4416,5.4697],["格羅寧根 Groningen",53.2194,6.5665],
+];
+
+const BELGIUM: Center[] = [
+  ["布魯塞爾 Brussels",50.8503,4.3517],["安特衛普 Antwerp",51.2194,4.4025],
+  ["根特 Ghent",51.0543,3.7174],["布魯日 Bruges",51.2093,3.2247],
+  ["列日 Liege",50.6326,5.5797],
+];
+
+const IRELAND: Center[] = [
+  ["都柏林 Dublin",53.3498,-6.2603],["科克 Cork",51.8985,-8.4756],
+  ["利默里克 Limerick",52.6638,-8.6267],["戈爾韋 Galway",53.2707,-9.0568],
+];
+
+const ROMANIA: Center[] = [
+  ["布加勒斯特 Bucharest",44.4268,26.1025],["克盧日 Cluj-Napoca",46.7712,23.6236],
+  ["蒂米什瓦拉 Timisoara",45.7489,21.2087],["雅西 Iasi",47.1585,27.6014],
+  ["康斯坦察 Constanta",44.1598,28.6348],["布拉索夫 Brasov",45.6427,25.5887],
+];
+
+const BULGARIA: Center[] = [
+  ["索菲亞 Sofia",42.6977,23.3219],["普羅夫迪夫 Plovdiv",42.1354,24.7453],
+  ["瓦爾納 Varna",43.2141,27.9147],["布爾加斯 Burgas",42.5048,27.4626],
+];
+
+const SERBIA: Center[] = [
+  ["貝爾格勒 Belgrade",44.7866,20.4489],["諾維薩德 Novi Sad",45.2671,19.8335],
+  ["尼什 Nis",43.3209,21.8958],["克拉古耶瓦茨 Kragujevac",44.0128,20.9114],
+];
+
+const SLOVAKIA: Center[] = [
+  ["布拉提斯拉瓦 Bratislava",48.1486,17.1077],["科希策 Kosice",48.7164,21.2611],
+  ["普雷紹夫 Presov",48.9984,21.2396],["日利納 Zilina",49.2231,18.7394],
+];
+
+const SLOVENIA: Center[] = [
+  ["盧比安納 Ljubljana",46.0569,14.5058],["馬里博爾 Maribor",46.5547,15.6459],
+  ["采列 Celje",46.2397,15.2677],["科佩爾 Koper",45.5481,13.7302],
+];
+
 const EGYPT: Center[] = [
   ["開羅 Cairo",30.0444,31.2357],["亞歷山卓 Alexandria",31.2001,29.9187],
   ["吉薩 Giza",30.0131,31.2089],["塞得港 Port Said",31.2653,32.3019],
@@ -274,6 +429,18 @@ const PANAMA: Center[] = [
   ["奇特雷 Chitre",7.9608,-80.4297],
 ];
 
+const MEXICO: Center[] = [
+  ["墨西哥城 Mexico City",19.4326,-99.1332],["瓜達拉哈拉 Guadalajara",20.6597,-103.3496],
+  ["蒙特雷 Monterrey",25.6866,-100.3161],["普埃布拉 Puebla",19.0414,-98.2063],
+  ["提華納 Tijuana",32.5149,-117.0382],["萊昂 Leon",21.1220,-101.6840],
+  ["克雷塔羅 Queretaro",20.5888,-100.3899],["梅里達 Merida",20.9674,-89.5926],
+  ["坎昆 Cancun",21.1619,-86.8515],["托盧卡 Toluca",19.2826,-99.6557],
+];
+
+const BELIZE: Center[] = [
+  ["貝里斯市 Belize City",17.5046,-88.1962],["貝爾莫潘 Belmopan",17.2510,-88.7590],
+];
+
 const USA_EAST: Center[] = [
   ["紐約 New York",40.7128,-74.0060],["波士頓 Boston",42.3601,-71.0589],
   ["費城 Philadelphia",39.9526,-75.1652],["華盛頓 Washington DC",38.9072,-77.0369],
@@ -305,11 +472,26 @@ const USA_WEST: Center[] = [
 export const COUNTRY_PACK_CATALOG = [
   { id: "jp", name: "日本", region: "亞洲", cities: JAPAN },
   { id: "in", name: "印度", region: "亞洲", cities: INDIA },
+  { id: "kr", name: "韓國", region: "亞洲", cities: SOUTH_KOREA },
+  { id: "tw", name: "台灣", region: "亞洲", cities: TAIWAN },
+  { id: "th", name: "泰國", region: "亞洲", cities: THAILAND },
+  { id: "my", name: "馬來西亞", region: "亞洲", cities: MALAYSIA },
+  { id: "sg", name: "新加坡", region: "亞洲", cities: SINGAPORE },
+  { id: "id", name: "印尼", region: "亞洲", cities: INDONESIA },
+  { id: "ph", name: "菲律賓", region: "亞洲", cities: PHILIPPINES },
+  { id: "vn", name: "越南", region: "亞洲", cities: VIETNAM },
   { id: "au", name: "澳洲", region: "大洋洲", cities: AUSTRALIA },
   { id: "nz", name: "紐西蘭", region: "大洋洲", cities: NEW_ZEALAND },
   { id: "br", name: "巴西", region: "南美洲", cities: BRAZIL },
   { id: "ec", name: "厄瓜多", region: "南美洲", cities: ECUADOR },
   { id: "ar", name: "阿根廷", region: "南美洲", cities: ARGENTINA },
+  { id: "co", name: "哥倫比亞", region: "南美洲", cities: COLOMBIA },
+  { id: "pe", name: "秘魯", region: "南美洲", cities: PERU },
+  { id: "cl", name: "智利", region: "南美洲", cities: CHILE },
+  { id: "uy", name: "烏拉圭", region: "南美洲", cities: URUGUAY },
+  { id: "py", name: "巴拉圭", region: "南美洲", cities: PARAGUAY },
+  { id: "bo", name: "玻利維亞", region: "南美洲", cities: BOLIVIA },
+  { id: "ve", name: "委內瑞拉", region: "南美洲", cities: VENEZUELA },
   { id: "se", name: "瑞典", region: "北歐", cities: SWEDEN },
   { id: "no", name: "挪威", region: "北歐", cities: NORWAY },
   { id: "dk", name: "丹麥", region: "北歐", cities: DENMARK },
@@ -331,6 +513,16 @@ export const COUNTRY_PACK_CATALOG = [
   { id: "pt", name: "葡萄牙", region: "南歐", cities: PORTUGAL },
   { id: "gr", name: "希臘", region: "南歐", cities: GREECE },
   { id: "hr", name: "克羅埃西亞", region: "南歐", cities: CROATIA },
+  { id: "gb", name: "英國", region: "西歐", cities: UNITED_KINGDOM },
+  { id: "fr", name: "法國", region: "西歐", cities: FRANCE },
+  { id: "nl", name: "荷蘭", region: "西歐", cities: NETHERLANDS },
+  { id: "be", name: "比利時", region: "西歐", cities: BELGIUM },
+  { id: "ie", name: "愛爾蘭", region: "西歐", cities: IRELAND },
+  { id: "ro", name: "羅馬尼亞", region: "東歐", cities: ROMANIA },
+  { id: "bg", name: "保加利亞", region: "東歐", cities: BULGARIA },
+  { id: "rs", name: "塞爾維亞", region: "東歐", cities: SERBIA },
+  { id: "sk", name: "斯洛伐克", region: "東歐", cities: SLOVAKIA },
+  { id: "si", name: "斯洛維尼亞", region: "東歐", cities: SLOVENIA },
   { id: "eg", name: "埃及", region: "北非", cities: EGYPT },
   { id: "ma", name: "摩洛哥", region: "北非", cities: MOROCCO },
   { id: "dz", name: "阿爾及利亞", region: "北非", cities: ALGERIA },
@@ -341,6 +533,8 @@ export const COUNTRY_PACK_CATALOG = [
   { id: "ni", name: "尼加拉瓜", region: "中美洲", cities: NICARAGUA },
   { id: "cr", name: "哥斯大黎加", region: "中美洲", cities: COSTA_RICA },
   { id: "pa", name: "巴拿馬", region: "中美洲", cities: PANAMA },
+  { id: "mx", name: "墨西哥", region: "中美洲", cities: MEXICO },
+  { id: "bz", name: "貝里斯", region: "中美洲", cities: BELIZE },
   { id: "us-east", name: "美國東部", region: "北美洲", cities: USA_EAST },
   { id: "us-central", name: "美國中部", region: "北美洲", cities: USA_CENTRAL },
   { id: "us-west", name: "美國西部", region: "北美洲", cities: USA_WEST },

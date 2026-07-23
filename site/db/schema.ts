@@ -133,10 +133,20 @@ export const scanTargets = sqliteTable("scan_targets", {
   updatedAt: integer("updated_at").notNull(),
   completedAt: integer("completed_at").notNull().default(0),
   completedAgentId: text("completed_agent_id").notNull().default(""),
+  priority: integer("priority").notNull().default(0),
+  requiredAgentId: text("required_agent_id").notNull().default(""),
+  verificationBatch: text("verification_batch").notNull().default(""),
+  verificationMushroomId: text("verification_mushroom_id").notNull().default(""),
+  verificationKind: text("verification_kind").notNull().default(""),
 }, (table) => [
   index("scan_targets_claim_idx").on(table.jobId, table.status, table.cycle),
   index("scan_targets_lease_idx").on(table.leaseExpiresAt),
   index("scan_targets_agent_idx").on(table.leaseAgentId, table.status),
+  index("scan_targets_verification_idx").on(
+    table.verificationBatch,
+    table.verificationKind,
+    table.status,
+  ),
   uniqueIndex("scan_targets_job_sequence_uidx").on(table.jobId, table.sequence),
 ]);
 

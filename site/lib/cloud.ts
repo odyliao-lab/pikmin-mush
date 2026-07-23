@@ -48,6 +48,11 @@ async function patchColumns(db: RuntimeEnv["DB"]) {
     { sql: "ALTER TABLE scan_agents ADD COLUMN token_rotated_at INTEGER NOT NULL DEFAULT 0", verify: "SELECT token_rotated_at FROM scan_agents LIMIT 1" },
     { sql: "ALTER TABLE scan_targets ADD COLUMN leased_at INTEGER NOT NULL DEFAULT 0", verify: "SELECT leased_at FROM scan_targets LIMIT 1" },
     { sql: "ALTER TABLE scan_targets ADD COLUMN completed_agent_id TEXT NOT NULL DEFAULT ''", verify: "SELECT completed_agent_id FROM scan_targets LIMIT 1" },
+    { sql: "ALTER TABLE scan_targets ADD COLUMN priority INTEGER NOT NULL DEFAULT 0", verify: "SELECT priority FROM scan_targets LIMIT 1" },
+    { sql: "ALTER TABLE scan_targets ADD COLUMN required_agent_id TEXT NOT NULL DEFAULT ''", verify: "SELECT required_agent_id FROM scan_targets LIMIT 1" },
+    { sql: "ALTER TABLE scan_targets ADD COLUMN verification_batch TEXT NOT NULL DEFAULT ''", verify: "SELECT verification_batch FROM scan_targets LIMIT 1" },
+    { sql: "ALTER TABLE scan_targets ADD COLUMN verification_mushroom_id TEXT NOT NULL DEFAULT ''", verify: "SELECT verification_mushroom_id FROM scan_targets LIMIT 1" },
+    { sql: "ALTER TABLE scan_targets ADD COLUMN verification_kind TEXT NOT NULL DEFAULT ''", verify: "SELECT verification_kind FROM scan_targets LIMIT 1" },
   ];
   for (const addition of additions) {
     try {
@@ -193,7 +198,12 @@ export async function ensureSchema() {
       created_at INTEGER NOT NULL,
       updated_at INTEGER NOT NULL,
       completed_at INTEGER NOT NULL DEFAULT 0,
-      completed_agent_id TEXT NOT NULL DEFAULT ''
+      completed_agent_id TEXT NOT NULL DEFAULT '',
+      priority INTEGER NOT NULL DEFAULT 0,
+      required_agent_id TEXT NOT NULL DEFAULT '',
+      verification_batch TEXT NOT NULL DEFAULT '',
+      verification_mushroom_id TEXT NOT NULL DEFAULT '',
+      verification_kind TEXT NOT NULL DEFAULT ''
     )`),
     db.prepare(`CREATE INDEX IF NOT EXISTS scan_targets_claim_idx
       ON scan_targets (job_id, status, cycle)`),
@@ -201,6 +211,8 @@ export async function ensureSchema() {
       ON scan_targets (lease_expires_at)`),
     db.prepare(`CREATE INDEX IF NOT EXISTS scan_targets_agent_idx
       ON scan_targets (lease_agent_id, status)`),
+    db.prepare(`CREATE INDEX IF NOT EXISTS scan_targets_verification_idx
+      ON scan_targets (verification_batch, verification_kind, status)`),
     db.prepare(`CREATE UNIQUE INDEX IF NOT EXISTS scan_targets_job_sequence_uidx
       ON scan_targets (job_id, sequence)`),
     db.prepare(`CREATE TABLE IF NOT EXISTS scan_agent_events (
