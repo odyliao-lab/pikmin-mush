@@ -81,19 +81,27 @@ export async function ensureDailyRotation(now = Date.now()) {
   ).bind(planned.scheduleDate).first<RotationRunRow>();
   let lockAcquired = false;
   if (existing?.status === "completed") {
-    let assignedAgentIds: string[] = [];
+    let existingPlan: Array<{ agentId: string; id: string; packs: string[] }> = [];
     try {
       const parsed = JSON.parse(existing.assignments_json);
       if (Array.isArray(parsed)) {
-        assignedAgentIds = parsed.map((item) => String(item?.agentId ?? "")).filter(Boolean).sort();
+        existingPlan = parsed.map((item) => ({
+          agentId: String(item?.agentId ?? ""),
+          id: String(item?.id ?? ""),
+          packs: Array.isArray(item?.packs) ? item.packs.map(String) : [],
+        })).sort((left, right) => left.agentId.localeCompare(right.agentId));
       }
     } catch {
-      assignedAgentIds = [];
+      existingPlan = [];
     }
-    const enabledAgentIds = agents.results.map((agent) => agent.id).sort();
-    if (JSON.stringify(assignedAgentIds) === JSON.stringify(enabledAgentIds)) return existing;
+    const expectedPlan = planned.assignments.map((item) => ({
+      agentId: item.agentId,
+      id: item.id,
+      packs: item.packs,
+    })).sort((left, right) => left.agentId.localeCompare(right.agentId));
+    if (JSON.stringify(existingPlan) === JSON.stringify(expectedPlan)) return existing;
     const reacquired = await db.prepare(`UPDATE scan_rotation_runs SET
-        status='running', message='Agent 清單變更，重新平衡今日區域', updated_at=?
+        status='running', message='Agent 或輪替方案變更，重新平衡今日區域', updated_at=?
       WHERE schedule_date=? AND status='completed' AND assignments_json=?`)
       .bind(now, planned.scheduleDate, existing.assignments_json).run();
     lockAcquired = Boolean(reacquired.meta.changes);

@@ -153,6 +153,8 @@ test("includes durable multi-agent leases, v2 protocol routes, and migrations", 
   assert.match(rotation, /每日 07:30 自動換區/);
   assert.match(rotation, /SELECT \* FROM scan_rotation_runs WHERE schedule_date=\?/);
   assert.match(rotation, /30 \* 60_000/);
+  assert.match(rotation, /existingPlan/);
+  assert.match(rotation, /expectedPlan/);
   await access(new URL("dist/server/index.js", root));
 });
 
