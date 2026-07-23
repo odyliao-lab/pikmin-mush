@@ -7,7 +7,25 @@ export async function GET(request: Request) {
   if (!adminAuthorized(request)) return noStoreJson({ error: "forbidden" }, 403);
   await ensureSchema();
   const db = runtime().DB;
-  const rotation = await rotationStatus();
+  // A rotation rebuild may temporarily fail while a large target queue is being
+  // materialized. Keep fleet health and recovery controls available instead of
+  // turning the entire admin dashboard into an empty state.
+  let rotation;
+  try {
+    rotation = await rotationStatus();
+  } catch (error) {
+    rotation = {
+      enabled: true,
+      timezone: "Asia/Taipei",
+      switch_minute: 450,
+      schedule_date: "",
+      next_switch_at: 0,
+      status: "failed",
+      job_id: null,
+      assignments: [],
+      message: error instanceof Error ? error.message : "每日換區狀態讀取失敗",
+    };
+  }
   const job = await activeOrLatestJob();
   const [agentsResult, logs, targetCounts] = await Promise.all([
     db.prepare(`SELECT * FROM scan_agents ORDER BY enabled DESC, last_seen DESC, id`)
