@@ -57,6 +57,13 @@
       "when": 1784733018161,
       "tag": "0007_condemned_nekra",
       "breakpoints": true
+    },
+    {
+      "idx": 8,
+      "version": "6",
+      "when": 1784817482620,
+      "tag": "0008_rich_mac_gargan",
+      "breakpoints": true
     }
   ]
 }

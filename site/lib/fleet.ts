@@ -64,6 +64,11 @@ export type ScanTargetRow = {
   updated_at: number;
   completed_at: number;
   completed_agent_id: string;
+  priority: number;
+  required_agent_id: string;
+  verification_batch: string;
+  verification_mushroom_id: string;
+  verification_kind: string;
 };
 
 function bearer(request: Request) {
@@ -306,11 +311,13 @@ async function resetLoop(job: ScanJobRow) {
     .bind(nextCycle, now, `第 ${nextCycle} 輪完成，重新分派掃描點`,
       job.id, job.cycle, job.id, job.id).run();
   if (!won.meta.changes) return false;
+  await db.prepare(`DELETE FROM scan_targets
+    WHERE job_id=? AND verification_kind<>''`).bind(job.id).run();
   await db.prepare(`UPDATE scan_targets SET cycle=?, status='queued',
       lease_agent_id='', lease_token='', leased_at=0, lease_expires_at=0,
       captured_rows=0, captured_bytes=0, error='', completed_at=0,
       completed_agent_id='', updated_at=?
-    WHERE job_id=?`).bind(nextCycle, now, job.id).run();
+    WHERE job_id=? AND verification_kind=''`).bind(nextCycle, now, job.id).run();
   await appendScanLog(job.id, "info", `第 ${nextCycle} 輪開始，多 Agent 重新分派`);
   return true;
 }
@@ -347,11 +354,14 @@ async function candidateTarget(job: ScanJobRow, agent: ScanAgentRow) {
   const distanceOrder = location
     ? `((lat-?)*(lat-?) + (lng-?)*(lng-?)),`
     : "";
-  const params: unknown[] = [job.id, Number(job.cycle), ...tags, ...tags];
+  const params: unknown[] = [
+    job.id, Number(job.cycle), agent.id, ...tags, ...tags,
+  ];
   if (location) params.push(location.lat, location.lat, location.lng, location.lng);
   return db.prepare(`SELECT * FROM scan_targets
-    WHERE job_id=? AND cycle=? AND status='queued' ${tagFilter}
-    ORDER BY ${whereTags} ${distanceOrder} sequence ASC LIMIT 1`)
+    WHERE job_id=? AND cycle=? AND status='queued'
+      AND (required_agent_id='' OR required_agent_id=?) ${tagFilter}
+    ORDER BY priority DESC, ${whereTags} ${distanceOrder} sequence ASC LIMIT 1`)
     .bind(...params).first<ScanTargetRow>();
 }
 
@@ -494,7 +504,8 @@ export async function completeTask(
   if (!job || !["queued", "running"].includes(job.status)) return "stop" as const;
   const now = Date.now();
   const status = input.ok ? "completed" : target.attempts >= 3 ? "failed" : "queued";
-  const completedDelta = status === "completed" || status === "failed" ? 1 : 0;
+  const completedDelta = target.verification_kind ? 0 :
+    status === "completed" || status === "failed" ? 1 : 0;
   const message = input.ok
     ? `${agent.display_name} 完成 ${target.city}，新增 ${input.rows} 行`
     : status === "failed"

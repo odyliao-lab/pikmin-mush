@@ -2,49 +2,34 @@ export const ROTATION_TIME_ZONE = "Asia/Taipei";
 export const ROTATION_SWITCH_MINUTE = 7 * 60 + 30;
 export const ROTATION_EPOCH_DATE = "2026-07-22";
 
-// Ten balanced days cover every currently configured country pack exactly once.
-// Bundles keep neighboring countries together and daily pairs differ by at most
-// two cities, so two Agents receive similar workloads without sharing a region.
+// Five balanced days cover every configured country pack exactly once.
+// Each day has three non-overlapping routes of 27–31 cities, roughly twice the
+// former per-Agent workload while keeping daily route sizes within two cities.
 export const ROTATION_DAYS = [
   [
-    { id: "middle-east", label: "中東五國", packs: ["ae", "sa", "il", "jo", "qa"], cityCount: 20 },
-    { id: "japan", label: "日本", packs: ["jp"], cityCount: 18 },
+    { id: "global-01", label: "全球路線 01", packs: ["jp", "bo", "ae", "bg"], cityCount: 31 },
+    { id: "global-02", label: "全球路線 02", packs: ["us-east", "eg", "pa", "ni", "il"], cityCount: 31 },
+    { id: "global-03", label: "全球路線 03", packs: ["us-central", "ro", "cr", "sv", "ie"], cityCount: 31 },
   ],
   [
-    { id: "oceania", label: "澳洲・紐西蘭", packs: ["au", "nz"], cityCount: 18 },
-    { id: "south-america-south", label: "阿根廷・厄瓜多", packs: ["ar", "ec"], cityCount: 16 },
+    { id: "global-04", label: "全球路線 04", packs: ["br", "nl", "tn", "hn", "is"], cityCount: 31 },
+    { id: "global-05", label: "全球路線 05", packs: ["us-west", "es", "dz", "gt", "uy"], cityCount: 31 },
+    { id: "global-06", label: "全球路線 06", packs: ["in", "de", "be", "cz", "jo"], cityCount: 31 },
   ],
   [
-    { id: "nordic-east", label: "丹麥・芬蘭・冰島", packs: ["dk", "fi", "is"], cityCount: 15 },
-    { id: "southern-europe-west", label: "葡萄牙・希臘・克羅埃西亞", packs: ["pt", "gr", "hr"], cityCount: 15 },
+    { id: "global-07", label: "全球路線 07", packs: ["gb", "ph", "hr", "py", "qa"], cityCount: 30 },
+    { id: "global-08", label: "全球路線 08", packs: ["fr", "id", "at", "si", "bz"], cityCount: 29 },
+    { id: "global-09", label: "全球路線 09", packs: ["au", "co", "pt", "sk", "sg"], cityCount: 28 },
   ],
   [
-    { id: "central-america-south", label: "尼加拉瓜・哥斯大黎加・巴拿馬", packs: ["ni", "cr", "pa"], cityCount: 14 },
-    { id: "southern-europe-core", label: "義大利・西班牙", packs: ["it", "es"], cityCount: 13 },
+    { id: "global-10", label: "全球路線 10", packs: ["mx", "it", "no", "rs"], cityCount: 27 },
+    { id: "global-11", label: "全球路線 11", packs: ["ar", "ma", "pl", "dk"], cityCount: 27 },
+    { id: "global-12", label: "全球路線 12", packs: ["my", "pe", "ec", "hu"], cityCount: 27 },
   ],
   [
-    { id: "india", label: "印度", packs: ["in"], cityCount: 12 },
-    { id: "brazil", label: "巴西", packs: ["br"], cityCount: 12 },
-  ],
-  [
-    { id: "nordic-west", label: "瑞典・挪威", packs: ["se", "no"], cityCount: 12 },
-    { id: "north-africa-west", label: "埃及・摩洛哥", packs: ["eg", "ma"], cityCount: 12 },
-  ],
-  [
-    { id: "central-america-north", label: "瓜地馬拉・宏都拉斯・薩爾瓦多", packs: ["gt", "hn", "sv"], cityCount: 12 },
-    { id: "us-east", label: "美國東部", packs: ["us-east"], cityCount: 12 },
-  ],
-  [
-    { id: "us-central", label: "美國中部", packs: ["us-central"], cityCount: 12 },
-    { id: "us-west", label: "美國西部", packs: ["us-west"], cityCount: 12 },
-  ],
-  [
-    { id: "central-europe-west", label: "德國・奧地利", packs: ["de", "at"], cityCount: 11 },
-    { id: "central-europe-east", label: "波蘭・匈牙利", packs: ["pl", "hu"], cityCount: 11 },
-  ],
-  [
-    { id: "north-africa-central", label: "阿爾及利亞・突尼西亞", packs: ["dz", "tn"], cityCount: 10 },
-    { id: "alpine", label: "瑞士・捷克", packs: ["ch", "cz"], cityCount: 9 },
+    { id: "global-13", label: "全球路線 13", packs: ["th", "tw", "ve", "sa"], cityCount: 27 },
+    { id: "global-14", label: "全球路線 14", packs: ["cl", "nz", "fi", "ch"], cityCount: 27 },
+    { id: "global-15", label: "全球路線 15", packs: ["kr", "vn", "se", "gr"], cityCount: 27 },
   ],
 ];
 
@@ -87,8 +72,8 @@ export function planDailyRotation(agentIds, now = Date.now()) {
   const cycle = Math.floor(window.dayOffset / ROTATION_DAYS.length);
   const selected = [];
   for (let offset = 0; selected.length < agents.length; offset += 1) {
-    const pair = ROTATION_DAYS[mod(primaryDay + offset, ROTATION_DAYS.length)];
-    const ordered = mod(cycle, 2) ? [...pair].reverse() : pair;
+    const routes = ROTATION_DAYS[mod(primaryDay + offset, ROTATION_DAYS.length)];
+    const ordered = mod(cycle, 2) ? [...routes].reverse() : routes;
     for (const bundle of ordered) {
       if (!selected.some((item) => item.id === bundle.id)) selected.push(bundle);
       if (selected.length === agents.length) break;
