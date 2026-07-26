@@ -75,6 +75,15 @@ export async function ensureDailyRotation(now = Date.now()) {
     .bind(now - AGENT_ACTIVE_MS).all<{ id: string }>();
   if (!agents.results.length) return null;
 
+  // Notification verification is time-sensitive and must finish before the
+  // daily route rebuild cancels the scan job that owns those targets.
+  // Once all candidate checks finish, the next agent poll performs rotation.
+  const pendingVerification = await db.prepare(`SELECT COUNT(*) AS count
+    FROM scan_targets
+    WHERE verification_kind='candidate' AND status IN ('queued','leased')`)
+    .first<{ count: number }>();
+  if (Number(pendingVerification?.count ?? 0) > 0) return null;
+
   const planned = planDailyRotation(agents.results.map((agent) => agent.id), now);
   const existing = await db.prepare(
     "SELECT * FROM scan_rotation_runs WHERE schedule_date=?",
