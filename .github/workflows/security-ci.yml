@@ -21,10 +21,11 @@ jobs:
           node-version: 22
           cache: npm
           cache-dependency-path: site/package-lock.json
+      - run: npm install --global npm@11.12.1
       - run: npm ci
       - run: npm run lint
       - run: npm test
-      - run: npm audit --package-lock-only --audit-level=moderate
+      - run: npm audit --audit-level=moderate
       - name: Validate Android Agent shell
         working-directory: .
         run: bash -n phone_agent/agent.sh
