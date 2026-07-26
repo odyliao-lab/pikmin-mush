@@ -23,7 +23,7 @@ test("assigns three Agents distinct balanced routes and covers all packs in five
     assert.notEqual(plan.assignments[1].id, plan.assignments[2].id);
     const counts = plan.assignments.map((item) => item.cityCount);
     assert.ok(Math.max(...counts) - Math.min(...counts) <= 2);
-    assert.ok(Math.min(...counts) >= 27);
+    assert.ok(Math.min(...counts) >= 28);
     for (const assignment of plan.assignments) {
       seenBundles.add(assignment.id);
       for (const pack of assignment.packs) {
@@ -33,7 +33,8 @@ test("assigns three Agents distinct balanced routes and covers all packs in five
     }
   }
   assert.equal(seenBundles.size, 15);
-  assert.equal(seenPacks.size, 68);
+  assert.equal(seenPacks.has("tw"), false);
+  assert.equal(seenPacks.size, 67);
 });
 
 test("reverses the three routes between Agents on the next cycle", () => {

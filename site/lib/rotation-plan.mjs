@@ -2,34 +2,34 @@ export const ROTATION_TIME_ZONE = "Asia/Taipei";
 export const ROTATION_SWITCH_MINUTE = 7 * 60 + 30;
 export const ROTATION_EPOCH_DATE = "2026-07-22";
 
-// Five balanced days cover every configured country pack exactly once.
-// Each day has three non-overlapping routes of 27–31 cities, roughly twice the
-// former per-Agent workload while keeping daily route sizes within two cities.
+// Five balanced days cover every configured non-Taiwan country pack exactly
+// once. Each day has three non-overlapping routes of 28–29 cities so all
+// Agents receive nearly identical daily workloads.
 export const ROTATION_DAYS = [
   [
-    { id: "global-01", label: "全球路線 01", packs: ["jp", "bo", "ae", "bg"], cityCount: 31 },
-    { id: "global-02", label: "全球路線 02", packs: ["us-east", "eg", "pa", "ni", "il"], cityCount: 31 },
-    { id: "global-03", label: "全球路線 03", packs: ["us-central", "ro", "cr", "sv", "ie"], cityCount: 31 },
+    { id: "global-01", label: "全球路線 01", packs: ["de", "ec", "eg", "es", "at"], cityCount: 29 },
+    { id: "global-02", label: "全球路線 02", packs: ["fi", "ma", "nl", "no", "be"], cityCount: 29 },
+    { id: "global-03", label: "全球路線 03", packs: ["pl", "ro", "se", "ve", "bo"], cityCount: 29 },
   ],
   [
-    { id: "global-04", label: "全球路線 04", packs: ["br", "nl", "tn", "hn", "is"], cityCount: 31 },
-    { id: "global-05", label: "全球路線 05", packs: ["us-west", "es", "dz", "gt", "uy"], cityCount: 31 },
-    { id: "global-06", label: "全球路線 06", packs: ["in", "de", "be", "cz", "jo"], cityCount: 31 },
+    { id: "global-04", label: "全球路線 04", packs: ["cl", "it", "ch", "cr", "ae"], cityCount: 29 },
+    { id: "global-05", label: "全球路線 05", packs: ["co", "id", "dk", "bg", "cz"], cityCount: 29 },
+    { id: "global-06", label: "全球路線 06", packs: ["kr", "my", "dz", "gt", "hn"], cityCount: 29 },
   ],
   [
-    { id: "global-07", label: "全球路線 07", packs: ["gb", "ph", "hr", "py", "qa"], cityCount: 30 },
-    { id: "global-08", label: "全球路線 08", packs: ["fr", "id", "at", "si", "bz"], cityCount: 29 },
-    { id: "global-09", label: "全球路線 09", packs: ["au", "co", "pt", "sk", "sg"], cityCount: 28 },
+    { id: "global-07", label: "全球路線 07", packs: ["ar", "gr", "hr", "hu", "ie"], cityCount: 29 },
+    { id: "global-08", label: "全球路線 08", packs: ["au", "nz", "pa", "pt"], cityCount: 28 },
+    { id: "global-09", label: "全球路線 09", packs: ["fr", "pe", "sa", "tn"], cityCount: 28 },
   ],
   [
-    { id: "global-10", label: "全球路線 10", packs: ["mx", "it", "no", "rs"], cityCount: 27 },
-    { id: "global-11", label: "全球路線 11", packs: ["ar", "ma", "pl", "dk"], cityCount: 27 },
-    { id: "global-12", label: "全球路線 12", packs: ["my", "pe", "ec", "hu"], cityCount: 27 },
+    { id: "global-10", label: "全球路線 10", packs: ["gb", "mx", "il", "is"], cityCount: 28 },
+    { id: "global-11", label: "全球路線 11", packs: ["br", "ph", "jo", "ni"], cityCount: 28 },
+    { id: "global-12", label: "全球路線 12", packs: ["in", "th", "py", "rs"], cityCount: 28 },
   ],
   [
-    { id: "global-13", label: "全球路線 13", packs: ["th", "tw", "ve", "sa"], cityCount: 27 },
-    { id: "global-14", label: "全球路線 14", packs: ["cl", "nz", "fi", "ch"], cityCount: 27 },
-    { id: "global-15", label: "全球路線 15", packs: ["kr", "vn", "se", "gr"], cityCount: 27 },
+    { id: "global-13", label: "全球路線 13", packs: ["us-central", "vn", "si", "sk"], cityCount: 28 },
+    { id: "global-14", label: "全球路線 14", packs: ["us-east", "us-west", "qa", "sg"], cityCount: 28 },
+    { id: "global-15", label: "全球路線 15", packs: ["jp", "sv", "uy", "bz"], cityCount: 28 },
   ],
 ];
 

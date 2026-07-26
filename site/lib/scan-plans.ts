@@ -79,13 +79,6 @@ const SOUTH_KOREA: Center[] = [
   ["蔚山 Ulsan",35.5384,129.3114],["濟州 Jeju",33.4996,126.5312],
 ];
 
-const TAIWAN: Center[] = [
-  ["台北 Taipei",25.0330,121.5654],["新北 New Taipei",25.0114,121.4618],
-  ["桃園 Taoyuan",24.9937,121.3010],["新竹 Hsinchu",24.8138,120.9675],
-  ["台中 Taichung",24.1477,120.6736],["台南 Tainan",22.9999,120.2269],
-  ["高雄 Kaohsiung",22.6273,120.3014],["花蓮 Hualien",23.9911,121.6112],
-];
-
 const THAILAND: Center[] = [
   ["曼谷 Bangkok",13.7563,100.5018],["清邁 Chiang Mai",18.7883,98.9853],
   ["芭達雅 Pattaya",12.9236,100.8825],["普吉 Phuket",7.8804,98.3923],
@@ -473,7 +466,6 @@ export const COUNTRY_PACK_CATALOG = [
   { id: "jp", name: "日本", region: "亞洲", cities: JAPAN },
   { id: "in", name: "印度", region: "亞洲", cities: INDIA },
   { id: "kr", name: "韓國", region: "亞洲", cities: SOUTH_KOREA },
-  { id: "tw", name: "台灣", region: "亞洲", cities: TAIWAN },
   { id: "th", name: "泰國", region: "亞洲", cities: THAILAND },
   { id: "my", name: "馬來西亞", region: "亞洲", cities: MALAYSIA },
   { id: "sg", name: "新加坡", region: "亞洲", cities: SINGAPORE },
