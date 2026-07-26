@@ -80,7 +80,7 @@ test("hardens uploads, public telemetry, controller credentials, and browser pol
 
 test("includes durable multi-agent leases, v2 protocol routes, and migrations", async () => {
   const [
-    schema, cloud, plan, fleet, task, ack, control, agentAction, adminClient,
+    schema, cloud, plan, fleet, task, ack, control, verification, agentAction, adminClient,
     migration, pauseMigration, rotationMigration, phoneAgent, rotation, targets,
   ] = await Promise.all([
     readFile(new URL("db/schema.ts", root), "utf8"),
@@ -90,6 +90,7 @@ test("includes durable multi-agent leases, v2 protocol routes, and migrations", 
     readFile(new URL("app/api/agent/v2/task/route.ts", root), "utf8"),
     readFile(new URL("app/api/agent/v2/ack/route.ts", root), "utf8"),
     readFile(new URL("app/api/agent/v2/control/route.ts", root), "utf8"),
+    readFile(new URL("app/api/controller/verification/route.ts", root), "utf8"),
     readFile(new URL("app/api/admin/agents/action/route.ts", root), "utf8"),
     readFile(new URL("app/admin/admin-client.tsx", root), "utf8"),
     readFile(new URL("drizzle/0003_fair_dragon_man.sql", root), "utf8"),
@@ -141,6 +142,8 @@ test("includes durable multi-agent leases, v2 protocol routes, and migrations", 
   assert.match(fleet, /if \(agent\.paused\)/);
   assert.match(fleet, /rotation\.status !== "completed"/);
   assert.match(control, /if \(agent\.paused\) return plain\("pause\\n"\)/);
+  assert.match(verification, /replaceExisting/);
+  assert.match(verification, /DELETE FROM scan_targets WHERE verification_batch=\?/);
   assert.match(agentAction, /"rotate-token", "revoke-old-token"/);
   assert.match(agentAction, /region_tags_json=\?/);
   assert.match(agentAction, /每日自動換區已啟用/);

@@ -35,6 +35,7 @@ export async function POST(request: Request) {
 
   const agentId = String(input.agentId ?? "").trim().toLowerCase();
   const batch = cleanBatch(input.batch);
+  const replaceExisting = input.replaceExisting === true;
   const rawCandidates = Array.isArray(input.candidates) ? input.candidates : [];
   if (!agentId || !batch || !rawCandidates.length || rawCandidates.length > 30) {
     return noStoreJson({ error: "agentId, batch and 1-30 candidates are required" }, 400);
@@ -57,7 +58,8 @@ export async function POST(request: Request) {
   const existing = await db.prepare(
     "SELECT COUNT(*) AS count FROM scan_targets WHERE verification_batch=?",
   ).bind(batch).first<{ count: number }>();
-  if (Number(existing?.count ?? 0)) {
+  const existingCount = Number(existing?.count ?? 0);
+  if (existingCount && !replaceExisting) {
     return noStoreJson({ ok: true, batch, existing: true });
   }
   const agent = await db.prepare(`SELECT id, region_tags_json, current_lat, current_lng
@@ -82,6 +84,11 @@ export async function POST(request: Request) {
   if (!country) return noStoreJson({ error: "agent has no assigned region" }, 409);
 
   const now = Date.now();
+  if (existingCount) {
+    await db.prepare(
+      "DELETE FROM scan_targets WHERE verification_batch=?",
+    ).bind(batch).run();
+  }
   const minimum = await db.prepare(
     "SELECT MIN(sequence) AS value FROM scan_targets WHERE job_id=?",
   ).bind(job.id).first<{ value: number | null }>();
@@ -114,6 +121,7 @@ export async function POST(request: Request) {
     batch,
     job_id: Number((job as ScanJobRow).id),
     candidates: candidates.length,
+    replaced: Boolean(existingCount),
     return_scheduled: agent.current_lat != null && agent.current_lng != null,
   });
 }
