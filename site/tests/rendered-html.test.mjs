@@ -36,6 +36,9 @@ test("ships the public mushroom map and protected scan console", async () => {
   assert.match(adminClient, /api\/admin\/agents\/enroll/);
   assert.doesNotMatch(adminClient, /獨立主要城市|CITY_CHOICES|cityIds/);
   assert.match(adminClient, /COUNTRY_PACK_GROUPS/);
+  assert.match(adminClient, /<details className=\{styles\.packDisclosure\}>/);
+  assert.doesNotMatch(adminClient, /<details className=\{styles\.packDisclosure\}\s+open/);
+  assert.match(adminClient, /已選 \$\{packs\.length\} 個城市包/);
   assert.match(layout, /Pikmin 蘑菇探險隊/);
 });
 

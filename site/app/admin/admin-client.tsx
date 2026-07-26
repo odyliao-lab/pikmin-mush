@@ -607,23 +607,35 @@ export default function AdminClient({
             <>
               <fieldset>
                 <legend>國家城市包（可複選）</legend>
-                <div className={styles.packGroups}>
-                  {COUNTRY_PACK_GROUPS.map((group) => (
-                    <section className={styles.packGroup} key={group.region}>
-                      <h3>{group.region}</h3>
-                      <div className={styles.choiceGrid}>
-                        {group.packs.map((pack) => (
-                          <label key={pack.name}
-                            className={packs.includes(pack.name) ? styles.checked : ""}>
-                            <input type="checkbox" checked={packs.includes(pack.name)}
-                              onChange={() => toggle(pack.name, packs, setPacks)} />
-                            <span>{pack.name}</span><small>{pack.count} 城市</small>
-                          </label>
-                        ))}
-                      </div>
-                    </section>
-                  ))}
-                </div>
+                <details className={styles.packDisclosure}>
+                  <summary>
+                    <span>
+                      <strong>選擇國家與地區</strong>
+                      <small>
+                        {packs.length
+                          ? `已選 ${packs.length} 個城市包 · ${estimate.cities} 城市`
+                          : "尚未選擇城市包"}
+                      </small>
+                    </span>
+                  </summary>
+                  <div className={styles.packGroups}>
+                    {COUNTRY_PACK_GROUPS.map((group) => (
+                      <section className={styles.packGroup} key={group.region}>
+                        <h3>{group.region}</h3>
+                        <div className={styles.choiceGrid}>
+                          {group.packs.map((pack) => (
+                            <label key={pack.name}
+                              className={packs.includes(pack.name) ? styles.checked : ""}>
+                              <input type="checkbox" checked={packs.includes(pack.name)}
+                                onChange={() => toggle(pack.name, packs, setPacks)} />
+                              <span>{pack.name}</span><small>{pack.count} 城市</small>
+                            </label>
+                          ))}
+                        </div>
+                      </section>
+                    ))}
+                  </div>
+                </details>
               </fieldset>
             </>
           ) : (
