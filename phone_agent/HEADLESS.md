@@ -33,10 +33,11 @@ The recovery switch still refuses to clear the lock when its recorded, identity-
 installer process is alive. A new virtual display also force-stops and recreates the Pikmin task
 on the target display; a healthy existing display remains idempotent and does not restart the game.
 
-Boot recovery is bounded: every framework display probe has a timeout, and a display that is
-still recovering after the boot wait no longer prevents the cloud Agent from starting. The
-display daemon continues rebuilding in the background while the Agent uses its existing
-display-0 fallback.
+Boot recovery is bounded: every framework display probe has a timeout, and the display daemon
+continues rebuilding in the background. When `LOCAL_DISPLAY=1`, the Agent waits briefly for the
+managed display and then fails the current scan closed; it never launches Pikmin, sends keys, or
+sends taps to display 0 as a fallback. An existing Pikmin task found on the wrong display is
+force-stopped and recreated on the managed display.
 
 For phone-only manual recovery, open Magisk, find `Pikmin Scanner Agent`, and tap its
 **Action** button. The installed `action.sh` stops only cmdline-validated processes owned by
@@ -69,8 +70,9 @@ hidden display session and can start, inspect, or stop it through ADB.
   another app.
 
 The phone Agent reads `game.display` from its Magisk module directory. Launches, recovery
-restarts, and confirmation key events are sent to that display. If scrcpy disconnects and
-the display disappears, the Agent rejects the stale id and falls back to the main display.
+restarts, and confirmation key events are sent to that display. In local-display mode, if the
+display disappears, the Agent rejects the stale id and pauses the affected attempt while the
+display daemon rebuilds it; the physical screen is not used as a fallback.
 
 Windows scrcpy processes are owned by an exact `(PID, process name, ADB serial, session marker)`
 identity. The marker is `PikminHeadless-<safe-serial>`; PID and process name alone must never be

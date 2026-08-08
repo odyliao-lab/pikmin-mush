@@ -80,7 +80,8 @@ export async function ensureDailyRotation(now = Date.now()) {
   // Once all candidate checks finish, the next agent poll performs rotation.
   const pendingVerification = await db.prepare(`SELECT COUNT(*) AS count
     FROM scan_targets
-    WHERE verification_kind='candidate' AND status IN ('queued','leased')`)
+    WHERE (verification_kind='candidate' OR verification_kind='giant-recheck')
+      AND status IN ('queued','leased')`)
     .first<{ count: number }>();
   if (Number(pendingVerification?.count ?? 0) > 0) return null;
 
@@ -234,7 +235,8 @@ export async function redeployDailyRotation(now = Date.now()) {
 
   const pendingVerification = await db.prepare(`SELECT COUNT(*) AS count
     FROM scan_targets
-    WHERE verification_kind='candidate' AND status IN ('queued','leased')`)
+    WHERE (verification_kind='candidate' OR verification_kind='giant-recheck')
+      AND status IN ('queued','leased')`)
     .first<{ count: number }>();
   if (Number(pendingVerification?.count ?? 0) > 0) {
     throw new Error("通知複查仍在進行，完成後才能重新分配");

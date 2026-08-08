@@ -483,6 +483,43 @@ export async function renewLease(
   return Boolean(result.meta.changes);
 }
 
+async function finalizeGiantRecheck(
+  target: ScanTargetRow,
+  status: string,
+  now: number,
+) {
+  if (target.verification_kind !== "giant-recheck") return "";
+  const db = runtime().DB;
+  let result = status === "failed" ? "failed" : "unconfirmed";
+  if (status === "completed") {
+    const mushroom = await db.prepare(`SELECT level, challenger_count,
+        challenger_capacity, last_seen FROM mushrooms WHERE id=?`)
+      .bind(target.verification_mushroom_id).first<{
+        level: number;
+        challenger_count: number;
+        challenger_capacity: number;
+        last_seen: number;
+      }>();
+    const refreshed = mushroom != null &&
+      Number(mushroom.last_seen) * 1000 >= Number(target.leased_at) - 1_000;
+    if (refreshed) {
+      const valid = Number(mushroom.level) === 4 &&
+        Number(mushroom.challenger_capacity) > 0 &&
+        Number(mushroom.challenger_count) >= 0 &&
+        Number(mushroom.challenger_count) < 5;
+      result = valid ? "valid" : "invalid";
+      await db.prepare(`UPDATE mushrooms SET giant_recheck_status=?,
+          giant_rechecked_at=?, first_seen=CASE WHEN ?='valid' THEN ? ELSE first_seen END
+        WHERE id=?`)
+        .bind(result, now, result, Math.floor(now / 1000), target.verification_mushroom_id)
+        .run();
+    }
+  }
+  await db.prepare("UPDATE scan_targets SET verification_result=? WHERE id=?")
+    .bind(result, target.id).run();
+  return result;
+}
+
 export async function completeTask(
   agent: ScanAgentRow,
   input: {
@@ -541,6 +578,7 @@ export async function completeTask(
       .bind(now, target.lat, target.lng, status, now, status, input.rows, now,
         status, input.rows, status, now, agent.id),
   ]);
+  const giantRecheckResult = await finalizeGiantRecheck(target, status, now);
   const durationMs = target.leased_at ? Math.max(0, now - Number(target.leased_at)) : 0;
   await recordAgentEvent({
     agentId: agent.id,
@@ -554,9 +592,18 @@ export async function completeTask(
       jobId: job.id, targetId: target.id, durationMs,
     });
   }
+  const recheckSuffix = giantRecheckResult === "valid"
+    ? "・巨菇複查有效，已更新發現時間"
+    : giantRecheckResult === "invalid"
+      ? "・巨菇複查失效"
+      : giantRecheckResult === "unconfirmed"
+        ? "・巨菇複查未取得新資料"
+        : giantRecheckResult === "failed"
+          ? "・巨菇複查失敗"
+          : "";
   await appendScanLog(job.id, input.ok && input.rows ? "info" : input.ok ? "warn" : "error",
     `${agent.display_name}・${target.country ? `${target.country}-` : ""}${target.city} ` +
-    `${target.sequence + 1}/${job.total_points}・擷取 +${input.rows} 行`);
+    `${target.sequence + 1}/${job.total_points}・擷取 +${input.rows} 行${recheckSuffix}`);
   const refreshed = await db.prepare("SELECT * FROM scan_jobs WHERE id=?")
     .bind(job.id).first<ScanJobRow>();
   if (refreshed) {

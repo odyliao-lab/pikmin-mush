@@ -30,6 +30,7 @@ MAP_REFRESH_SETTLE_SECONDS="${MAP_REFRESH_SETTLE_SECONDS:-3}"
 MAP_REFRESH_FALLBACK_TIMEOUT_SECONDS="${MAP_REFRESH_FALLBACK_TIMEOUT_SECONDS:-40}"
 QUERY_ONLY_RESTART_STREAK="${QUERY_ONLY_RESTART_STREAK:-12}"
 DISPLAY_QUERY_TIMEOUT_SECONDS="${DISPLAY_QUERY_TIMEOUT_SECONDS:-5}"
+DISPLAY_READY_TIMEOUT_SECONDS="${DISPLAY_READY_TIMEOUT_SECONDS:-20}"
 STARTUP_TAP_X="${STARTUP_TAP_X:-0}"
 STARTUP_WARNING_Y="${STARTUP_WARNING_Y:-0}"
 STARTUP_CONTINUE_Y="${STARTUP_CONTINUE_Y:-0}"
@@ -165,8 +166,29 @@ game_display_id() {
   echo "$DISPLAY_ID"
 }
 
+wait_for_game_display() {
+  DISPLAY_WAITED=0
+  while [ "$DISPLAY_WAITED" -lt "$DISPLAY_READY_TIMEOUT_SECONDS" ]; do
+    DISPLAY_ID="$(game_display_id)"
+    if [ -n "$DISPLAY_ID" ]; then
+      echo "$DISPLAY_ID"
+      return 0
+    fi
+    sleep 1
+    DISPLAY_WAITED=$((DISPLAY_WAITED + 1))
+  done
+  return 1
+}
+
 launch_game() {
-  DISPLAY_ID="$(game_display_id)"
+  if [ "$LOCAL_DISPLAY" = "1" ]; then
+    DISPLAY_ID="$(wait_for_game_display)" || {
+      echo "[display] virtual display unavailable; refusing physical launch"
+      return 1
+    }
+  else
+    DISPLAY_ID="$(game_display_id)"
+  fi
   if [ -n "$DISPLAY_ID" ]; then
     su -Z u:r:shell:s0 2000 -c \
       "am start --display $DISPLAY_ID -n $PKG/$GAME_ACTIVITY" >/dev/null 2>&1
@@ -179,6 +201,10 @@ launch_game() {
 game_keyevent() {
   KEY_NAME="$1"
   DISPLAY_ID="$(game_display_id)"
+  if [ "$LOCAL_DISPLAY" = "1" ] && [ -z "$DISPLAY_ID" ]; then
+    echo "[display] virtual display unavailable; refusing physical keyevent"
+    return 1
+  fi
   if [ -n "$DISPLAY_ID" ]; then
     su -Z u:r:shell:s0 2000 -c \
       "input -d $DISPLAY_ID keyevent $KEY_NAME" >/dev/null 2>&1
@@ -194,6 +220,10 @@ game_tap() {
   [ "$TAP_X" -gt 0 ] 2>/dev/null || return 1
   [ "$TAP_Y" -gt 0 ] 2>/dev/null || return 1
   DISPLAY_ID="$(game_display_id)"
+  if [ "$LOCAL_DISPLAY" = "1" ] && [ -z "$DISPLAY_ID" ]; then
+    echo "[display] virtual display unavailable; refusing physical tap"
+    return 1
+  fi
   if [ -n "$DISPLAY_ID" ]; then
     su -Z u:r:shell:s0 2000 -c "input -d $DISPLAY_ID tap $TAP_X $TAP_Y" \
       >/dev/null 2>&1
@@ -208,16 +238,42 @@ game_is_resumed() {
     grep -q "$PKG"
 }
 
+game_is_on_display() {
+  EXPECTED_DISPLAY_ID="$1"
+  case "$EXPECTED_DISPLAY_ID" in ''|*[!0-9]*) return 1 ;; esac
+  su -Z u:r:shell:s0 2000 -c "am stack list" 2>/dev/null |
+    awk -v wanted="$EXPECTED_DISPLAY_ID" -v package="$PKG" '
+      /RootTask id=/ {
+        on_display = index($0, "displayId=" wanted " ") > 0 ||
+          $0 ~ ("displayId=" wanted "$")
+      }
+      on_display && index($0, package) > 0 { found = 1 }
+      END { exit(found ? 0 : 1) }
+    '
+}
+
 ensure_game_running() {
+  if [ "$LOCAL_DISPLAY" = "1" ]; then
+    EXPECTED_DISPLAY_ID="$(wait_for_game_display)" || {
+      echo "[display] virtual display unavailable; game cannot be verified"
+      return 1
+    }
+    if pidof "$PKG" >/dev/null 2>&1 &&
+        ! game_is_on_display "$EXPECTED_DISPLAY_ID"; then
+      echo "[display] game is on the wrong display; recreating on id=$EXPECTED_DISPLAY_ID"
+      su -Z u:r:shell:s0 2000 -c "am force-stop $PKG" >/dev/null 2>&1
+      sleep 2
+    fi
+  fi
   if ! pidof "$PKG" >/dev/null 2>&1; then
-    launch_game
+    launch_game || return 1
     sleep 25
     game_keyevent KEYCODE_ENTER
     game_keyevent KEYCODE_DPAD_CENTER
     return
   fi
   if ! game_is_resumed; then
-    launch_game
+    launch_game || return 1
     sleep 8
   fi
 }
@@ -341,7 +397,7 @@ restart_game_for_scan() {
   if [ "$MAP_REFRESH_EXPERIMENT" = "1" ]; then
     rm -f "$SCAN_READY" "$QUERY_READY"
   fi
-  launch_game
+  launch_game || return 1
   if [ "$MAP_REFRESH_EXPERIMENT" = "1" ]; then
     wait_for_map_refresh "$RESTART_TOKEN" "$RESTART_JOB" \
       "$MAP_REFRESH_FALLBACK_TIMEOUT_SECONDS" fallback || return $?
@@ -420,7 +476,11 @@ execute_scan_task() {
     send_scan_ack "$JOB_ID" "$TASK_TARGET_ID" "$TASK_LEASE" 0 0 0
     return
   fi
-  ensure_game_running
+  if ! ensure_game_running; then
+    echo "[scan] game unavailable on configured display job=$JOB_ID point=$TASK_INDEX"
+    send_scan_ack "$JOB_ID" "$TASK_TARGET_ID" "$TASK_LEASE" 0 0 0
+    return
+  fi
   BEFORE_SIZE="$(file_size)"
   BEFORE_LINES="$(useful_line_count)"
   if [ "$MAP_REFRESH_EXPERIMENT" = "1" ] && [ "$TASK_COOLDOWN" -gt 0 ]; then
@@ -556,8 +616,11 @@ execute_command() {
     teleport)
       echo "$a,$b" >"$TELEPORT"
       if [ "$(cat "$TELEPORT" 2>/dev/null)" = "$a,$b" ]; then
-        ensure_game_running
-        ack "$seq" 1 "$a" "$b"
+        if ensure_game_running; then
+          ack "$seq" 1 "$a" "$b"
+        else
+          ack "$seq" 0 "" ""
+        fi
       else
         ack "$seq" 0 "" ""
       fi
@@ -573,7 +636,10 @@ execute_command() {
       OLD_PID="$(pidof "$PKG" 2>/dev/null)"
       su -Z u:r:shell:s0 2000 -c "am force-stop $PKG"
       sleep 2
-      launch_game
+      if ! launch_game; then
+        ack "$seq" 0 "" ""
+        return 0
+      fi
       sleep 25
       game_keyevent KEYCODE_ENTER
       game_keyevent KEYCODE_DPAD_CENTER

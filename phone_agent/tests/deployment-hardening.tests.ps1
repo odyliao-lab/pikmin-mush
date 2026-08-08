@@ -58,5 +58,17 @@ Assert-Contains $agent 'dumpsys display' `
     'Agent display discovery is missing the Android 12 fallback.'
 Assert-Contains $agent 'mDisplayId=\$DISPLAY_ID' `
     'Android 12 display fallback does not verify the requested display id.'
+Assert-Contains $agent 'if \[ "\$LOCAL_DISPLAY" = "1" \]; then[\s\S]*?DISPLAY_ID="\$\(wait_for_game_display\)"' `
+    'Local-display launch does not wait for the supervised virtual display.'
+Assert-Contains $agent 'virtual display unavailable; refusing physical launch' `
+    'Local-display launch can still fall back to the physical screen.'
+Assert-Contains $agent 'virtual display unavailable; refusing physical keyevent' `
+    'Local-display key events can still leak onto the physical screen.'
+Assert-Contains $agent 'virtual display unavailable; refusing physical tap' `
+    'Local-display taps can still leak onto the physical screen.'
+Assert-Contains $agent 'game_is_on_display' `
+    'Agent does not verify that an existing game task belongs to the configured display.'
+Assert-Contains $agent 'game is on the wrong display; recreating on id=' `
+    'Agent can keep using an existing Pikmin task on the physical screen.'
 
 Write-Host 'Deployment hardening regression tests passed.'

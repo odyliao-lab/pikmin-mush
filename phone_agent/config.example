@@ -11,6 +11,10 @@ MODULE_VERSION='150.0'
 SYSTEM_GPS_OVERRIDE='0'
 # 1 = create and supervise a trusted virtual display entirely on the phone.
 LOCAL_DISPLAY='0'
+# Maximum time to wait for the supervised virtual display after it is rebuilt.
+# In local-display mode the agent fails closed instead of opening Pikmin on the
+# phone's physical screen.
+DISPLAY_READY_TIMEOUT_SECONDS='20'
 # Event-driven map refresh. A timeout of 0 immediately uses the verified
 # cold-restart marker path, which is the current production default.
 MAP_REFRESH_EXPERIMENT='1'

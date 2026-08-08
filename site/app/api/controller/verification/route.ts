@@ -9,6 +9,10 @@ type Candidate = {
   lng: number;
 };
 
+type VerificationKind = "candidate" | "giant-recheck";
+
+const GIANT_RECHECK_LOOKBACK_MS = 48 * 60 * 60 * 1000;
+
 function finiteCoordinate(value: unknown, min: number, max: number) {
   const number = Number(value);
   return Number.isFinite(number) && number >= min && number <= max ? number : null;
@@ -36,9 +40,16 @@ export async function POST(request: Request) {
   const agentId = String(input.agentId ?? "").trim().toLowerCase();
   const batch = cleanBatch(input.batch);
   const replaceExisting = input.replaceExisting === true;
+  const kind = String(input.kind ?? "candidate") as VerificationKind;
   const rawCandidates = Array.isArray(input.candidates) ? input.candidates : [];
-  if (!agentId || !batch || !rawCandidates.length || rawCandidates.length > 30) {
-    return noStoreJson({ error: "agentId, batch and 1-30 candidates are required" }, 400);
+  if (!agentId || !batch || !["candidate", "giant-recheck"].includes(kind)) {
+    return noStoreJson({ error: "agentId, batch and a supported kind are required" }, 400);
+  }
+  if (kind === "candidate" && (!rawCandidates.length || rawCandidates.length > 30)) {
+    return noStoreJson({ error: "candidate verification requires 1-30 candidates" }, 400);
+  }
+  if (kind === "giant-recheck" && rawCandidates.length) {
+    return noStoreJson({ error: "giant recheck selects candidates on the server" }, 400);
   }
   const candidates: Candidate[] = [];
   for (const item of rawCandidates) {
@@ -55,6 +66,23 @@ export async function POST(request: Request) {
   }
 
   const db = runtime().DB;
+  if (kind === "giant-recheck") {
+    const now = Date.now();
+    const rows = await db.prepare(`SELECT id, lat, lng FROM mushrooms
+      WHERE level=4 AND challenger_capacity>0 AND challenger_count>=0
+        AND challenger_count<5 AND first_seen>=?
+        AND giant_recheck_status<>'invalid'
+        AND (finish_ms=0 OR finish_ms>?)
+      ORDER BY first_seen ASC, id ASC`)
+      .bind(Math.floor((now - GIANT_RECHECK_LOOKBACK_MS) / 1000), now)
+      .all<Candidate>();
+    candidates.push(...rows.results.map((row) => ({
+      id: String(row.id), lat: Number(row.lat), lng: Number(row.lng),
+    })));
+    if (!candidates.length) {
+      return noStoreJson({ ok: true, batch, kind, candidates: 0, empty: true });
+    }
+  }
   const existing = await db.prepare(
     "SELECT COUNT(*) AS count FROM scan_targets WHERE verification_batch=?",
   ).bind(batch).first<{ count: number }>();
@@ -98,9 +126,11 @@ export async function POST(request: Request) {
       job_id, sequence, cycle, country, city, lat, lng, region_index, point_index,
       base_cooldown_s, status, priority, required_agent_id, verification_batch,
       verification_mushroom_id, verification_kind, created_at, updated_at
-    ) VALUES (?, ?, ?, ?, '通知前人數複核', ?, ?, -1, ?, 0, 'queued', 100, ?, ?, ?, 'candidate', ?, ?)`)
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, -1, ?, 0, 'queued', ?, ?, ?, ?, ?, ?, ?)`)
       .bind(job.id, sequence++, Number(job.cycle), country,
-        candidate.lat, candidate.lng, index, agentId, batch, candidate.id, now, now));
+        kind === "giant-recheck" ? "巨菇報後複查" : "通知前人數複核",
+        candidate.lat, candidate.lng, index, kind === "giant-recheck" ? 80 : 100,
+        agentId, batch, candidate.id, kind, now, now));
   if (agent.current_lat != null && agent.current_lng != null) {
     inserts.push(db.prepare(`INSERT INTO scan_targets (
       job_id, sequence, cycle, country, city, lat, lng, region_index, point_index,
@@ -112,13 +142,19 @@ export async function POST(request: Request) {
         agentId, batch, now, now));
   }
   await db.prepare(`UPDATE scan_targets SET status='cancelled', updated_at=?
-    WHERE required_agent_id=? AND verification_kind<>''
+    WHERE required_agent_id=? AND verification_kind=?
       AND verification_batch<>? AND status='queued'`)
-    .bind(now, agentId, batch).run();
-  await db.batch(inserts);
+    .bind(now, agentId, kind, batch).run();
+  // A two-day giant recheck can contain far more rows than a notification
+  // batch. Keep each D1 batch bounded so one busy report cannot exceed the
+  // statement limit and silently leave Agent1 without its follow-up queue.
+  for (let offset = 0; offset < inserts.length; offset += 50) {
+    await db.batch(inserts.slice(offset, offset + 50));
+  }
   return noStoreJson({
     ok: true,
     batch,
+    kind,
     job_id: Number((job as ScanJobRow).id),
     candidates: candidates.length,
     replaced: Boolean(existingCount),
@@ -135,15 +171,20 @@ export async function GET(request: Request) {
   if (!batch) return noStoreJson({ error: "invalid batch" }, 400);
   const rows = await runtime().DB.prepare(`SELECT
       t.verification_mushroom_id AS id, t.status, t.leased_at, t.completed_at,
+      t.verification_kind, t.verification_result,
+      m.level,
       m.challenger_count, m.challenger_capacity, m.last_seen
     FROM scan_targets t
     LEFT JOIN mushrooms m ON m.id=t.verification_mushroom_id
-    WHERE t.verification_batch=? AND t.verification_kind='candidate'
+    WHERE t.verification_batch=? AND t.verification_kind IN ('candidate','giant-recheck')
     ORDER BY t.id`).bind(batch).all<{
       id: string;
       status: string;
       leased_at: number;
       completed_at: number;
+      verification_kind: string;
+      verification_result: string;
+      level: number | null;
       challenger_count: number | null;
       challenger_capacity: number | null;
       last_seen: number | null;
@@ -160,7 +201,10 @@ export async function GET(request: Request) {
       refreshed,
       challenger_count: count,
       challenger_capacity: capacity,
-      eligible: refreshed && capacity > 0 && count >= 0 && count < 5,
+      level: Number(row.level ?? 0),
+      result: row.verification_result || "pending",
+      eligible: refreshed && capacity > 0 && count >= 0 && count < 5 &&
+        (row.verification_kind !== "giant-recheck" || Number(row.level) === 4),
     };
   });
   return noStoreJson({

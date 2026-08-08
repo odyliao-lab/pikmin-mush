@@ -53,6 +53,9 @@ async function patchColumns(db: RuntimeEnv["DB"]) {
     { sql: "ALTER TABLE scan_targets ADD COLUMN verification_batch TEXT NOT NULL DEFAULT ''", verify: "SELECT verification_batch FROM scan_targets LIMIT 1" },
     { sql: "ALTER TABLE scan_targets ADD COLUMN verification_mushroom_id TEXT NOT NULL DEFAULT ''", verify: "SELECT verification_mushroom_id FROM scan_targets LIMIT 1" },
     { sql: "ALTER TABLE scan_targets ADD COLUMN verification_kind TEXT NOT NULL DEFAULT ''", verify: "SELECT verification_kind FROM scan_targets LIMIT 1" },
+    { sql: "ALTER TABLE scan_targets ADD COLUMN verification_result TEXT NOT NULL DEFAULT ''", verify: "SELECT verification_result FROM scan_targets LIMIT 1" },
+    { sql: "ALTER TABLE mushrooms ADD COLUMN giant_recheck_status TEXT NOT NULL DEFAULT ''", verify: "SELECT giant_recheck_status FROM mushrooms LIMIT 1" },
+    { sql: "ALTER TABLE mushrooms ADD COLUMN giant_rechecked_at INTEGER NOT NULL DEFAULT 0", verify: "SELECT giant_rechecked_at FROM mushrooms LIMIT 1" },
   ];
   for (const addition of additions) {
     try {
@@ -96,9 +99,10 @@ async function probeSchema(db: RuntimeEnv["DB"]) {
           previous_token_expires_at || token_rotated_at
           FROM scan_agents LIMIT 1) AS agent_shape,
         (SELECT leased_at || completed_agent_id || priority || required_agent_id ||
-          verification_batch || verification_mushroom_id || verification_kind
+          verification_batch || verification_mushroom_id || verification_kind ||
+          verification_result
           FROM scan_targets LIMIT 1) AS target_shape,
-        (SELECT id FROM mushrooms LIMIT 1) AS mushroom_shape,
+        (SELECT id || giant_recheck_status || giant_rechecked_at FROM mushrooms LIMIT 1) AS mushroom_shape,
         (SELECT id FROM scan_jobs LIMIT 1) AS job_shape,
         (SELECT id FROM scan_logs LIMIT 1) AS log_shape,
         (SELECT id FROM scan_agent_events LIMIT 1) AS event_shape,
@@ -131,7 +135,9 @@ async function initializeSchema() {
       challenger_count INTEGER NOT NULL DEFAULT 0,
       challenger_capacity INTEGER NOT NULL DEFAULT 0,
       total_power REAL NOT NULL DEFAULT 0,
-      start_ms INTEGER NOT NULL DEFAULT 0
+      start_ms INTEGER NOT NULL DEFAULT 0,
+      giant_recheck_status TEXT NOT NULL DEFAULT '',
+      giant_rechecked_at INTEGER NOT NULL DEFAULT 0
     )`),
     db.prepare(`CREATE INDEX IF NOT EXISTS mushrooms_finish_ms_idx
       ON mushrooms (finish_ms)`),
@@ -249,7 +255,8 @@ async function initializeSchema() {
       required_agent_id TEXT NOT NULL DEFAULT '',
       verification_batch TEXT NOT NULL DEFAULT '',
       verification_mushroom_id TEXT NOT NULL DEFAULT '',
-      verification_kind TEXT NOT NULL DEFAULT ''
+      verification_kind TEXT NOT NULL DEFAULT '',
+      verification_result TEXT NOT NULL DEFAULT ''
     )`),
     db.prepare(`CREATE INDEX IF NOT EXISTS scan_targets_claim_idx
       ON scan_targets (job_id, status, cycle)`),
@@ -486,6 +493,16 @@ export async function upsertMushrooms(rows: MushroomRow[]) {
         WHEN excluded.start_ms > 0 AND mushrooms.start_ms <> excluded.start_ms
           THEN excluded.first_seen
         ELSE mushrooms.first_seen
+      END,
+      giant_recheck_status=CASE
+        WHEN excluded.start_ms > 0 AND mushrooms.start_ms <> excluded.start_ms
+          THEN ''
+        ELSE mushrooms.giant_recheck_status
+      END,
+      giant_rechecked_at=CASE
+        WHEN excluded.start_ms > 0 AND mushrooms.start_ms <> excluded.start_ms
+          THEN 0
+        ELSE mushrooms.giant_rechecked_at
       END,
       start_ms=excluded.start_ms`;
   for (let offset = 0; offset < usefulRows.length; offset += 50) {

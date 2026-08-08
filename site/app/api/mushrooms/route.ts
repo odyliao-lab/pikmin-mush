@@ -71,7 +71,8 @@ export async function GET(request: Request) {
   }
   const select = `SELECT id, lat, lng, level, type, cluster, cooldown,
       finish_ms, first_seen, last_seen, challenger_count,
-      challenger_capacity, total_power, start_ms
+      challenger_capacity, total_power, start_ms, giant_recheck_status,
+      giant_rechecked_at
     FROM mushrooms WHERE ${where.join(" AND ")}
     ORDER BY last_seen DESC, id DESC${paginated ? " LIMIT ?" : ""}`;
   const mushroomBindings = paginated ? [...bindings, limit + 1] : bindings;
