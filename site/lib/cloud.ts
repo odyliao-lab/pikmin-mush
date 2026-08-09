@@ -16,6 +16,16 @@ export type MushroomRow = {
   start_ms: number;
 };
 
+const MUSHROOM_RETENTION_SECONDS = 7 * 24 * 60 * 60;
+const MUSHROOM_RETENTION_INTERVAL_SECONDS = 5 * 60;
+const MUSHROOM_RETENTION_BATCH_SIZE = 1_000;
+
+export type MushroomRetentionStatus = {
+  lastRunAt: number;
+  lastDeleted: number;
+  pending: number;
+};
+
 type RuntimeEnv = {
   DB: D1Database;
   AGENT_TOKEN?: string;
@@ -135,6 +145,14 @@ async function initializeSchema() {
     )`),
     db.prepare(`CREATE INDEX IF NOT EXISTS mushrooms_finish_ms_idx
       ON mushrooms (finish_ms)`),
+    db.prepare(`CREATE INDEX IF NOT EXISTS mushrooms_last_seen_id_idx
+      ON mushrooms (last_seen, id)`),
+    db.prepare(`CREATE TABLE IF NOT EXISTS maintenance_state (
+      name TEXT PRIMARY KEY,
+      last_run_at INTEGER NOT NULL DEFAULT 0,
+      last_deleted INTEGER NOT NULL DEFAULT 0,
+      pending INTEGER NOT NULL DEFAULT 0
+    )`),
     db.prepare(`CREATE TABLE IF NOT EXISTS agent_state (
       id INTEGER PRIMARY KEY,
       seq INTEGER NOT NULL DEFAULT 0,
@@ -497,4 +515,50 @@ export async function upsertMushrooms(rows: MushroomRow[]) {
       ));
     if (statements.length) await db.batch(statements);
   }
+}
+
+function retentionStatus(row: Record<string, unknown> | null | undefined): MushroomRetentionStatus {
+  return {
+    lastRunAt: Number(row?.last_run_at ?? 0),
+    lastDeleted: Number(row?.last_deleted ?? 0),
+    pending: Number(row?.pending ?? 0),
+  };
+}
+
+/**
+ * Keep the public map bounded even for mushrooms whose source did not provide
+ * an expiry time. Agent uploads and map reads both call this function; D1 owns
+ * the five-minute lease so concurrent Worker isolates cannot all purge at once.
+ */
+export async function runMushroomRetention(): Promise<MushroomRetentionStatus> {
+  const db = runtime().DB;
+  const now = Math.floor(Date.now() / 1000);
+  const cutoff = now - MUSHROOM_RETENTION_SECONDS;
+  const lockBefore = now - MUSHROOM_RETENTION_INTERVAL_SECONDS;
+
+  await db.prepare(`INSERT OR IGNORE INTO maintenance_state (name)
+    VALUES ('mushroom-retention')`).run();
+  const claim = await db.prepare(`UPDATE maintenance_state
+      SET last_run_at=?
+      WHERE name='mushroom-retention' AND last_run_at<?`)
+    .bind(now, lockBefore).run();
+  if (Number(claim.meta.changes ?? 0) === 0) {
+    return retentionStatus(await db.prepare(`SELECT last_run_at, last_deleted, pending
+      FROM maintenance_state WHERE name='mushroom-retention'`).first());
+  }
+
+  const candidates = await db.prepare(`SELECT COUNT(*) AS count FROM mushrooms
+    WHERE last_seen < ?`).bind(cutoff).first<{ count: number }>();
+  const eligible = Number(candidates?.count ?? 0);
+  const deleted = await db.prepare(`DELETE FROM mushrooms WHERE id IN (
+      SELECT id FROM mushrooms WHERE last_seen < ?
+      ORDER BY last_seen ASC, id ASC LIMIT ?
+    )`).bind(cutoff, MUSHROOM_RETENTION_BATCH_SIZE).run();
+  const lastDeleted = Number(deleted.meta.changes ?? 0);
+  const pending = Math.max(0, eligible - lastDeleted);
+  await db.prepare(`UPDATE maintenance_state
+      SET last_deleted=?, pending=?
+      WHERE name='mushroom-retention'`)
+    .bind(lastDeleted, pending).run();
+  return { lastRunAt: now, lastDeleted, pending };
 }

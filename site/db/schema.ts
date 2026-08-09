@@ -17,7 +17,15 @@ export const mushrooms = sqliteTable("mushrooms", {
   startMs: integer("start_ms").notNull().default(0),
 }, (table) => [
   index("mushrooms_finish_ms_idx").on(table.finishMs),
+  index("mushrooms_last_seen_id_idx").on(table.lastSeen, table.id),
 ]);
+
+export const maintenanceState = sqliteTable("maintenance_state", {
+  name: text("name").primaryKey(),
+  lastRunAt: integer("last_run_at").notNull().default(0),
+  lastDeleted: integer("last_deleted").notNull().default(0),
+  pending: integer("pending").notNull().default(0),
+});
 
 export const agentState = sqliteTable("agent_state", {
   id: integer("id").primaryKey(),

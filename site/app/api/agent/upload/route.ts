@@ -1,5 +1,6 @@
 import {
-  ensureSchema, parseTsv, plain, readBoundedUtf8, runtime, upsertMushrooms,
+  ensureSchema, parseTsv, plain, readBoundedUtf8, runMushroomRetention,
+  runtime, upsertMushrooms,
 } from "../../../../lib/cloud";
 import {
   agentRequestVersions, authorizeFleetAgent, touchAgent,
@@ -40,6 +41,7 @@ export async function POST(request: Request) {
   const rows = parseTsv(complete);
   if (rows.length > MAX_ROWS_PER_UPLOAD) return plain("too many rows\n", 413);
   await upsertMushrooms(rows);
+  await runMushroomRetention();
   await db.prepare(`UPDATE scan_agents SET
       partial_text = ?,
       uploaded_rows = uploaded_rows + ?,

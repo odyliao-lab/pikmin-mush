@@ -64,6 +64,13 @@
       "when": 1784817482620,
       "tag": "0008_rich_mac_gargan",
       "breakpoints": true
+    },
+    {
+      "idx": 9,
+      "version": "6",
+      "when": 1786249500000,
+      "tag": "0009_mushroom_retention",
+      "breakpoints": true
     }
   ]
 }

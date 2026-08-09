@@ -220,6 +220,29 @@ test("adds fleet metrics, viewport pagination, version gates, and safe token rot
   assert.match(phoneAgent, /version-mismatch/);
 });
 
+test("bounds mushroom retention without making concurrent uploads purge repeatedly", async () => {
+  const [schema, cloud, upload, publicApi, migration] = await Promise.all([
+    readFile(new URL("db/schema.ts", root), "utf8"),
+    readFile(new URL("lib/cloud.ts", root), "utf8"),
+    readFile(new URL("app/api/agent/upload/route.ts", root), "utf8"),
+    readFile(new URL("app/api/mushrooms/route.ts", root), "utf8"),
+    readFile(new URL("drizzle/0009_mushroom_retention.sql", root), "utf8"),
+  ]);
+
+  assert.match(schema, /maintenanceState/);
+  assert.match(schema, /mushrooms_last_seen_id_idx/);
+  assert.match(cloud, /MUSHROOM_RETENTION_SECONDS = 7 \* 24 \* 60 \* 60/);
+  assert.match(cloud, /MUSHROOM_RETENTION_INTERVAL_SECONDS = 5 \* 60/);
+  assert.match(cloud, /UPDATE maintenance_state[\s\S]*last_run_at<\?/);
+  assert.match(cloud, /DELETE FROM mushrooms WHERE id IN/);
+  assert.match(cloud, /MUSHROOM_RETENTION_BATCH_SIZE/);
+  assert.match(upload, /await runMushroomRetention\(\)/);
+  assert.match(publicApi, /const retention = await runMushroomRetention\(\)/);
+  assert.match(publicApi, /policy_days: 7/);
+  assert.match(migration, /CREATE INDEX `mushrooms_last_seen_id_idx`/);
+  assert.match(migration, /CREATE TABLE `maintenance_state`/);
+});
+
 test("excludes level 1 mushrooms throughout the ingest and public API paths", async () => {
   const [cloud, api, phoneAgent, hook, scanner, legacyMap] = await Promise.all([
     readFile(new URL("lib/cloud.ts", root), "utf8"),
