@@ -90,6 +90,17 @@ export async function ensureDailyRotation(now = Date.now()) {
   ).bind(planned.scheduleDate).first<RotationRunRow>();
   let lockAcquired = false;
   if (existing?.status === "completed") {
+    // A manual scan job deliberately replaces the automatic route for the
+    // current time window.  Agent polls call this function before every task
+    // claim; without this guard, a changed active-agent set can reacquire the
+    // completed daily-rotation record, leave it "running", and make every
+    // agent return idle until the stale-lock timeout.  Let the operator's
+    // active job run until the next scheduled window instead.
+    const operatorJob = await db.prepare(`SELECT id FROM scan_jobs
+      WHERE status IN ('queued','running','paused') AND id<>?
+      ORDER BY id DESC LIMIT 1`).bind(existing.job_id ?? 0).first<{ id: number }>();
+    if (operatorJob) return existing;
+
     let existingPlan: Array<{ agentId: string; id: string; packs: string[] }> = [];
     try {
       const parsed = JSON.parse(existing.assignments_json);
