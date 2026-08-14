@@ -497,6 +497,7 @@ execute_scan_task() {
   TASK_LEASE="$2"
   TASK_COUNTRY="$3"
   TASK_CITY="$4"
+  TASK_VERIFICATION_KIND="${5:-}"
   [ "$TASK_COUNTRY" = "-" ] && TASK_COUNTRY=""
   SCAN_JOB_ID="$JOB_ID"
   SCAN_TARGET_ID="$TASK_TARGET_ID"
@@ -530,6 +531,14 @@ execute_scan_task() {
     # per-attempt token so the native watcher reapplies GPS and emits new markers.
     REFRESH_TOKEN="$(date +%s)$(printf '%05d' $((TASK_TARGET_ID % 100000)))"
     TELEPORT_VALUE="$TASK_LAT,$TASK_LNG,$REFRESH_TOKEN"
+  fi
+  # Verification targets must create a fresh observation even if their game
+  # fields did not change.  The fourth value is ignored by older modules, so
+  # deploying the cloud side before the module remains backward-compatible.
+  if [ "$TASK_VERIFICATION_KIND" = "candidate" ] || \
+      [ "$TASK_VERIFICATION_KIND" = "giant-recheck" ]; then
+    TELEPORT_VALUE="$TELEPORT_VALUE,1"
+    echo "[scan] forcing fresh observation for $TASK_VERIFICATION_KIND target"
   fi
   if [ "$MAP_REFRESH_EXPERIMENT" = "1" ]; then
     rm -f "$SCAN_READY" "$QUERY_READY"
@@ -754,7 +763,7 @@ while true; do
       case "$2" in
         target)
           execute_scan_task "$1" "$3" "$4" "$5" "$6" "$7" "$8" "$9" \
-            "${10}" "${11}" "${12}" "${13}" "${14}"
+            "${10}" "${11}" "${12}" "${13}" "${14}" "${15}"
           ;;
         pause|wait|'') ;;
         version-mismatch) echo "[scan] version mismatch: $3" ;;

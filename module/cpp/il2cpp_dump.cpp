@@ -489,6 +489,10 @@ static char g_query_ready_path[512] = {0};
 static volatile double g_cur_lat = 0, g_cur_lng = 0;
 static volatile bool g_have_target = false;
 static volatile bool g_refresh_pending = false;
+// A verification scan must persist the mushroom observation even when its
+// state is unchanged.  The flag is supplied as the fourth teleport value by
+// the phone Agent and is reset on every subsequent target.
+static volatile bool g_force_observation = false;
 static volatile long long g_target_token = 0;
 static volatile long long g_applied_token = -1;
 static volatile long long g_query_written_token = -1;
@@ -611,11 +615,13 @@ static void hooked_RegisterMapObject(void *thiz, void *obj, void *method) {
                 long ts = (long) time(nullptr);
                 auto seen = g_seen.find(key);
                 // 等級 1（小型）不具雷達參考價值；也排除尚未解析出有效等級的資料。
+                bool force_observation = g_force_observation && point &&
+                    near_current_target(lat, lng);
                 bool should_log = level >= 2 && !key.empty() &&
                     (seen == g_seen.end() || seen->second.finish_ms != finishMs ||
                      seen->second.challenger_count != challengerCount ||
                      seen->second.total_power != totalPower ||
-                     ts - seen->second.logged_at >= 600);
+                     ts - seen->second.logged_at >= 600 || force_observation);
                 if (should_log) {
                     g_seen[key] = {finishMs, ts, challengerCount, totalPower};
                     LOGI("[MUSH] id=%s lat=%.7f lng=%.7f lv=%d type=%d players=%d/%d power=%.0f finish=%lld",
@@ -773,11 +779,14 @@ static void *teleport_thread(void *) {
                 if (buf[0] && strcmp(buf, last) != 0) {
                     double lat, lng;
                     long long token = 0;
-                    int parsed = sscanf(buf, "%lf,%lf,%lld", &lat, &lng, &token);
+                    int force_observation = 0;
+                    int parsed = sscanf(buf, "%lf,%lf,%lld,%d", &lat, &lng,
+                                        &token, &force_observation);
                     if (parsed >= 2) {
-                        if (parsed < 3 || token <= 0) token = ++g_generated_token;
-                        g_cur_lat = lat; g_cur_lng = lng; g_have_target = true;
-                        g_target_token = token;
+                      if (parsed < 3 || token <= 0) token = ++g_generated_token;
+                      g_cur_lat = lat; g_cur_lng = lng; g_have_target = true;
+                      g_target_token = token;
+                      g_force_observation = parsed >= 4 && force_observation == 1;
                         strncpy(last, buf, sizeof(last) - 1);
                         LOGI("[TP] target -> %.7f,%.7f token=%lld", lat, lng, token);
                     }

@@ -32,5 +32,6 @@ export async function GET(request: Request) {
     task.leaseToken,
     cleanTsv(task.target.country || "-"),
     cleanTsv(task.target.city),
+    cleanTsv(task.target.verification_kind || "-"),
   ].join("\t") + "\n");
 }
