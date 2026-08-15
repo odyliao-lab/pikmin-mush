@@ -187,14 +187,15 @@ upload_new() {
 game_display_id() {
   DISPLAY_ID="$(cat "$DISPLAY_FILE" 2>/dev/null)"
   case "$DISPLAY_ID" in ''|*[!0-9]*) return 1 ;; esac
-  DISPLAY_LIST="$(timeout -k 2 "$DISPLAY_QUERY_TIMEOUT_SECONDS" \
-    run_as_shell "cmd display get-displays" 2>/dev/null)" || DISPLAY_LIST=""
+  # run_as_shell is a shell function, so it cannot be the direct child of
+  # timeout.  Doing that makes every virtual display look unavailable.
+  # These DisplayManager queries are local and bounded by Android itself.
+  DISPLAY_LIST="$(run_as_shell "cmd display get-displays" 2>/dev/null)" || DISPLAY_LIST=""
   if ! echo "$DISPLAY_LIST" | grep -q "Display id $DISPLAY_ID:"; then
     # Android 12 does not implement `cmd display get-displays`. Fall back to
     # DisplayManagerService so a valid virtual display is not mistaken for a
     # missing one and the game is never launched on the physical screen.
-    DISPLAY_LIST="$(timeout -k 2 "$DISPLAY_QUERY_TIMEOUT_SECONDS" \
-      run_as_shell "dumpsys display" 2>/dev/null)" || return 1
+    DISPLAY_LIST="$(run_as_shell "dumpsys display" 2>/dev/null)" || return 1
     echo "$DISPLAY_LIST" | grep -q "mDisplayId=$DISPLAY_ID" || return 1
   fi
   echo "$DISPLAY_ID"
