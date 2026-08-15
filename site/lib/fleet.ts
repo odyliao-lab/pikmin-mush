@@ -451,7 +451,14 @@ export async function claimTask(agent: ScanAgentRow): Promise<ClaimedTask | null
   const distanceCooldown = location
     ? Math.min(120, Math.round(distanceKm(location, { lat: target.lat, lng: target.lng }) / 10))
     : 0;
-  const cooldownS = Math.max(Number(target.base_cooldown_s), distanceCooldown);
+  // Verification targets are injected shortly before a report window.  They
+  // still need a paced movement interval, but must not inherit a 100-120s
+  // cross-continent cooldown for every candidate or the whole batch expires
+  // before the report is due.
+  const normalCooldownS = Math.max(Number(target.base_cooldown_s), distanceCooldown);
+  const cooldownS = target.verification_kind
+    ? Math.min(20, normalCooldownS)
+    : normalCooldownS;
   await db.batch([
     db.prepare(`UPDATE scan_jobs SET status='running',
       started_at=CASE WHEN started_at=0 THEN ? ELSE started_at END,

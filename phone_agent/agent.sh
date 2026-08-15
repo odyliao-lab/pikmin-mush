@@ -28,6 +28,7 @@ MAP_REFRESH_EXPERIMENT="${MAP_REFRESH_EXPERIMENT:-0}"
 MAP_REFRESH_TIMEOUT_SECONDS="${MAP_REFRESH_TIMEOUT_SECONDS:-18}"
 MAP_REFRESH_SETTLE_SECONDS="${MAP_REFRESH_SETTLE_SECONDS:-3}"
 MAP_REFRESH_FALLBACK_TIMEOUT_SECONDS="${MAP_REFRESH_FALLBACK_TIMEOUT_SECONDS:-40}"
+VERIFICATION_FALLBACK_WAIT_SECONDS="${VERIFICATION_FALLBACK_WAIT_SECONDS:-25}"
 QUERY_ONLY_RESTART_STREAK="${QUERY_ONLY_RESTART_STREAK:-12}"
 DISPLAY_QUERY_TIMEOUT_SECONDS="${DISPLAY_QUERY_TIMEOUT_SECONDS:-5}"
 DISPLAY_READY_TIMEOUT_SECONDS="${DISPLAY_READY_TIMEOUT_SECONDS:-20}"
@@ -575,6 +576,33 @@ execute_scan_task() {
   NEW_ROWS=$((AFTER_LINES - BEFORE_LINES))
   [ "$NEW_BYTES" -lt 0 ] && NEW_BYTES=0
   [ "$NEW_ROWS" -lt 0 ] && NEW_ROWS=0
+  # A map-query callback only proves that the client received a response.  It
+  # does not prove the target mushroom was decoded and appended to TSV.  For a
+  # notification verification, accepting that callback as success made stale
+  # records look ineligible and could empty an otherwise valid report.
+  if { [ "$TASK_VERIFICATION_KIND" = "candidate" ] || \
+       [ "$TASK_VERIFICATION_KIND" = "giant-recheck" ]; } && \
+      [ "$NEW_ROWS" -eq 0 ]; then
+    echo "[scan] verification has no fresh TSV row; cold restarting before ACK"
+    if restart_game_for_scan "$JOB_ID" "$REFRESH_TOKEN"; then
+      interruptible_wait "$VERIFICATION_FALLBACK_WAIT_SECONDS" "$JOB_ID" || return
+      upload_new
+      AFTER_SIZE="$(file_size)"
+      AFTER_LINES="$(useful_line_count)"
+      NEW_BYTES=$((AFTER_SIZE - BEFORE_SIZE))
+      NEW_ROWS=$((AFTER_LINES - BEFORE_LINES))
+      [ "$NEW_BYTES" -lt 0 ] && NEW_BYTES=0
+      [ "$NEW_ROWS" -lt 0 ] && NEW_ROWS=0
+      echo "[scan] verification fallback captured rows=+$NEW_ROWS bytes=+$NEW_BYTES"
+    else
+      echo "[scan] verification fallback restart failed"
+    fi
+    if [ "$NEW_ROWS" -eq 0 ]; then
+      echo "[scan] verification observation missing; returning target for retry"
+      send_scan_ack "$JOB_ID" "$TASK_TARGET_ID" "$TASK_LEASE" 0 0 0
+      return
+    fi
+  fi
   if [ "$MAP_REFRESH_EXPERIMENT" = "1" ] && [ "$REFRESH_OK" -eq 1 ]; then
     if [ "$REFRESH_SOURCE" = "query" ] && [ "$NEW_ROWS" -eq 0 ]; then
       QUERY_ONLY_STREAK=$((QUERY_ONLY_STREAK + 1))
