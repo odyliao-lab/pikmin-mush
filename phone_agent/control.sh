@@ -142,12 +142,14 @@ release_gps() {
   GPS_BRIDGE_PACKAGE=""
   [ -f "$CONFIG" ] && . "$CONFIG"
 
-  if [ "$SYSTEM_GPS_OVERRIDE" = "1" ]; then
-    run_as_shell "cmd location providers set-test-provider-enabled gps false" \
-      >/dev/null 2>&1 || true
-    run_as_shell "cmd location providers remove-test-provider gps" \
-      >/dev/null 2>&1 || true
-  fi
+  # A mock `gps` test provider can survive an interrupted scan or a reboot
+  # even after SYSTEM_GPS_OVERRIDE has since been switched off.  Removing it
+  # is safe when the real provider is active (the command then simply fails),
+  # and is required before a Joystick app can register its own provider.
+  run_as_shell "cmd location providers set-test-provider-enabled gps false" \
+    >/dev/null 2>&1 || true
+  run_as_shell "cmd location providers remove-test-provider gps" \
+    >/dev/null 2>&1 || true
   if [ -n "$GPS_BRIDGE_PACKAGE" ]; then
     # Android 9 bridge devices hand the exclusive mock-location AppOp back to
     # the user's Joystick. Resume below grants it back before Agent polling.
