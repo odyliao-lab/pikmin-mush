@@ -19,7 +19,6 @@ import android.widget.TextView;
 import android.widget.Toast;
 
 import java.io.BufferedReader;
-import java.io.File;
 import java.io.InputStreamReader;
 import java.text.SimpleDateFormat;
 import java.util.Date;
@@ -312,13 +311,10 @@ public final class MainActivity extends Activity {
     }
 
     private String suBinary() {
-        String[] candidates = {"/sbin/su", "/system/bin/su"};
-        for (String candidate : candidates) {
-            if (new File(candidate).canExecute()) return candidate;
-        }
-        // Preserve a useful OS error on devices without root instead of
-        // pretending the App completed a privileged command.
-        return "/system/bin/su";
+        // Magisk/Kitsune place su in different read-only partitions
+        // (/product/bin on Agent Leo). Let Android resolve its own PATH
+        // instead of assuming a legacy /system/bin location.
+        return "su";
     }
 
     private void showError(String detail) {
