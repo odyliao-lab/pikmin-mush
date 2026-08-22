@@ -7,7 +7,7 @@ PACKAGE='cc.odyliao.pikminagentcontrol'
 PROCESS="$PACKAGE"
 
 UID_VALUE="$(cmd package list packages -U "$PACKAGE" 2>/dev/null \
-    | sed -n "s/^package:${PACKAGE} uid:\([0-9][0-9]*\)$/\1/p" \
+    | sed -n "s/^package:${PACKAGE} uid:\([0-9][0-9]*\).*/\1/p" \
     | head -n 1)"
 
 case "$UID_VALUE" in
