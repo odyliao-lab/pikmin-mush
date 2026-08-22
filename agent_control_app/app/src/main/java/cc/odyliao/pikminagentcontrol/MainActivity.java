@@ -19,6 +19,7 @@ import android.widget.TextView;
 import android.widget.Toast;
 
 import java.io.BufferedReader;
+import java.io.File;
 import java.io.InputStreamReader;
 import java.text.SimpleDateFormat;
 import java.util.Date;
@@ -200,7 +201,7 @@ public final class MainActivity extends Activity {
             StringBuilder errors = new StringBuilder();
             try {
                 Process process = new ProcessBuilder(
-                        "/system/bin/su", "-c", controlCommand("watch 5"))
+                        suBinary(), "-c", controlCommand("watch 5"))
                         .redirectErrorStream(true).start();
                 statusProcess = process;
                 try (BufferedReader reader = new BufferedReader(
@@ -263,7 +264,7 @@ public final class MainActivity extends Activity {
     private Result execute(String command) {
         StringBuilder output = new StringBuilder();
         try {
-            Process process = new ProcessBuilder("/system/bin/su", "-c", controlCommand(command))
+            Process process = new ProcessBuilder(suBinary(), "-c", controlCommand(command))
                     .redirectErrorStream(true).start();
             try (BufferedReader reader = new BufferedReader(
                     new InputStreamReader(process.getInputStream()))) {
@@ -308,6 +309,16 @@ public final class MainActivity extends Activity {
 
     private String controlCommand(String args) {
         return CONTROL_SEARCH + args + CONTROL_SEARCH_END;
+    }
+
+    private String suBinary() {
+        String[] candidates = {"/sbin/su", "/system/bin/su"};
+        for (String candidate : candidates) {
+            if (new File(candidate).canExecute()) return candidate;
+        }
+        // Preserve a useful OS error on devices without root instead of
+        // pretending the App completed a privileged command.
+        return "/system/bin/su";
     }
 
     private void showError(String detail) {
