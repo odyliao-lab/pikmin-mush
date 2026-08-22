@@ -27,8 +27,15 @@ import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 
 public final class MainActivity extends Activity {
-    private static final String CONTROL =
-            "/data/adb/modules/pikmin_scanner_agent/control.sh";
+    // Current Magisk installations use the first path. Older enrolled agents
+    // (including Agent Leo) keep their private Agent directory under
+    // /data/local/tmp/agent<ID>. The command is fixed by this App; user input
+    // is never interpolated except a validated integer minute count.
+    private static final String CONTROL_SEARCH =
+            "for d in /data/adb/modules/pikmin_scanner_agent /data/local/tmp/agent*; do " +
+            "if [ -x \"$d/control.sh\" ]; then exec \"$d/control.sh\" ";
+    private static final String CONTROL_SEARCH_END =
+            "; fi; done; echo error control-script-not-found; exit 127";
     private final ExecutorService commandExecutor = Executors.newSingleThreadExecutor();
     private final ExecutorService statusExecutor = Executors.newSingleThreadExecutor();
     private final Handler handler = new Handler(Looper.getMainLooper());
@@ -193,7 +200,7 @@ public final class MainActivity extends Activity {
             StringBuilder errors = new StringBuilder();
             try {
                 Process process = new ProcessBuilder(
-                        "/system/bin/su", "-c", CONTROL + " watch 5")
+                        "/system/bin/su", "-c", controlCommand("watch 5"))
                         .redirectErrorStream(true).start();
                 statusProcess = process;
                 try (BufferedReader reader = new BufferedReader(
@@ -256,7 +263,7 @@ public final class MainActivity extends Activity {
     private Result execute(String command) {
         StringBuilder output = new StringBuilder();
         try {
-            Process process = new ProcessBuilder("/system/bin/su", "-c", CONTROL + " " + command)
+            Process process = new ProcessBuilder("/system/bin/su", "-c", controlCommand(command))
                     .redirectErrorStream(true).start();
             try (BufferedReader reader = new BufferedReader(
                     new InputStreamReader(process.getInputStream()))) {
@@ -297,6 +304,10 @@ public final class MainActivity extends Activity {
             return;
         }
         showError(raw);
+    }
+
+    private String controlCommand(String args) {
+        return CONTROL_SEARCH + args + CONTROL_SEARCH_END;
     }
 
     private void showError(String detail) {
