@@ -99,6 +99,15 @@ public final class MainActivity extends Activity {
         updatedView.setPadding(0, dp(8), 0, 0);
         card.addView(updatedView);
 
+        root.addView(section("交還 GPS 控制"));
+        Button handoffGps = button("停止掃描並交還 GPS 給 Joystick", false);
+        root.addView(handoffGps, fullWidthWithBottom(4));
+        handoffGps.setOnClickListener(v -> runControl("handoff-gps", "掃描已停止，GPS 已交還給 Joystick"));
+        TextView handoffNote = text("此操作會手動暫停掃描、停止目前 Agent，並清除掃描器最後寫入的 GPS。按下「繼續掃描」後，掃描器才會再次接管 GPS。",
+                13, Color.rgb(96, 110, 101));
+        handoffNote.setPadding(0, 0, 0, dp(12));
+        root.addView(handoffNote);
+
         root.addView(section("快速暫停"));
         LinearLayout quick = new LinearLayout(this);
         quick.setOrientation(LinearLayout.HORIZONTAL);
