@@ -56,6 +56,25 @@ STARTUP_LOGIN_CONTINUE_Y='860'
 # sustained high-speed teleporting; ignores ENTER/DPAD_CENTER and BACK.
 SPEED_WARNING_TAP_X='360'
 SPEED_WARNING_TAP_Y='849'
+# Pikmin 151.0 may show a notification card after restart. Its X overlaps the
+# dashboard menu, so this is disabled by default and must be calibrated per
+# physical display. When enabled the Agent uses root screencap and only taps
+# this coordinate after detecting the white close circle around it.
+NOTIFICATION_OVERLAY_DETECTION='0'
+NOTIFICATION_CLOSE_TAP_X='0'
+NOTIFICATION_CLOSE_TAP_Y='0'
+NOTIFICATION_PIXEL_BRIGHTNESS_MIN='230'
+# Optional per-device guard for games that propagate the notification close
+# tap into the underlying dashboard menu. Configure three points known to be
+# white only while that menu is open; the Agent presses BACK only when all
+# three samples match. Keep disabled unless verified on that phone.
+NOTIFICATION_MENU_DETECTION='0'
+NOTIFICATION_MENU_SAMPLE_1_X='0'
+NOTIFICATION_MENU_SAMPLE_1_Y='0'
+NOTIFICATION_MENU_SAMPLE_2_X='0'
+NOTIFICATION_MENU_SAMPLE_2_Y='0'
+NOTIFICATION_MENU_SAMPLE_3_X='0'
+NOTIFICATION_MENU_SAMPLE_3_Y='0'
 # NOT currently fired by agent.sh — only relevant on the first launch after
 # local midnight (daily step recap / mood check-in / share card), and their
 # Y coordinates collide with real buttons on the dashboard/map often enough

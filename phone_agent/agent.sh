@@ -45,6 +45,25 @@ MAP_VIEW_TAP_Y="${MAP_VIEW_TAP_Y:-0}"
 # 「我不是司機」）在長時間高速瞬移後可能出現，觸控關閉，不吃 ENTER/DPAD_CENTER。
 SPEED_WARNING_TAP_X="${SPEED_WARNING_TAP_X:-0}"
 SPEED_WARNING_TAP_Y="${SPEED_WARNING_TAP_Y:-0}"
+# Pikmin 151.0 can automatically open a full-screen notification card after
+# a warning/restart. Its close button overlaps the dashboard menu, so never
+# tap it blindly. When enabled, inspect a few framebuffer pixels around the
+# configured close-button centre and only dismiss a visibly white close
+# circle. This is deliberately opt-in per device until calibrated.
+NOTIFICATION_OVERLAY_DETECTION="${NOTIFICATION_OVERLAY_DETECTION:-0}"
+NOTIFICATION_CLOSE_TAP_X="${NOTIFICATION_CLOSE_TAP_X:-0}"
+NOTIFICATION_CLOSE_TAP_Y="${NOTIFICATION_CLOSE_TAP_Y:-0}"
+NOTIFICATION_PIXEL_BRIGHTNESS_MIN="${NOTIFICATION_PIXEL_BRIGHTNESS_MIN:-230}"
+# Some devices propagate the close tap through to the overlapping dashboard
+# menu. This optional, separately-calibrated guard sends BACK only after three
+# known menu-card samples are bright; it is disabled unless explicitly set.
+NOTIFICATION_MENU_DETECTION="${NOTIFICATION_MENU_DETECTION:-0}"
+NOTIFICATION_MENU_SAMPLE_1_X="${NOTIFICATION_MENU_SAMPLE_1_X:-0}"
+NOTIFICATION_MENU_SAMPLE_1_Y="${NOTIFICATION_MENU_SAMPLE_1_Y:-0}"
+NOTIFICATION_MENU_SAMPLE_2_X="${NOTIFICATION_MENU_SAMPLE_2_X:-0}"
+NOTIFICATION_MENU_SAMPLE_2_Y="${NOTIFICATION_MENU_SAMPLE_2_Y:-0}"
+NOTIFICATION_MENU_SAMPLE_3_X="${NOTIFICATION_MENU_SAMPLE_3_X:-0}"
+NOTIFICATION_MENU_SAMPLE_3_Y="${NOTIFICATION_MENU_SAMPLE_3_Y:-0}"
 # 以下三組座標目前「不會」被自動點擊（2026-08-20 實測發現它們的按鈕 Y 座標
 # 常跟其他畫面的真實功能鍵重疊，誤觸風險高於效益，只在跨日第一次啟動這個
 # 罕見情境才用得到）。保留設定供未來手動調整或重新設計更安全的偵測方式之後
@@ -298,6 +317,125 @@ game_tap() {
   else
     run_as_shell "input tap $TAP_X $TAP_Y" >/dev/null 2>&1
   fi
+}
+
+# Unity exposes no useful accessibility nodes for its notification card.
+# screencap's raw output begins with width, height, pixel-format and color
+# space (four uint32 values), followed by RGBA_8888 pixels. A card close
+# button is a white circle; the dashboard/menu at the same location is green.
+# Keep this in a subshell so `set --` used while parsing does not affect the
+# Agent's outer positional parameters.
+notification_overlay_visible() (
+  [ "$NOTIFICATION_OVERLAY_DETECTION" = "1" ] || exit 1
+  [ "$NOTIFICATION_CLOSE_TAP_X" -gt 32 ] 2>/dev/null || exit 1
+  [ "$NOTIFICATION_CLOSE_TAP_Y" -gt 32 ] 2>/dev/null || exit 1
+
+  NOTIFY_RAW="/data/local/tmp/pikmin-notify-$$.raw"
+  run_as_shell_timeout 5 "screencap $NOTIFY_RAW" >/dev/null 2>&1 || {
+    rm -f "$NOTIFY_RAW"
+    exit 1
+  }
+  set -- $(od -An -N 8 -tu4 "$NOTIFY_RAW" 2>/dev/null)
+  NOTIFY_WIDTH="$1"
+  NOTIFY_HEIGHT="$2"
+  case "$NOTIFY_WIDTH" in
+    ''|*[!0-9]*|0)
+      rm -f "$NOTIFY_RAW"
+      exit 1
+      ;;
+  esac
+  case "$NOTIFY_HEIGHT" in
+    ''|*[!0-9]*|0)
+      rm -f "$NOTIFY_RAW"
+      exit 1
+      ;;
+  esac
+
+  NOTIFY_BRIGHT_SAMPLES=0
+  for NOTIFY_SAMPLE in \
+    "$NOTIFICATION_CLOSE_TAP_X,$((NOTIFICATION_CLOSE_TAP_Y - 30))" \
+    "$NOTIFICATION_CLOSE_TAP_X,$((NOTIFICATION_CLOSE_TAP_Y + 30))" \
+    "$((NOTIFICATION_CLOSE_TAP_X - 30)),$NOTIFICATION_CLOSE_TAP_Y" \
+    "$((NOTIFICATION_CLOSE_TAP_X + 30)),$NOTIFICATION_CLOSE_TAP_Y"; do
+    NOTIFY_X="${NOTIFY_SAMPLE%,*}"
+    NOTIFY_Y="${NOTIFY_SAMPLE#*,}"
+    [ "$NOTIFY_X" -ge 0 ] 2>/dev/null && [ "$NOTIFY_X" -lt "$NOTIFY_WIDTH" ] 2>/dev/null || continue
+    [ "$NOTIFY_Y" -ge 0 ] 2>/dev/null && [ "$NOTIFY_Y" -lt "$NOTIFY_HEIGHT" ] 2>/dev/null || continue
+    NOTIFY_OFFSET=$((16 + ((NOTIFY_Y * NOTIFY_WIDTH + NOTIFY_X) * 4)))
+    set -- $(dd if="$NOTIFY_RAW" bs=1 skip="$NOTIFY_OFFSET" count=4 2>/dev/null | od -An -tu1 2>/dev/null)
+    [ "$#" -eq 4 ] || continue
+    if [ "$1" -ge "$NOTIFICATION_PIXEL_BRIGHTNESS_MIN" ] 2>/dev/null && \
+       [ "$2" -ge "$NOTIFICATION_PIXEL_BRIGHTNESS_MIN" ] 2>/dev/null && \
+       [ "$3" -ge "$NOTIFICATION_PIXEL_BRIGHTNESS_MIN" ] 2>/dev/null; then
+      NOTIFY_BRIGHT_SAMPLES=$((NOTIFY_BRIGHT_SAMPLES + 1))
+    fi
+  done
+  rm -f "$NOTIFY_RAW"
+  [ "$NOTIFY_BRIGHT_SAMPLES" -ge 3 ]
+)
+
+notification_menu_visible() (
+  [ "$NOTIFICATION_MENU_DETECTION" = "1" ] || exit 1
+  NOTIFY_RAW="/data/local/tmp/pikmin-menu-$$.raw"
+  run_as_shell_timeout 5 "screencap $NOTIFY_RAW" >/dev/null 2>&1 || {
+    rm -f "$NOTIFY_RAW"
+    exit 1
+  }
+  set -- $(od -An -N 8 -tu4 "$NOTIFY_RAW" 2>/dev/null)
+  NOTIFY_WIDTH="$1"
+  NOTIFY_HEIGHT="$2"
+  case "$NOTIFY_WIDTH" in
+    ''|*[!0-9]*|0) rm -f "$NOTIFY_RAW"; exit 1 ;;
+  esac
+  case "$NOTIFY_HEIGHT" in
+    ''|*[!0-9]*|0) rm -f "$NOTIFY_RAW"; exit 1 ;;
+  esac
+  NOTIFY_BRIGHT_SAMPLES=0
+  for NOTIFY_SAMPLE in \
+    "$NOTIFICATION_MENU_SAMPLE_1_X,$NOTIFICATION_MENU_SAMPLE_1_Y" \
+    "$NOTIFICATION_MENU_SAMPLE_2_X,$NOTIFICATION_MENU_SAMPLE_2_Y" \
+    "$NOTIFICATION_MENU_SAMPLE_3_X,$NOTIFICATION_MENU_SAMPLE_3_Y"; do
+    NOTIFY_X="${NOTIFY_SAMPLE%,*}"
+    NOTIFY_Y="${NOTIFY_SAMPLE#*,}"
+    [ "$NOTIFY_X" -gt 0 ] 2>/dev/null && [ "$NOTIFY_X" -lt "$NOTIFY_WIDTH" ] 2>/dev/null || continue
+    [ "$NOTIFY_Y" -gt 0 ] 2>/dev/null && [ "$NOTIFY_Y" -lt "$NOTIFY_HEIGHT" ] 2>/dev/null || continue
+    NOTIFY_OFFSET=$((16 + ((NOTIFY_Y * NOTIFY_WIDTH + NOTIFY_X) * 4)))
+    set -- $(dd if="$NOTIFY_RAW" bs=1 skip="$NOTIFY_OFFSET" count=4 2>/dev/null | od -An -tu1 2>/dev/null)
+    [ "$#" -eq 4 ] || continue
+    if [ "$1" -ge "$NOTIFICATION_PIXEL_BRIGHTNESS_MIN" ] 2>/dev/null && \
+       [ "$2" -ge "$NOTIFICATION_PIXEL_BRIGHTNESS_MIN" ] 2>/dev/null && \
+       [ "$3" -ge "$NOTIFICATION_PIXEL_BRIGHTNESS_MIN" ] 2>/dev/null; then
+      NOTIFY_BRIGHT_SAMPLES=$((NOTIFY_BRIGHT_SAMPLES + 1))
+    fi
+  done
+  rm -f "$NOTIFY_RAW"
+  [ "$NOTIFY_BRIGHT_SAMPLES" -eq 3 ]
+)
+
+dismiss_notification_overlay_if_visible() {
+  if notification_overlay_visible; then
+    echo "[scan] notification overlay detected; closing safely x=$NOTIFICATION_CLOSE_TAP_X y=$NOTIFICATION_CLOSE_TAP_Y"
+    if game_tap "$NOTIFICATION_CLOSE_TAP_X" "$NOTIFICATION_CLOSE_TAP_Y"; then
+      echo "[scan] notification overlay close tap sent"
+      # Unity can drop the first touch immediately after a framebuffer read.
+      # Retry exactly once, but only after proving that the same card remains;
+      # never send a second blind tap to the overlapping dashboard menu.
+      sleep 2
+      if notification_overlay_visible; then
+        echo "[scan] notification overlay still visible; retrying close tap"
+        game_tap "$NOTIFICATION_CLOSE_TAP_X" "$NOTIFICATION_CLOSE_TAP_Y" || \
+          echo "[scan] notification overlay retry tap failed"
+        sleep 1
+      fi
+      if ! notification_overlay_visible && notification_menu_visible; then
+        echo "[scan] notification close opened dashboard menu; closing safely"
+        game_keyevent KEYCODE_BACK || echo "[scan] notification menu close keyevent failed"
+      fi
+      return 0
+    fi
+    echo "[scan] notification overlay close tap failed"
+  fi
+  return 1
 }
 
 # 2026-08-20 現場測試教訓，記在這裡因為它決定了下面 wait_for_map_refresh
@@ -667,6 +805,9 @@ execute_scan_task() {
         echo "[scan] query-only recovery: dismiss warning and open map"
         game_tap "$SPEED_WARNING_TAP_X" "$SPEED_WARNING_TAP_Y" || true
         interruptible_wait 1 "$JOB_ID" || return
+        if dismiss_notification_overlay_if_visible; then
+          interruptible_wait 1 "$JOB_ID" || return
+        fi
         game_tap "$MAP_VIEW_TAP_X" "$MAP_VIEW_TAP_Y" || true
       fi
       if [ "$QUERY_ONLY_STREAK" -ge "$(number_or_zero "$QUERY_ONLY_RESTART_STREAK")" ]; then
