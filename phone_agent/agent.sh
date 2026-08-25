@@ -54,6 +54,16 @@ NOTIFICATION_OVERLAY_DETECTION="${NOTIFICATION_OVERLAY_DETECTION:-0}"
 NOTIFICATION_CLOSE_TAP_X="${NOTIFICATION_CLOSE_TAP_X:-0}"
 NOTIFICATION_CLOSE_TAP_Y="${NOTIFICATION_CLOSE_TAP_Y:-0}"
 NOTIFICATION_PIXEL_BRIGHTNESS_MIN="${NOTIFICATION_PIXEL_BRIGHTNESS_MIN:-230}"
+# Some devices propagate the close tap through to the overlapping dashboard
+# menu. This optional, separately-calibrated guard sends BACK only after three
+# known menu-card samples are bright; it is disabled unless explicitly set.
+NOTIFICATION_MENU_DETECTION="${NOTIFICATION_MENU_DETECTION:-0}"
+NOTIFICATION_MENU_SAMPLE_1_X="${NOTIFICATION_MENU_SAMPLE_1_X:-0}"
+NOTIFICATION_MENU_SAMPLE_1_Y="${NOTIFICATION_MENU_SAMPLE_1_Y:-0}"
+NOTIFICATION_MENU_SAMPLE_2_X="${NOTIFICATION_MENU_SAMPLE_2_X:-0}"
+NOTIFICATION_MENU_SAMPLE_2_Y="${NOTIFICATION_MENU_SAMPLE_2_Y:-0}"
+NOTIFICATION_MENU_SAMPLE_3_X="${NOTIFICATION_MENU_SAMPLE_3_X:-0}"
+NOTIFICATION_MENU_SAMPLE_3_Y="${NOTIFICATION_MENU_SAMPLE_3_Y:-0}"
 # 以下三組座標目前「不會」被自動點擊（2026-08-20 實測發現它們的按鈕 Y 座標
 # 常跟其他畫面的真實功能鍵重疊，誤觸風險高於效益，只在跨日第一次啟動這個
 # 罕見情境才用得到）。保留設定供未來手動調整或重新設計更安全的偵測方式之後
@@ -364,6 +374,44 @@ notification_overlay_visible() (
   [ "$NOTIFY_BRIGHT_SAMPLES" -ge 3 ]
 )
 
+notification_menu_visible() (
+  [ "$NOTIFICATION_MENU_DETECTION" = "1" ] || exit 1
+  NOTIFY_RAW="/data/local/tmp/pikmin-menu-$$.raw"
+  run_as_shell_timeout 5 "screencap $NOTIFY_RAW" >/dev/null 2>&1 || {
+    rm -f "$NOTIFY_RAW"
+    exit 1
+  }
+  set -- $(od -An -N 8 -tu4 "$NOTIFY_RAW" 2>/dev/null)
+  NOTIFY_WIDTH="$1"
+  NOTIFY_HEIGHT="$2"
+  case "$NOTIFY_WIDTH" in
+    ''|*[!0-9]*|0) rm -f "$NOTIFY_RAW"; exit 1 ;;
+  esac
+  case "$NOTIFY_HEIGHT" in
+    ''|*[!0-9]*|0) rm -f "$NOTIFY_RAW"; exit 1 ;;
+  esac
+  NOTIFY_BRIGHT_SAMPLES=0
+  for NOTIFY_SAMPLE in \
+    "$NOTIFICATION_MENU_SAMPLE_1_X,$NOTIFICATION_MENU_SAMPLE_1_Y" \
+    "$NOTIFICATION_MENU_SAMPLE_2_X,$NOTIFICATION_MENU_SAMPLE_2_Y" \
+    "$NOTIFICATION_MENU_SAMPLE_3_X,$NOTIFICATION_MENU_SAMPLE_3_Y"; do
+    NOTIFY_X="${NOTIFY_SAMPLE%,*}"
+    NOTIFY_Y="${NOTIFY_SAMPLE#*,}"
+    [ "$NOTIFY_X" -gt 0 ] 2>/dev/null && [ "$NOTIFY_X" -lt "$NOTIFY_WIDTH" ] 2>/dev/null || continue
+    [ "$NOTIFY_Y" -gt 0 ] 2>/dev/null && [ "$NOTIFY_Y" -lt "$NOTIFY_HEIGHT" ] 2>/dev/null || continue
+    NOTIFY_OFFSET=$((16 + ((NOTIFY_Y * NOTIFY_WIDTH + NOTIFY_X) * 4)))
+    set -- $(dd if="$NOTIFY_RAW" bs=1 skip="$NOTIFY_OFFSET" count=4 2>/dev/null | od -An -tu1 2>/dev/null)
+    [ "$#" -eq 4 ] || continue
+    if [ "$1" -ge "$NOTIFICATION_PIXEL_BRIGHTNESS_MIN" ] 2>/dev/null && \
+       [ "$2" -ge "$NOTIFICATION_PIXEL_BRIGHTNESS_MIN" ] 2>/dev/null && \
+       [ "$3" -ge "$NOTIFICATION_PIXEL_BRIGHTNESS_MIN" ] 2>/dev/null; then
+      NOTIFY_BRIGHT_SAMPLES=$((NOTIFY_BRIGHT_SAMPLES + 1))
+    fi
+  done
+  rm -f "$NOTIFY_RAW"
+  [ "$NOTIFY_BRIGHT_SAMPLES" -eq 3 ]
+)
+
 dismiss_notification_overlay_if_visible() {
   if notification_overlay_visible; then
     echo "[scan] notification overlay detected; closing safely x=$NOTIFICATION_CLOSE_TAP_X y=$NOTIFICATION_CLOSE_TAP_Y"
@@ -377,6 +425,11 @@ dismiss_notification_overlay_if_visible() {
         echo "[scan] notification overlay still visible; retrying close tap"
         game_tap "$NOTIFICATION_CLOSE_TAP_X" "$NOTIFICATION_CLOSE_TAP_Y" || \
           echo "[scan] notification overlay retry tap failed"
+        sleep 1
+      fi
+      if ! notification_overlay_visible && notification_menu_visible; then
+        echo "[scan] notification close opened dashboard menu; closing safely"
+        game_keyevent KEYCODE_BACK || echo "[scan] notification menu close keyevent failed"
       fi
       return 0
     fi
