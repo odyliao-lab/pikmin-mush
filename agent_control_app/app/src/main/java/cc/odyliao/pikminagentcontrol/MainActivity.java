@@ -27,8 +27,15 @@ import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 
 public final class MainActivity extends Activity {
-    private static final String CONTROL =
-            "/data/adb/modules/pikmin_scanner_agent/control.sh";
+    // Current Magisk installations use the first path. Older enrolled agents
+    // (including Agent Leo) keep their private Agent directory under
+    // /data/local/tmp/agent<ID>. The command is fixed by this App; user input
+    // is never interpolated except a validated integer minute count.
+    private static final String CONTROL_SEARCH =
+            "for d in /data/adb/modules/pikmin_scanner_agent /data/local/tmp/agent*; do " +
+            "if [ -x \"$d/control.sh\" ]; then exec \"$d/control.sh\" ";
+    private static final String CONTROL_SEARCH_END =
+            "; fi; done; echo error control-script-not-found; exit 127";
     private final ExecutorService commandExecutor = Executors.newSingleThreadExecutor();
     private final ExecutorService statusExecutor = Executors.newSingleThreadExecutor();
     private final Handler handler = new Handler(Looper.getMainLooper());
@@ -98,6 +105,15 @@ public final class MainActivity extends Activity {
         updatedView = text("狀態尚未更新", 12, Color.rgb(125, 139, 130));
         updatedView.setPadding(0, dp(8), 0, 0);
         card.addView(updatedView);
+
+        root.addView(section("交還 GPS 控制"));
+        Button handoffGps = button("停止掃描並交還 GPS 給 Joystick", false);
+        root.addView(handoffGps, fullWidthWithBottom(4));
+        handoffGps.setOnClickListener(v -> runControl("handoff-gps", "掃描已停止，GPS 已交還給 Joystick"));
+        TextView handoffNote = text("此操作會手動暫停掃描、停止目前 Agent，並清除掃描器最後寫入的 GPS。按下「繼續掃描」後，掃描器才會再次接管 GPS。",
+                13, Color.rgb(96, 110, 101));
+        handoffNote.setPadding(0, 0, 0, dp(12));
+        root.addView(handoffNote);
 
         root.addView(section("快速暫停"));
         LinearLayout quick = new LinearLayout(this);
@@ -184,7 +200,7 @@ public final class MainActivity extends Activity {
             StringBuilder errors = new StringBuilder();
             try {
                 Process process = new ProcessBuilder(
-                        "/system/bin/su", "-c", CONTROL + " watch 5")
+                        suBinary(), "-c", controlCommand("watch 5"))
                         .redirectErrorStream(true).start();
                 statusProcess = process;
                 try (BufferedReader reader = new BufferedReader(
@@ -247,7 +263,7 @@ public final class MainActivity extends Activity {
     private Result execute(String command) {
         StringBuilder output = new StringBuilder();
         try {
-            Process process = new ProcessBuilder("/system/bin/su", "-c", CONTROL + " " + command)
+            Process process = new ProcessBuilder(suBinary(), "-c", controlCommand(command))
                     .redirectErrorStream(true).start();
             try (BufferedReader reader = new BufferedReader(
                     new InputStreamReader(process.getInputStream()))) {
@@ -288,6 +304,17 @@ public final class MainActivity extends Activity {
             return;
         }
         showError(raw);
+    }
+
+    private String controlCommand(String args) {
+        return CONTROL_SEARCH + args + CONTROL_SEARCH_END;
+    }
+
+    private String suBinary() {
+        // Magisk/Kitsune place su in different read-only partitions
+        // (/product/bin on Agent Leo). Let Android resolve its own PATH
+        // instead of assuming a legacy /system/bin location.
+        return "su";
     }
 
     private void showError(String detail) {

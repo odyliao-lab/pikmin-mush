@@ -79,14 +79,20 @@ su -c '/data/adb/modules/pikmin_scanner_agent/control.sh status'
 su -c '/data/adb/modules/pikmin_scanner_agent/control.sh pause 60'
 su -c '/data/adb/modules/pikmin_scanner_agent/control.sh pause 100'
 su -c '/data/adb/modules/pikmin_scanner_agent/control.sh pause-manual'
+su -c '/data/adb/modules/pikmin_scanner_agent/control.sh handoff-gps'
 su -c '/data/adb/modules/pikmin_scanner_agent/control.sh resume'
 ```
+
+`handoff-gps` 適合要改用 Joystick 等手動定位工具時使用：它會寫入手動暫停、
+停止目前的 Agent 行程，並清除 Scanner 建立的 GPS test provider。掃描器不會在
+手機重開後重新接管 GPS，直到使用者在控制 App 按下「繼續掃描」。
 
 控制 App 1.1 起也會顯示最近掃描的國家－城市、GPS、點位進度、擷取筆數與耗時。
 App 只建立一條持續的 root 狀態串流，每 5 秒由同一個程序更新畫面，不再每 5 秒
 重新呼叫 `su`；因此切換到其他 App 時，超級使用者授權提示不會持續重複出現。
 
-手機 App 原始碼位於 `agent_control_app/`，release APK 由
+手機 App 原始碼位於 `agent_control_app/`，支援 Magisk 模組目錄與舊版
+`/data/local/tmp/agent*` 私有 Agent 目錄；release APK 由
 `.github/workflows/agent-control-app.yml` 建置。App 僅執行上述固定控制腳本，第一次
 開啟時需要在 Magisk／root 管理器授予 root 權限。若手機使用
 Kitsune Mask 的 SU-list 模式，安裝 APK 後以 root 執行

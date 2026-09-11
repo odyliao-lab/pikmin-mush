@@ -4,6 +4,14 @@ MODDIR="${PIKMIN_AGENT_CONTROL_DIR:-${0%/*}}"
 PAUSE_FILE="$MODDIR/pause.until"
 AUDIT_LOG="$MODDIR/control.log"
 AGENT_LOG="$MODDIR/agent.log"
+CONFIG="$MODDIR/config"
+
+# Match the Agent's shell-domain location calls.  Magisk service scripts run
+# as root, but Android location commands need the shell SELinux domain.
+MAGISK_SU="${MAGISK_SU:-/sbin/su}"
+if [ ! -x "$MAGISK_SU" ]; then
+  MAGISK_SU="$(command -v su 2>/dev/null || true)"
+fi
 
 now_epoch() {
   date +%s
@@ -105,24 +113,88 @@ pause_minutes() {
   status
 }
 
+pause_manual() {
+  printf 'manual\n' >"$PAUSE_FILE"
+  chmod 600 "$PAUSE_FILE"
+  write_audit "pause manual"
+}
+
+run_as_shell() {
+  [ -n "$MAGISK_SU" ] && [ -x "$MAGISK_SU" ] || return 127
+  "$MAGISK_SU" -Z u:r:shell:s0 2000 -c \
+    "PATH=/system/bin:/system/xbin:/vendor/bin:/sbin; export PATH; $1"
+}
+
+stop_running_agent() {
+  agent_pid="$(cat "$MODDIR/agent.pid" 2>/dev/null || true)"
+  case "$agent_pid" in ''|*[!0-9]*) return 0 ;; esac
+  [ -r "/proc/$agent_pid/cmdline" ] || return 0
+  agent_cmd="$(tr '\000' ' ' <"/proc/$agent_pid/cmdline" 2>/dev/null || true)"
+  case "$agent_cmd" in
+    *"$MODDIR/agent.sh"*) kill "$agent_pid" 2>/dev/null || true ;;
+  esac
+}
+
+release_gps() {
+  # Config is local and root-only.  It may contain the Agent token, but this
+  # script never prints it; only the GPS mode/package variables are used.
+  SYSTEM_GPS_OVERRIDE=0
+  GPS_BRIDGE_PACKAGE=""
+  [ -f "$CONFIG" ] && . "$CONFIG"
+
+  # A mock `gps` test provider can survive an interrupted scan or a reboot
+  # even after SYSTEM_GPS_OVERRIDE has since been switched off.  Removing it
+  # is safe when the real provider is active (the command then simply fails),
+  # and is required before a Joystick app can register its own provider.
+  run_as_shell "cmd location providers set-test-provider-enabled gps false" \
+    >/dev/null 2>&1 || true
+  run_as_shell "cmd location providers remove-test-provider gps" \
+    >/dev/null 2>&1 || true
+  if [ -n "$GPS_BRIDGE_PACKAGE" ]; then
+    # Android 9 bridge devices hand the exclusive mock-location AppOp back to
+    # the user's Joystick. Resume below grants it back before Agent polling.
+    appops set "$GPS_BRIDGE_PACKAGE" android:mock_location deny \
+      >/dev/null 2>&1 || true
+  fi
+}
+
+restore_gps_access() {
+  GPS_BRIDGE_PACKAGE=""
+  [ -f "$CONFIG" ] && . "$CONFIG"
+  [ -n "$GPS_BRIDGE_PACKAGE" ] || return 0
+  appops set "$GPS_BRIDGE_PACKAGE" android:mock_location allow \
+    >/dev/null 2>&1 || true
+}
+
+handoff_gps() {
+  # Do this in order: stop future writes first, then clear the last test
+  # location.  The pause file survives reboot, so service.sh cannot take GPS
+  # back until the user explicitly presses Resume in the control App.
+  pause_manual
+  stop_running_agent
+  release_gps
+  write_audit "gps handoff to external controller"
+  echo "paused manual gps released"
+}
+
 case "${1:-status}" in
   status) status ;;
   snapshot) snapshot ;;
   watch) watch_status "${2:-5}" ;;
   pause) pause_minutes "${2:-}" ;;
   pause-manual)
-    printf 'manual\n' >"$PAUSE_FILE"
-    chmod 600 "$PAUSE_FILE"
-    write_audit "pause manual"
+    pause_manual
     status
     ;;
+  handoff-gps) handoff_gps ;;
   resume)
+    restore_gps_access
     rm -f "$PAUSE_FILE"
     write_audit "resume"
     status
     ;;
   *)
-    echo "usage: $0 {status|snapshot|watch [SECONDS]|pause MINUTES|pause-manual|resume}" >&2
+    echo "usage: $0 {status|snapshot|watch [SECONDS]|pause MINUTES|pause-manual|handoff-gps|resume}" >&2
     exit 2
     ;;
 esac
