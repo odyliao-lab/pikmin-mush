@@ -106,6 +106,24 @@ pause_minutes() {
 }
 
 case "${1:-status}" in
+  power-status)
+    if [ -s "$MODDIR/power.status" ]; then
+      cat "$MODDIR/power.status"
+    else
+      echo "unknown guard-not-observed"
+    fi
+    ;;
+  cool-now)
+    # Only requests extra protection; no command bypasses the recovery checks.
+    if [ ! -f "$MODDIR/power-guard.sh" ] ||
+        ! grep -Eq "^POWER_GUARD_ENABLED=['\"]?1['\"]?$" "$MODDIR/config"; then
+      echo "error guard-not-enabled" >&2
+      exit 2
+    fi
+    (umask 077; printf 'requested\n' >"$MODDIR/power.cool-request")
+    write_audit "cooldown requested"
+    echo "cooldown requested"
+    ;;
   status) status ;;
   snapshot) snapshot ;;
   watch) watch_status "${2:-5}" ;;
@@ -122,7 +140,7 @@ case "${1:-status}" in
     status
     ;;
   *)
-    echo "usage: $0 {status|snapshot|watch [SECONDS]|pause MINUTES|pause-manual|resume}" >&2
+    echo "usage: $0 {status|snapshot|watch [SECONDS]|pause MINUTES|pause-manual|resume|power-status|cool-now}" >&2
     exit 2
     ;;
 esac

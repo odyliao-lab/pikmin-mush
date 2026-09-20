@@ -52,8 +52,14 @@ if ($displayWriteIndex -lt 0 -or $forceStopIndex -lt 0 -or $displayStartIndex -l
 
 Assert-Contains $agent 'DISPLAY_QUERY_TIMEOUT_SECONDS' `
     'Agent display discovery must have a configurable timeout.'
-Assert-Contains $agent 'timeout -k 2 "\$DISPLAY_QUERY_TIMEOUT_SECONDS"' `
+Assert-Contains $agent 'run_as_shell_timeout "\$DISPLAY_QUERY_TIMEOUT_SECONDS"' `
     'Agent display discovery can block forever without a bounded command.'
+Assert-Contains $agent 'timeout -k 2 "\$RUN_TIMEOUT_SECONDS" "\$MAGISK_SU"' `
+    'The timeout must wrap the real su executable, not a shell function.'
+Assert-Contains $installer "Invoke-Adb push \(Join-Path \`$scriptDirectory 'power-guard.sh'\)" `
+    'The installer must stage the power guard with the Agent.'
+Assert-Contains $installer 'cp \$stageDirectory/power-guard.sh \$moduleDirectory/power-guard.sh' `
+    'The installer must deploy the required power guard library.'
 Assert-Contains $agent 'dumpsys display' `
     'Agent display discovery is missing the Android 12 fallback.'
 Assert-Contains $agent 'mDisplayId=\$DISPLAY_ID' `

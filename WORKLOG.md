@@ -1,5 +1,15 @@
 # Pikmin Bloom 蘑菇搜尋研究 — WORKLOG
 
+## 2026-09-20 — Cancer 自動降溫續掃（Agent 2.2.1，單機啟用）
+
+- 背景：老化電池在接電且 Android 仍顯示充電中時也可能持續掉電。此次保留所有原廠熱／充電保護、使用者最低亮度與手動暫停，不改 Aries／Leo，不變更網站、情報時間或區域配置。
+- 新增 opt-in `power-guard.sh`：每約 30 秒讀取真實 Android battery／thermalservice，Severe 熱限制、43°C 電池熱、低電量、感測未知、接電 10 分鐘仍掉電時停止遊戲。至少降載 3 分鐘，溫度、電量及供電連續穩定 2 分鐘才回到雲端派工。
+- `power.hold` 與 `pause.until` 分開；手動暫停優先，重啟後重新觀察安全窗。冷卻時只續租／保留 target，不為中斷點寫成功／失敗 ACK；既有 offset、token、pending ACK 保留。新增 root-only、限大小的 `power.log` 和 `control.sh power-status/cool-now`。舊 APK 仍只顯示手動暫停狀態，未發布新 APK。
+- 本機通過：shell 語法、保護政策／感測解析／取樣間隔／未知與過期讀值、低電量及充電標籤仍掉電、恢復遲滯與重啟 latch、手動暫停、零 dwell／啟動／fallback 中斷不誤 ACK、正常 ACK、控制腳本、UTF-8 分批上傳、Windows process identity、deployment hardening。修正 hardening 測試對既有 `run_as_shell_timeout` 的過時斷言，沒有改回錯誤的 `timeout shell-function` 寫法。
+- Cancer（Pixel 3 / Android 12 / Pikmin 152）已先做 root-only 設定／程式／狀態備份，再部署相同雜湊的 2.2.1 與保護程式；未重開手機或改 native 模組。
+- 實機測試（台北時間）：08:24:35 以 `cool-now` 請求額外降溫，08:24:36 遊戲 PID 消失；沒有偽造感測器或刻意加熱。電池 38.0°C → 35.0°C、Thermal Status 2 → 1、電量保持 100%，charge counter 1,262,000 → 1,264,000 uAh。08:28:10 通過真實復原條件，重新領到同一個 109/2775 target；其後 ACK 成功並繼續工作。API 在 08:29 查得 4 筆 Cancer 恢復後的觀測資料（不宣稱這是 4 個全新地點）。
+- 這是單次真實降載／續掃驗證，加上政策回歸測試，不是過熱強制測試、整夜 soak 或「電池老化已修好」的證據。完整門檻、限制及查詢方式見 `phone_agent/README.md`。本次沒有 Sites／Discord 發布需求。
+
 ## 2026-09-14 — 平日巨菇通知前複查介面
 
 - 新增獨立 `candidate-giant` 複查種類，由 Discord 服務提交凍結候選；沿用指定 Agent、D1 分批、返回原座標及同批次冪等行為。既有 `candidate` 與報後 48 小時 `giant-recheck` 不變，無 schema migration。

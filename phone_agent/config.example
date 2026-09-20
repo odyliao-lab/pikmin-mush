@@ -3,6 +3,11 @@ SERVER_URL='https://mush.odyliao.cc'
 AGENT_ID='primary'
 TOKEN=''
 POLL_SECONDS='2'
+# Dedicated-device opt-in, deployed to Cancer first. Requires power-guard.sh.
+# Stops the game on severe heat, battery <=20%, sensor failure or plugged-in
+# depletion; preserves the task and resumes only after stable, cool charging.
+# Does NOT disable Android thermal/charging protections. See README for policy.
+POWER_GUARD_ENABLED='0'
 # Normally auto-detected/reported by agent.sh. Override only for diagnostics.
 # GAME_VERSION='150.0'
 MODULE_VERSION='150.0'

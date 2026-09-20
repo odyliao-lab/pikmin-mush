@@ -110,7 +110,61 @@ Release APK 使用 GitHub Actions secrets 中的固定簽章，金鑰不得提�
 Magisk 會在開機後執行 `service.sh`，再由它啟動 `agent.sh`。正式設定在手機端
 `config`，認證密鑰在 `token`。每台裝置的 `AGENT_ID` 必須不同。
 
-## PC 端
+## 自動降溫續掃（Cancer 單機啟用）
+
+`power-guard.sh` 是專用掃描手機的保護閘門，預設關閉，先在 Cancer 設定
+`POWER_GUARD_ENABLED='1'`。更新時必須連同 `agent.sh` 一起部署；啟用但缺少
+保護程式時拒絕啟動，不默默略過。**不關閉原廠熱保護、不強制充電、不偽造
+溫度或電池資料，也不變更亮度、更新率或其他 Agent 的設定。**
+
+每約 30 秒以有逾時限制的 Android `dumpsys battery`／`thermalservice` 讀值判斷：
+
+| 條件 | 處理 |
+| --- | --- |
+| Thermal Status >= 3（Severe）、電池 >= 43°C 或 <= 5°C | 停止遊戲降載 |
+| 電量 <= 20% | 停止遊戲，等待安全充電 |
+| 持續接電 10 分鐘仍掉 >= 3 個百分點，或 charge counter 掉 >= 30,000 uAh | 接電掉電保護；不相信單獨的「充電中」標籤 |
+| 感測缺漏、格式錯誤、Android 測試覆寫或讀取逾時 | 視為未知並保護，不當成安全 |
+| 降溫後符合全部復原條件 | 再領取雲端工作才開遊戲，不自行重播已取消的工作 |
+
+復原條件：至少停止 3 分鐘，Thermal Status <= 1、電池 10–39°C、電量 >= 30%、
+接電且 Android 顯示充電中／已充滿；連續 2 分鐘電量不減、charge counter
+相比穩定期起點下降不超過 5,000 uAh。中途重新變熱、掉電或感測未知會重算
+穩定時間。這些是此專案較保守的降載門檻，不是手機廠商的充電安全規格。
+
+降溫狀態另存 `power.hold`，不使用或清除 `pause.until`。手動暫停優先，
+此時 Agent 不會為降溫而操作使用者的遊戲；按「繼續」也不能繞過熱保護。
+重啟 Agent／手機後既有降溫 latch 會保留，但必須重新取得完整穩定觀察窗。
+降溫中每約 30 秒續租當前 target，**中斷點不送成功或失敗 ACK**；恢復後雲端
+仍可回傳同一點。如果工作被停止、重新分配或租約失效，則服從下一次正式派工。
+既有上傳 offset、待送 ACK、Token 與工作資料皆保留。
+
+```sh
+su -c '/data/adb/modules/pikmin_scanner_agent/control.sh power-status'
+su -c '/data/adb/modules/pikmin_scanner_agent/control.sh cool-now'
+```
+
+`power-status` 回傳 TSV：狀態、原因、更新 epoch、thermal status、電量%、
+電池溫度（0.1°C）、是否接電、Android 充電狀態、charge counter（uAh）。
+檔案是最後觀測快照，務必核對更新時間；不是執行中程序保證。
+`cool-now` 只要求額外降溫，不能強制恢復或改寫感測器，可安全驗證真實降溫流程。
+舊控制 App 的 `status`／`snapshot` 仍表示手動暫停狀態；自動保護須看
+`power-status` 或 `power.log`，目前不向網站／Discord 宣告額外狀態。
+`power.log`（含開機識別、電量、溫度、原因）保留約 128 KiB × 2，root-only，
+不記錄憑證或 GPS。Agent 本身死亡時無法降載；不能取代硬體維修或系統熱保護。
+
+驗證：
+
+```sh
+bash -n phone_agent/agent.sh
+bash -n phone_agent/power-guard.sh
+bash phone_agent/tests/power-guard-test.sh
+bash phone_agent/tests/power-guard-integration-test.sh
+bash phone_agent/tests/control-test.sh
+bash phone_agent/tests/upload-chunk-test.sh
+```
+
+## PC 端用法
 
 GUI 預設選擇「手機 Agent（免 ADB）」。命令列可使用：
 

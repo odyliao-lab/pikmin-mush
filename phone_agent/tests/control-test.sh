@@ -20,6 +20,17 @@ timed="$(PIKMIN_AGENT_CONTROL_DIR="$tmp_dir" bash "$control" pause 60)"
 case "$timed" in paused\ until\ * ) ;; *) echo "unexpected timed status: $timed" >&2; exit 1 ;; esac
 test "$(PIKMIN_AGENT_CONTROL_DIR="$tmp_dir" bash "$control" pause-manual)" = "paused manual"
 test "$(PIKMIN_AGENT_CONTROL_DIR="$tmp_dir" bash "$control" resume)" = "running"
+test "$(PIKMIN_AGENT_CONTROL_DIR="$tmp_dir" bash "$control" power-status)" = "unknown guard-not-observed"
+if PIKMIN_AGENT_CONTROL_DIR="$tmp_dir" bash "$control" cool-now >/dev/null 2>&1; then
+  echo "cool-now without an enabled guard should fail" >&2; exit 1
+fi
+touch "$tmp_dir/power-guard.sh"
+printf "POWER_GUARD_ENABLED='1'\n" >"$tmp_dir/config"
+test "$(PIKMIN_AGENT_CONTROL_DIR="$tmp_dir" bash "$control" cool-now)" = "cooldown requested"
+test -s "$tmp_dir/power.cool-request"
+printf 'requested\n' >"$tmp_dir/power.hold"
+PIKMIN_AGENT_CONTROL_DIR="$tmp_dir" bash "$control" resume >/dev/null
+test -s "$tmp_dir/power.hold"
 if PIKMIN_AGENT_CONTROL_DIR="$tmp_dir" bash "$control" pause 0 >/dev/null 2>&1; then
   echo "pause 0 should fail" >&2
   exit 1

@@ -23,6 +23,16 @@ if [ ! -f "$CONFIG" ]; then
 fi
 . "$CONFIG"
 
+POWER_GUARD_ENABLED="${POWER_GUARD_ENABLED:-0}"
+if [ "$POWER_GUARD_ENABLED" = "1" ]; then
+  if [ ! -r "$MODDIR/power-guard.sh" ]; then
+    echo "[power] guard enabled but library missing; refusing to scan"
+    exit 1
+  fi
+  . "$MODDIR/power-guard.sh"
+  power_guard_init
+fi
+
 POLL_SECONDS="${POLL_SECONDS:-2}"
 MAP_REFRESH_EXPERIMENT="${MAP_REFRESH_EXPERIMENT:-0}"
 MAP_REFRESH_TIMEOUT_SECONDS="${MAP_REFRESH_TIMEOUT_SECONDS:-18}"
@@ -66,7 +76,7 @@ if [ ! -x "$MAGISK_SU" ]; then
   MAGISK_SU="$(command -v su 2>/dev/null)"
 fi
 AGENT_ID="${AGENT_ID:-primary}"
-AGENT_VERSION="${AGENT_VERSION:-2.2.0}"
+AGENT_VERSION="${AGENT_VERSION:-2.2.1}"
 GAME_VERSION="${GAME_VERSION:-$(dumpsys package "$PKG" 2>/dev/null |
   sed -n 's/^[[:space:]]*versionName=//p' | head -n 1 | tr -d '\r')}"
 MODULE_VERSION="${MODULE_VERSION:-151.0}"
@@ -174,6 +184,28 @@ refresh_local_pause() {
   return 0
 }
 
+# Manual pause always wins and is never cleared by automatic cooling recovery.
+scan_can_run() {
+  if refresh_local_pause; then
+    PG_STABLE_AT=-1
+    return 1
+  fi
+  [ "$POWER_GUARD_ENABLED" = "1" ] || return 0
+  power_guard_check
+}
+
+guarded_startup_wait() {
+  STARTUP_WAIT_LEFT="$1"
+  while [ "$STARTUP_WAIT_LEFT" -gt 0 ]; do
+    scan_can_run || return 2
+    STARTUP_WAIT_STEP=5
+    [ "$STARTUP_WAIT_LEFT" -ge 5 ] || STARTUP_WAIT_STEP="$STARTUP_WAIT_LEFT"
+    sleep "$STARTUP_WAIT_STEP"
+    STARTUP_WAIT_LEFT=$((STARTUP_WAIT_LEFT - STARTUP_WAIT_STEP))
+  done
+  scan_can_run || return 2
+}
+
 save_offset() {
   OFFSET="$1"
   echo "$OFFSET" >"$OFFSET_FILE"
@@ -258,6 +290,7 @@ wait_for_game_display() {
 }
 
 launch_game() {
+  scan_can_run || return 2
   if [ "$LOCAL_DISPLAY" = "1" ]; then
     DISPLAY_ID="$(wait_for_game_display)" || {
       echo "[display] virtual display unavailable; refusing physical launch"
@@ -276,6 +309,7 @@ launch_game() {
 }
 
 game_keyevent() {
+  scan_can_run || return 2
   KEY_NAME="$1"
   DISPLAY_ID="$(game_display_id)"
   if [ "$LOCAL_DISPLAY" = "1" ] && [ -z "$DISPLAY_ID" ]; then
@@ -292,6 +326,7 @@ game_keyevent() {
 }
 
 game_tap() {
+  scan_can_run || return 2
   TAP_X="$1"
   TAP_Y="$2"
   [ "$TAP_X" -gt 0 ] 2>/dev/null || return 1
@@ -354,6 +389,7 @@ game_is_on_display() {
 }
 
 ensure_game_running() {
+  scan_can_run || return 2
   if [ "$LOCAL_DISPLAY" = "1" ]; then
     EXPECTED_DISPLAY_ID="$(wait_for_game_display)" || {
       echo "[display] virtual display unavailable; game cannot be verified"
@@ -368,10 +404,10 @@ ensure_game_running() {
   fi
   if ! pidof "$PKG" >/dev/null 2>&1; then
     launch_game || return 1
-    sleep 25
+    guarded_startup_wait 25 || return 2
   elif ! game_is_resumed; then
     launch_game || return 1
-    sleep 8
+    guarded_startup_wait 8 || return 2
   fi
   # Android 9 can report the Unity activity as resumed while the game still
   # displays a touch-only startup or speed-warning overlay. These are harmless
@@ -417,7 +453,7 @@ interruptible_wait() {
   WAIT_LEFT="$(number_or_zero "$1")"
   WAIT_JOB="$2"
   while [ "$WAIT_LEFT" -gt 0 ]; do
-    refresh_local_pause && return 2
+    scan_can_run || return 2
     WAIT_STEP=5
     [ "$WAIT_LEFT" -lt 5 ] && WAIT_STEP="$WAIT_LEFT"
     sleep "$WAIT_STEP"
@@ -427,6 +463,7 @@ interruptible_wait() {
       pause|stop) return 2 ;;
     esac
   done
+  scan_can_run || return 2
   return 0
 }
 
@@ -447,7 +484,7 @@ wait_for_map_refresh() {
   REFRESH_TOTAL="$REFRESH_LEFT"
   QUERY_SEEN_AT=0
   while [ "$REFRESH_LEFT" -gt 0 ]; do
-    refresh_local_pause && return 2
+    scan_can_run || return 2
     if refresh_marker_matches "$SCAN_READY" "$REFRESH_TOKEN"; then
       REFRESH_SOURCE="object"
       echo "[scan] $REFRESH_PHASE refresh ready target=$REFRESH_TOKEN source=object"
@@ -605,16 +642,21 @@ execute_scan_task() {
     echo "[scan] local pause requested before point=$TASK_INDEX"
     return
   fi
+  scan_can_run || return
   if ! set_system_gps "$TASK_LAT" "$TASK_LNG"; then
     echo "[scan] system GPS write failed job=$JOB_ID point=$TASK_INDEX"
     send_scan_ack "$JOB_ID" "$TASK_TARGET_ID" "$TASK_LEASE" 0 0 0
     return
   fi
   if ! ensure_game_running; then
+    # Cooling/manual interruption is neither a completed point nor a failure
+    # attempt. Keep the lease so the cloud can return this point after recovery.
+    scan_can_run || return
     echo "[scan] game unavailable on configured display job=$JOB_ID point=$TASK_INDEX"
     send_scan_ack "$JOB_ID" "$TASK_TARGET_ID" "$TASK_LEASE" 0 0 0
     return
   fi
+  scan_can_run || return
   BEFORE_SIZE="$(file_size)"
   BEFORE_LINES="$(useful_line_count)"
   if [ "$MAP_REFRESH_EXPERIMENT" = "1" ] && [ "$TASK_COOLDOWN" -gt 0 ]; then
@@ -632,6 +674,7 @@ execute_scan_task() {
   if [ "$MAP_REFRESH_EXPERIMENT" = "1" ]; then
     rm -f "$SCAN_READY" "$QUERY_READY"
   fi
+  scan_can_run || return
   echo "$TELEPORT_VALUE" >"$TELEPORT"
   if [ "$(cat "$TELEPORT" 2>/dev/null)" != "$TELEPORT_VALUE" ]; then
     echo "[scan] GPS write failed job=$JOB_ID point=$TASK_INDEX"
@@ -735,6 +778,7 @@ execute_scan_task() {
     fi
   fi
   interruptible_wait "$TASK_DELAY" "$JOB_ID" || return
+  scan_can_run || return
   case "$REFRESH_SOURCE" in object|query) DIAG_SOURCE="$REFRESH_SOURCE" ;; *) DIAG_SOURCE=timeout ;; esac
   [ "$MAP_REFRESH_EXPERIMENT" = "1" ] || DIAG_SOURCE=legacy
   DIAG_SCAN_MS=$(( ($(date +%s) - TASK_STARTED_AT) * 1000 ))
@@ -757,6 +801,7 @@ execute_scan_task() {
 }
 
 execute_command() {
+  scan_can_run || return
   seq="$1"
   op="$2"
   a="$3"
@@ -796,10 +841,10 @@ execute_command() {
         ack "$seq" 0 "" ""
         return 0
       fi
-      sleep 25
+      guarded_startup_wait 25 || return
       game_keyevent KEYCODE_ENTER
       game_keyevent KEYCODE_DPAD_CENTER
-      sleep 5
+      guarded_startup_wait 5 || return
       NEW_PID="$(pidof "$PKG" 2>/dev/null)"
       if [ -n "$NEW_PID" ] && [ "$NEW_PID" != "$OLD_PID" ]; then
         ack "$seq" 1 "" ""
@@ -837,8 +882,9 @@ fi
 LOCAL_PAUSE_LOGGED=0
 echo "[agent] started id=$AGENT_ID agent=$AGENT_VERSION game=${GAME_VERSION:-unknown} module=$MODULE_VERSION server=$SERVER_URL"
 while true; do
-  upload_new
   if refresh_local_pause; then
+    PG_STABLE_AT=-1
+    upload_new
     if [ "$LOCAL_PAUSE_LOGGED" -eq 0 ]; then
       if [ "$LOCAL_PAUSE_KIND" = "manual" ]; then
         echo "[agent] locally paused until manual resume"
@@ -854,6 +900,12 @@ while true; do
     echo "[agent] local pause ended; resuming"
     LOCAL_PAUSE_LOGGED=0
   fi
+  if ! scan_can_run; then
+    [ "$POWER_GUARD_ENABLED" != "1" ] || power_guard_heartbeat
+    sleep "$POLL_SECONDS"
+    continue
+  fi
+  upload_new
   if [ "$AGENT_ID" = "primary" ]; then
     COMMAND="$(auth_curl "$SERVER_URL/api/agent/command?since=$LAST_SEQ" 2>/dev/null)"
     if [ -n "$COMMAND" ]; then

@@ -26,6 +26,7 @@ foreach ($path in @($AdbPath, $ScrcpyServerPath, $compiler,
         (Join-Path $scriptDirectory 'local-display.sh'),
         (Join-Path $scriptDirectory 'localvd-drain.c'),
         (Join-Path $scriptDirectory 'agent.sh'),
+        (Join-Path $scriptDirectory 'power-guard.sh'),
         (Join-Path $scriptDirectory 'control.sh'),
         (Join-Path $scriptDirectory 'service.sh'),
         (Join-Path $scriptDirectory 'action.sh'),
@@ -177,6 +178,8 @@ rm -f $moduleDirectory/agent.pid
 cp $stageDirectory/local-display.sh $moduleDirectory/local-display.sh
 cp $stageDirectory/service.sh $moduleDirectory/service.sh
 cp $stageDirectory/agent.sh $moduleDirectory/agent.sh
+cp $stageDirectory/power-guard.sh $moduleDirectory/power-guard.sh
+chmod 700 $moduleDirectory/power-guard.sh
 cp $stageDirectory/control.sh $moduleDirectory/control.sh
 cp $stageDirectory/action.sh $moduleDirectory/action.sh
 cp $stageDirectory/localvd-drain $moduleDirectory/localvd-drain
@@ -274,6 +277,7 @@ try {
     Invoke-Adb push (Join-Path $scriptDirectory 'local-display.sh') "$stageDirectory/local-display.sh"
     Invoke-Adb push (Join-Path $scriptDirectory 'service.sh') "$stageDirectory/service.sh"
     Invoke-Adb push (Join-Path $scriptDirectory 'agent.sh') "$stageDirectory/agent.sh"
+    Invoke-Adb push (Join-Path $scriptDirectory 'power-guard.sh') "$stageDirectory/power-guard.sh"
     Invoke-Adb push (Join-Path $scriptDirectory 'control.sh') "$stageDirectory/control.sh"
     Invoke-Adb push (Join-Path $scriptDirectory 'action.sh') "$stageDirectory/action.sh"
     Invoke-Adb push $drainOutput "$stageDirectory/localvd-drain"

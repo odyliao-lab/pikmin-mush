@@ -32,9 +32,13 @@ jobs:
       - name: Validate Agent shell controls
         run: |
           bash -n phone_agent/agent.sh
+          bash -n phone_agent/power-guard.sh
           bash -n phone_agent/control.sh
           bash -n phone_agent/allow-control-app-root.sh
           bash phone_agent/tests/control-test.sh
+          bash phone_agent/tests/power-guard-test.sh
+          bash phone_agent/tests/power-guard-integration-test.sh
+          bash phone_agent/tests/upload-chunk-test.sh
       - name: Build APK
         working-directory: agent_control_app
         env:
