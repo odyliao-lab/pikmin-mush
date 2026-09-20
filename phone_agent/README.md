@@ -138,6 +138,9 @@ Magisk 會在開機後執行 `service.sh`，再由它啟動 `agent.sh`。正式�
 降溫中每約 30 秒續租當前 target，**中斷點不送成功或失敗 ACK**；恢復後雲端
 仍可回傳同一點。如果工作被停止、重新分配或租約失效，則服從下一次正式派工。
 既有上傳 offset、待送 ACK、Token 與工作資料皆保留。
+保護模式下冷啟動遊戲會清除上一個遊戲程序的 query-only streak，並在啟動等待後
+用該手機既有 `MAP_VIEW_TAP_*` 羅盤座標進入即時地圖一次，避免停在首頁卻只有
+map-query 成功。暖啟動不重點羅盤；不同解析度仍須先校準這組座標。
 
 ```sh
 su -c '/data/adb/modules/pikmin_scanner_agent/control.sh power-status'

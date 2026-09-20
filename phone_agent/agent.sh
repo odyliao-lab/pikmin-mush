@@ -390,6 +390,7 @@ game_is_on_display() {
 
 ensure_game_running() {
   scan_can_run || return 2
+  GUARD_COLD_START=0
   if [ "$LOCAL_DISPLAY" = "1" ]; then
     EXPECTED_DISPLAY_ID="$(wait_for_game_display)" || {
       echo "[display] virtual display unavailable; game cannot be verified"
@@ -405,6 +406,10 @@ ensure_game_running() {
   if ! pidof "$PKG" >/dev/null 2>&1; then
     launch_game || return 1
     guarded_startup_wait 25 || return 2
+    if [ "$POWER_GUARD_ENABLED" = "1" ]; then
+      GUARD_COLD_START=1
+      QUERY_ONLY_STREAK=0
+    fi
   elif ! game_is_resumed; then
     launch_game || return 1
     guarded_startup_wait 8 || return 2
@@ -415,6 +420,15 @@ ensure_game_running() {
   # reboot/session restart.
   game_keyevent KEYCODE_ENTER || true
   game_keyevent KEYCODE_DPAD_CENTER || true
+  if [ "$GUARD_COLD_START" = "1" ]; then
+    # Cooling force-stops Unity. A new game starts on the dashboard, where map
+    # queries succeed but mushroom object hooks do not. Re-enter the map once
+    # using this device's already configured compass; do not inherit the old
+    # query-only streak and wait up to twelve points before attempting recovery.
+    echo "[power] cold-start recovery: open map using configured compass"
+    game_tap "$MAP_VIEW_TAP_X" "$MAP_VIEW_TAP_Y" || true
+    guarded_startup_wait 3 || return 2
+  fi
 }
 
 number_or_zero() {

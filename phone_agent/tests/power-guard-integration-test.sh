@@ -62,4 +62,20 @@ execute_scan_task 42 100 0 20 1.1 2.2 0 0 0 1 lease country city
 test "$(wc -l <"$TMP/acks")" -eq 1
 grep -q '^42 100 lease 0 0 1 ' "$TMP/acks"
 test ! -e "$SCAN_PENDING"
+
+# Cooling restarts must re-enter the live map rather than inherit a query-only
+# streak from the previous Unity process. Warm checks must not toggle the map.
+load_function ensure_game_running
+LOCAL_DISPLAY=0 PKG=test.game MAP_VIEW_TAP_X=540 MAP_VIEW_TAP_Y=1910
+QUERY_ONLY_STREAK=8
+pidof() { return 1; }
+launch_game() { return 0; }
+game_tap() { printf '%s,%s\n' "$1" "$2" >>"$TMP/taps"; }
+ensure_game_running
+test "$QUERY_ONLY_STREAK" = 0
+test "$(cat "$TMP/taps")" = 540,1910
+pidof() { echo 123; }
+game_is_resumed() { return 0; }
+ensure_game_running
+test "$(wc -l <"$TMP/taps")" -eq 1
 echo 'power guard task/manual-pause integration tests passed'

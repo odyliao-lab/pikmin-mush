@@ -8,6 +8,7 @@
 - 本機通過：shell 語法、保護政策／感測解析／取樣間隔／未知與過期讀值、低電量及充電標籤仍掉電、恢復遲滯與重啟 latch、手動暫停、零 dwell／啟動／fallback 中斷不誤 ACK、正常 ACK、控制腳本、UTF-8 分批上傳、Windows process identity、deployment hardening。修正 hardening 測試對既有 `run_as_shell_timeout` 的過時斷言，沒有改回錯誤的 `timeout shell-function` 寫法。
 - Cancer（Pixel 3 / Android 12 / Pikmin 152）已先做 root-only 設定／程式／狀態備份，再部署相同雜湊的 2.2.1 與保護程式；未重開手機或改 native 模組。
 - 實機測試（台北時間）：08:24:35 以 `cool-now` 請求額外降溫，08:24:36 遊戲 PID 消失；沒有偽造感測器或刻意加熱。電池 38.0°C → 35.0°C、Thermal Status 2 → 1、電量保持 100%，charge counter 1,262,000 → 1,264,000 uAh。08:28:10 通過真實復原條件，重新領到同一個 109/2775 target；其後 ACK 成功並繼續工作。API 在 08:29 查得 4 筆 Cancer 恢復後的觀測資料（不宣稱這是 4 個全新地點）。
+- 08:30:45 又實際遇到系統 Severe（3）而自行停遊戲，08:34:17 自動復原至 34.4°C／Thermal 1。後續發現冷啟動停在首頁且繼承旧 query-only streak；補上保護模式冷啟動時歸零 streak、用該機已校準的羅盤座標進地圖一次，暖啟動不重點。保護閘門仍可中斷此恢復程序，測試涵蓋暖／冷啟動差異。
 - 這是單次真實降載／續掃驗證，加上政策回歸測試，不是過熱強制測試、整夜 soak 或「電池老化已修好」的證據。完整門檻、限制及查詢方式見 `phone_agent/README.md`。本次沒有 Sites／Discord 發布需求。
 
 ## 2026-09-14 — 平日巨菇通知前複查介面
