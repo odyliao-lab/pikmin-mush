@@ -5,7 +5,7 @@ import {Script} from 'node:vm';
 import ts from 'typescript';
 
 test('maintenance writes require the dedicated secret and report bounded health', async () => {
-  let dedicated=false, controller=false, runs=0;
+  let dedicated=false, controller=false, runs=0, scheduledWrites=0, completes=true;
   const now=Date.now();
   const records=[
     {id:'active',display_name:'Aries',enabled:1,paused:0,last_seen:now-1000,
@@ -13,7 +13,7 @@ test('maintenance writes require the dedicated secret and report bounded health'
     {id:'held',display_name:'Cancer',enabled:1,paused:1,last_seen:now-86400000,
       last_data_at:0,current_job_id:2,current_target_id:3,created_at:now-86400000},
   ];
-  const db={prepare(sql){return {bind(){return this},async all(){
+  const db={prepare(sql){return {bind(){return this},async run(){scheduledWrites++;return {meta:{changes:1}}},async all(){
     if(sql.includes('scan_agent_events'))return {results:[]};
     if(sql.includes('scan_agents'))return {results:records};
     throw Error(sql);
@@ -28,7 +28,9 @@ test('maintenance writes require the dedicated secret and report bounded health'
       maintenanceAuthorized:()=>dedicated,controllerAuthorized:()=>controller,
       ensureSchema:async()=>{},runtime:()=>({DB:db}),
       readMushroomRetentionStatus:async()=>status,
-      runMushroomRetention:async()=>{runs++},
+      runMushroomRetention:async()=>{runs++;
+        if(completes)status.lastSucceededAt=Math.floor(Date.now()/1000);
+        return status},
       noStoreJson:(body,code=200)=>Response.json(body,{status:code,headers:{'cache-control':'no-store'}}),
     };
     throw Error(p);
@@ -49,4 +51,12 @@ test('maintenance writes require the dedicated secret and report bounded health'
   assert.equal(runs,1);
   assert.deepEqual(Array.from(payload.alerts.uploadSilentAgents),['active']);
   assert.equal(payload.alerts.retentionBacklog,true);
+  assert.equal(scheduledWrites,0);
+  const scheduled=new Request('https://test/api/controller/maintenance',
+    {method:'POST',headers:{'x-maintenance-event':'schedule'}});
+  assert.equal((await exports.POST(scheduled)).status,200);
+  assert.equal(scheduledWrites,2);
+  completes=false;status.lastSucceededAt=Math.floor(Date.now()/1000)-1900;
+  assert.equal((await exports.POST(scheduled)).status,503);
+  assert.equal(scheduledWrites,2);
 });

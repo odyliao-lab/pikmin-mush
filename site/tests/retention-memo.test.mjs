@@ -37,7 +37,7 @@ test('emergency cleanup is off the response path and only runs after an hour wit
  new Script(ts.transpileModule(section,{compilerOptions:{module:ts.ModuleKind.CommonJS,target:ts.ScriptTarget.ES2022}}).outputText)
   .runInNewContext({exports,Date:Clock,waitUntil:p=>scheduled.push(p),
    readMushroomRetentionStatus:async()=>({lastSucceededAt:successAt,pending:0,lastBatchSaturated:false}),
-   runMushroomRetention:async()=>{runs++},console,
+   runMushroomRetention:async()=>{runs++},notifyMissingScheduledMaintenance:async()=>{},console,
    MUSHROOM_RETENTION_INTERVAL_SECONDS:300,RETENTION_EMERGENCY_AFTER_SECONDS:3600});
  exports.scheduleRetentionEmergencyFallback();
  await scheduled[0];assert.equal(runs,0);
@@ -57,8 +57,39 @@ test('emergency cleanup keeps draining saturated bounded batches',async()=>{
  new Script(ts.transpileModule(section,{compilerOptions:{module:ts.ModuleKind.CommonJS,target:ts.ScriptTarget.ES2022}}).outputText)
   .runInNewContext({exports,Date:Clock,waitUntil:p=>scheduled.push(p),
    readMushroomRetentionStatus:async()=>({lastSucceededAt:Math.floor(now/1000)-60,
-     pending:0,lastBatchSaturated:true}),runMushroomRetention:async()=>{runs++},console,
+     pending:0,lastBatchSaturated:true}),runMushroomRetention:async()=>{runs++},
+   notifyMissingScheduledMaintenance:async()=>{},console,
    MUSHROOM_RETENTION_INTERVAL_SECONDS:300,RETENTION_EMERGENCY_AFTER_SECONDS:3600});
  exports.scheduleRetentionEmergencyFallback();await scheduled[0];assert.equal(runs,1);
  now+=300001;exports.scheduleRetentionEmergencyFallback();await scheduled[1];assert.equal(runs,2);
+});
+
+test('missing scheduled cleanup sends one throttled Discord warning, not a manual-run heartbeat',async()=>{
+ const source=readFileSync(new URL('../lib/cloud.ts',import.meta.url),'utf8');
+ const section=source.slice(source.indexOf('async function notifyMissingScheduledMaintenance'),
+   source.indexOf('// GitHub\'s scheduled event'));
+ let scheduledAt=0,alertAt=0,sends=0;
+ const db={prepare(sql){return {
+   bind(...args){this.args=args;return this},
+   async first(){assert.match(sql,/mushroom-retention-scheduled/);return scheduledAt?{last_run_at:scheduledAt}:null},
+   async run(){
+     if(sql.startsWith('UPDATE')){
+       const [now,cutoff]=this.args;
+       if(alertAt>=cutoff)return {meta:{changes:0}};
+       alertAt=now;return {meta:{changes:1}};
+     }
+     return {meta:{changes:0}};
+   },
+ }}};
+ const exports={};
+ new Script(`${ts.transpileModule(section,{compilerOptions:{module:ts.ModuleKind.CommonJS,
+   target:ts.ScriptTarget.ES2022}}).outputText}\nexports.notify=notifyMissingScheduledMaintenance;`)
+  .runInNewContext({exports,runtime:()=>({DB:db,MAINTENANCE_DISCORD_WEBHOOK:
+    'https://discord.com/api/webhooks/test'}),RETENTION_EMERGENCY_AFTER_SECONDS:3600,
+   fetch:async()=>{sends++;return {ok:true}},AbortSignal,console});
+ const t=1800000000000;
+ await exports.notify(t);await exports.notify(t+300000);assert.equal(sends,1);
+ scheduledAt=Math.floor((t+3601000)/1000);
+ await exports.notify(t+3601000);assert.equal(sends,1);
+ await exports.notify(t+7202000);assert.equal(sends,2);
 });

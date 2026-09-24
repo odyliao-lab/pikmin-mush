@@ -47,6 +47,7 @@ type RuntimeEnv = {
   AGENT_TOKEN?: string;
   CONTROLLER_TOKEN?: string;
   MAINTENANCE_TOKEN?: string;
+  MAINTENANCE_DISCORD_WEBHOOK?: string;
   ADMIN_EMAILS?: string;
   COPY_AUDIT_HASH_KEY?: string;
 };
@@ -702,6 +703,33 @@ export async function readMushroomRetentionStatus(): Promise<MushroomRetentionSt
   return retentionStatus(row);
 }
 
+async function notifyMissingScheduledMaintenance(nowMs: number): Promise<void> {
+  const webhook = runtime().MAINTENANCE_DISCORD_WEBHOOK ?? "";
+  if (!/^https:\/\/discord\.com\/api\/webhooks\//.test(webhook)) return;
+  const db = runtime().DB;
+  const now = Math.floor(nowMs / 1_000);
+  const scheduled = await db.prepare(`SELECT last_run_at FROM maintenance_state
+    WHERE name='mushroom-retention-scheduled'`).first<{ last_run_at: number }>();
+  if (scheduled?.last_run_at && now - scheduled.last_run_at < RETENTION_EMERGENCY_AFTER_SECONDS) return;
+  await db.prepare(`INSERT OR IGNORE INTO maintenance_state (name)
+    VALUES ('mushroom-retention-schedule-alert')`).run();
+  const claim = await db.prepare(`UPDATE maintenance_state SET last_run_at=?
+    WHERE name='mushroom-retention-schedule-alert' AND last_run_at<?`)
+    .bind(now, now - RETENTION_EMERGENCY_AFTER_SECONDS).run();
+  if (Number(claim.meta.changes ?? 0) === 0) return;
+  try {
+    const response = await fetch(webhook, {
+      method: "POST", headers: { "content-type": "application/json" },
+      body: JSON.stringify({ content: "【蘑菇維護排程警示】GitHub 定時清理超過一小時沒有成功回報；站台已由 Agent 上傳啟動安全備援。請檢查 GitHub Actions 排程。" }),
+      signal: AbortSignal.timeout(7_000),
+    });
+    if (!response.ok) throw new Error("discord rejected alert");
+    console.info(JSON.stringify({ event: "mushroom_retention_scheduler_alert_sent" }));
+  } catch {
+    console.warn(JSON.stringify({ event: "mushroom_retention_scheduler_alert_failed" }));
+  }
+}
+
 // GitHub's scheduled event can be delayed or dropped. Never tie normal cleanup
 // to uploads, but fail safe if no independent run has succeeded for an hour.
 let emergencyFallbackCheckedAt = 0;
@@ -715,6 +743,7 @@ export function scheduleRetentionEmergencyFallback(): void {
     if (!backlogged && status.lastSucceededAt &&
       now / 1_000 - status.lastSucceededAt < RETENTION_EMERGENCY_AFTER_SECONDS) return;
     await runMushroomRetention();
+    await notifyMissingScheduledMaintenance(now);
     console.warn(JSON.stringify({ event: "mushroom_retention_emergency_attempted" }));
   })().catch(() => {
     console.warn(JSON.stringify({ event: "mushroom_retention_emergency_failed" }));

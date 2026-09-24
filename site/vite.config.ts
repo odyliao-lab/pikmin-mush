@@ -18,6 +18,7 @@ const localBindingConfig = {
     AGENT_TOKEN: process.env.AGENT_TOKEN ?? "",
     CONTROLLER_TOKEN: process.env.CONTROLLER_TOKEN ?? "",
     MAINTENANCE_TOKEN: process.env.MAINTENANCE_TOKEN ?? "",
+    MAINTENANCE_DISCORD_WEBHOOK: process.env.MAINTENANCE_DISCORD_WEBHOOK ?? "",
     ADMIN_EMAILS: process.env.ADMIN_EMAILS ?? "",
   },
   d1_databases: d1

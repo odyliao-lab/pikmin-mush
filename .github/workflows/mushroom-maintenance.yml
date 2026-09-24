@@ -23,6 +23,7 @@ jobs:
       MAINTENANCE_TOKEN: ${{ secrets.MUSHROOM_MAINTENANCE_TOKEN }}
       DISCORD_WEBHOOK: ${{ secrets.MUSHROOM_MAINTENANCE_DISCORD_WEBHOOK }}
       SCHEDULE: ${{ github.event.schedule }}
+      EVENT_NAME: ${{ github.event_name }}
     steps:
       - name: Run bounded maintenance and check fleet health
         shell: bash
@@ -35,6 +36,7 @@ jobs:
           else
             response="$(curl --fail-with-body --silent --show-error --max-time 90 \
               -X POST -H "Authorization: Bearer $MAINTENANCE_TOKEN" \
+              -H "X-Maintenance-Event: $EVENT_NAME" \
               -H 'Accept: application/json' \
               https://mush.odyliao.cc/api/controller/maintenance)" || request_failed=1
           fi

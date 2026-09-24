@@ -53,7 +53,19 @@ export async function POST(request: Request) {
   if (!maintenanceAuthorized(request)) return noStoreJson({ error: "unauthorized" }, 401);
   await ensureSchema();
   try {
-    await runMushroomRetention();
+    const completed = await runMushroomRetention();
+    if (!completed.lastSucceededAt ||
+      Date.now() / 1_000 - completed.lastSucceededAt > 5 * 60) {
+      throw new Error("maintenance did not complete recently");
+    }
+    if (request.headers.get("x-maintenance-event") === "schedule") {
+      const db = runtime().DB;
+      await db.prepare(`INSERT OR IGNORE INTO maintenance_state (name)
+        VALUES ('mushroom-retention-scheduled')`).run();
+      await db.prepare(`UPDATE maintenance_state SET last_run_at=?
+        WHERE name='mushroom-retention-scheduled'`)
+        .bind(Math.floor(Date.now() / 1_000)).run();
+    }
     return noStoreJson(await snapshot());
   } catch {
     return noStoreJson({ error: "maintenance failed" }, 503);
