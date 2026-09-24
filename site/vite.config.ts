@@ -17,6 +17,7 @@ const localBindingConfig = {
   vars: {
     AGENT_TOKEN: process.env.AGENT_TOKEN ?? "",
     CONTROLLER_TOKEN: process.env.CONTROLLER_TOKEN ?? "",
+    MAINTENANCE_TOKEN: process.env.MAINTENANCE_TOKEN ?? "",
     ADMIN_EMAILS: process.env.ADMIN_EMAILS ?? "",
   },
   d1_databases: d1

@@ -43,6 +43,15 @@ export const maintenanceState = sqliteTable("maintenance_state", {
   lastRunAt: integer("last_run_at").notNull().default(0),
   lastDeleted: integer("last_deleted").notNull().default(0),
   pending: integer("pending").notNull().default(0),
+  lastSucceededAt: integer("last_succeeded_at").notNull().default(0),
+  lastFailedAt: integer("last_failed_at").notNull().default(0),
+  lastFailureStage: text("last_failure_stage").notNull().default(""),
+  consecutiveFailures: integer("consecutive_failures").notNull().default(0),
+  lastDurationMs: integer("last_duration_ms").notNull().default(0),
+  lastInvalidated: integer("last_invalidated").notNull().default(0),
+  lastObservationsDeleted: integer("last_observations_deleted").notNull().default(0),
+  lastTargetsDeleted: integer("last_targets_deleted").notNull().default(0),
+  lastBatchSaturated: integer("last_batch_saturated").notNull().default(0),
 });
 
 // Additive history: legacy rows are not fabricated into past observations.
