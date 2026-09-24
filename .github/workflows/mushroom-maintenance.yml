@@ -28,33 +28,37 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          if [[ -z "$MAINTENANCE_TOKEN" ]]; then
-            echo 'Maintenance secret is missing' >&2
-            exit 1
-          fi
-          response="$(curl --fail-with-body --silent --show-error --max-time 90 \
-            -X POST -H "Authorization: Bearer $MAINTENANCE_TOKEN" \
-            -H 'Accept: application/json' \
-            https://mush.odyliao.cc/api/controller/maintenance)"
-          RESPONSE="$response" python3 - <<'PY'
+          python3 - <<'PY'
           import json, os, sys, urllib.request
-          data = json.loads(os.environ['RESPONSE'])
-          retention = data['retention']
-          alerts = data['alerts']
-          print('retention', {key: retention[key] for key in
-                 ('lastSucceededAt', 'lastDeleted', 'pending', 'lastBatchSaturated',
-                  'consecutiveFailures', 'lastDurationMs')})
-          if os.environ.get('SCHEDULE') != '11 * * * *':
-              sys.exit(0)
+          hourly = os.environ.get('SCHEDULE') == '11 * * * *'
           problems = []
-          if alerts['maintenanceStale'] or alerts['maintenanceFailing']:
-              problems.append('清理未正常完成')
-          if alerts['retentionBacklog']:
-              problems.append(f"清理積壓：待刪 {retention['pending']}、批次達上限 {retention['lastBatchSaturated']}")
-          if alerts['uploadSilentAgents']:
-              problems.append('兩小時無成功上傳：' + ', '.join(alerts['uploadSilentAgents']))
-          if not problems:
-              sys.exit(0)
+          failed = False
+          try:
+              token = os.environ['MAINTENANCE_TOKEN']
+              if len(token) < 32:
+                  raise ValueError('missing maintenance secret')
+              request = urllib.request.Request(
+                  'https://mush.odyliao.cc/api/controller/maintenance',
+                  headers={'Authorization': 'Bearer ' + token, 'Accept': 'application/json'},
+                  method='POST')
+              with urllib.request.urlopen(request, timeout=90) as reply:
+                  data = json.load(reply)
+              retention, alerts = data['retention'], data['alerts']
+              print('retention', {key: retention[key] for key in
+                     ('lastSucceededAt', 'lastDeleted', 'pending', 'lastBatchSaturated',
+                      'consecutiveFailures', 'lastDurationMs')})
+              if alerts['maintenanceStale'] or alerts['maintenanceFailing']:
+                  problems.append('清理未正常完成')
+              if alerts['retentionBacklog']:
+                  problems.append(f"清理積壓：待刪 {retention['pending']}、批次達上限 {retention['lastBatchSaturated']}")
+              if alerts['uploadSilentAgents']:
+                  problems.append('兩小時無成功上傳：' + ', '.join(alerts['uploadSilentAgents']))
+          except Exception:
+              print('Maintenance request failed', file=sys.stderr)
+              problems = ['定時清理請求失敗；請檢查 GitHub Actions 與站台紀錄']
+              failed = True
+          if not hourly or not problems:
+              sys.exit(1 if failed else 0)
           message = '【蘑菇系統維護警示】\n' + '\n'.join(problems)
           webhook = os.environ.get('DISCORD_WEBHOOK', '')
           if not webhook:
@@ -69,4 +73,5 @@ jobs:
           except Exception:
               print('Discord alert was not accepted', file=sys.stderr)
               sys.exit(1)
+          sys.exit(1 if failed else 0)
           PY
