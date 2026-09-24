@@ -277,9 +277,11 @@ test("bounds mushroom retention without making concurrent uploads purge repeated
   assert.match(cloud, /MUSHROOM_HISTORY_BATCH_SIZE = 500/);
   assert.doesNotMatch(cloud, /waitUntil\(runMushroomRetention\(\)/);
   assert.doesNotMatch(upload, /scheduleMushroomRetention\(\)/);
+  assert.match(upload, /scheduleRetentionEmergencyFallback\(\)/);
   assert.doesNotMatch(upload, /await runMushroomRetention\(\)/);
   assert.match(publicApi, /await readMushroomRetentionStatus\(\)/);
   assert.doesNotMatch(publicApi, /scheduleMushroomRetention\(\)/);
+  assert.doesNotMatch(publicApi, /scheduleRetentionEmergencyFallback\(\)/);
   assert.doesNotMatch(publicApi, /await runMushroomRetention\(\)/);
   assert.match(publicApi, /policy_days: 7/);
   assert.match(publicApi, /level_2_3_inactive_after_days: 2/);

@@ -1,4 +1,4 @@
-import { env } from "cloudflare:workers";
+import { env, waitUntil } from "cloudflare:workers";
 import { isUsefulMushroomLevel } from "./mushroom-policy.mjs";
 import { EVENT_SPOT_SEED } from "./event-spots";
 import { observationStatements } from "./observations.mjs";
@@ -22,6 +22,7 @@ export type MushroomRow = {
 const MUSHROOM_RETENTION_SECONDS = 7 * 24 * 60 * 60;
 const LEVEL_TWO_THREE_INVALID_AFTER_SECONDS = 2 * 24 * 60 * 60;
 const MUSHROOM_RETENTION_INTERVAL_SECONDS = 5 * 60;
+const RETENTION_EMERGENCY_AFTER_SECONDS = 60 * 60;
 const MUSHROOM_RETENTION_BATCH_SIZE = 1_000;
 const MUSHROOM_INVALIDATION_BATCH_SIZE = 250;
 const MUSHROOM_HISTORY_BATCH_SIZE = 500;
@@ -699,6 +700,23 @@ export async function readMushroomRetentionStatus(): Promise<MushroomRetentionSt
   const row = await runtime().DB.prepare(`SELECT *
     FROM maintenance_state WHERE name='mushroom-retention'`).first();
   return retentionStatus(row);
+}
+
+// GitHub's scheduled event can be delayed or dropped. Never tie normal cleanup
+// to uploads, but fail safe if no independent run has succeeded for an hour.
+let emergencyFallbackCheckedAt = 0;
+export function scheduleRetentionEmergencyFallback(): void {
+  const now = Date.now();
+  if (now - emergencyFallbackCheckedAt < MUSHROOM_RETENTION_INTERVAL_SECONDS * 1_000) return;
+  emergencyFallbackCheckedAt = now;
+  waitUntil((async () => {
+    const status = await readMushroomRetentionStatus();
+    if (status.lastSucceededAt && now / 1_000 - status.lastSucceededAt < RETENTION_EMERGENCY_AFTER_SECONDS) return;
+    await runMushroomRetention();
+    console.warn(JSON.stringify({ event: "mushroom_retention_emergency_attempted" }));
+  })().catch(() => {
+    console.warn(JSON.stringify({ event: "mushroom_retention_emergency_failed" }));
+  }));
 }
 
 export async function runMushroomRetention(): Promise<MushroomRetentionStatus> {
