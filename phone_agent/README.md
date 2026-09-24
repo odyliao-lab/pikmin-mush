@@ -20,7 +20,7 @@ Android curl 不一定支援指定 DNS；程式會先驗證選項，不支援時
 
 ## 保護暫停歷程
 
-啟用 power guard 的裝置將暫停／解除保護區間存入本機 `power-episode`、`power-events/`，經認證上傳 `/api/agent/power-events`；離線保留、每 30 秒最多重試一筆，重啟不改寫原始開始時間。首次更新可由既有 `power.hold` 的時間回填目前區間，無法補回先前已刪除的歷史。後台總覽／機隊可展開最近 24 小時紀錄；管理員／controller 才能讀取。解除保護僅表示允許恢復，實際掃描仍需確認目標 ACK 與上傳。Cancer 保持至少 80% 的恢復門檻及原廠安全保護。
+啟用 power guard 的裝置將暫停／解除保護區間存入本機 `power-episode`、`power-events/`，經認證上傳 `/api/agent/power-events`；離線保留、每 30 秒最多重試一筆，重啟不改寫原始開始時間。首次更新可由既有 `power.hold` 的時間回填目前區間，無法補回先前已刪除的歷史。後台總覽／機隊可展開最近 24 小時紀錄；管理員／controller 才能讀取。解除保護僅表示允許恢復，實際掃描仍需確認目標 ACK 與上傳。Cancer 的恢復門檻於 2026-09-24 依使用者指示由 80% 調為 60%；原廠安全保護不變。
 
 手機端 Magisk 常駐 Agent。手機主動透過 HTTPS 連到 `mush.odyliao.cc`，
 不需要 ADB、固定 IP、區域網路或開放手機連接埠。
@@ -149,10 +149,11 @@ Magisk 會在開機後執行 `service.sh`，再由它啟動 `agent.sh`。正式�
 | 感測缺漏、格式錯誤、Android 測試覆寫或讀取逾時 | 視為未知並保護，不當成安全 |
 | 降溫後符合全部復原條件 | 再領取雲端工作才開遊戲，不自行重播已取消的工作 |
 
-復原條件：至少停止 3 分鐘，Thermal Status <= 1、電池 10–39°C、電量達到 `POWER_GUARD_RESUME_BATTERY_PERCENT`（預設 30%；Cancer 設為 80%，無效設定安全回退 80%）、
+復原條件：至少停止 3 分鐘，Thermal Status <= 1、電池 10–39°C、電量達到 `POWER_GUARD_RESUME_BATTERY_PERCENT`（預設 30%；Cancer 設為 60%，無效設定安全回退 80%）、
 接電且 Android 顯示充電中／已充滿；連續 2 分鐘電量不減、charge counter
 相比穩定期起點下降不超過 5,000 uAh。中途重新變熱、掉電或感測未知會重算
 穩定時間。這些是此專案較保守的降載門檻，不是手機廠商的充電安全規格。
+降低 Cancer 的電量門檻不會覆寫 Pixel「已暫時限制充電」或過熱停充；若 Android 顯示未充電，保護閘門仍不會恢復掃描。
 
 降溫狀態另存 `power.hold`，不使用或清除 `pause.until`。手動暫停優先，
 此時 Agent 不會為降溫而操作使用者的遊戲；按「繼續」也不能繞過熱保護。
