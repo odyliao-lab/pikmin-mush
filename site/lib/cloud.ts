@@ -711,7 +711,9 @@ export function scheduleRetentionEmergencyFallback(): void {
   emergencyFallbackCheckedAt = now;
   waitUntil((async () => {
     const status = await readMushroomRetentionStatus();
-    if (status.lastSucceededAt && now / 1_000 - status.lastSucceededAt < RETENTION_EMERGENCY_AFTER_SECONDS) return;
+    const backlogged = status.pending > 0 || status.lastBatchSaturated;
+    if (!backlogged && status.lastSucceededAt &&
+      now / 1_000 - status.lastSucceededAt < RETENTION_EMERGENCY_AFTER_SECONDS) return;
     await runMushroomRetention();
     console.warn(JSON.stringify({ event: "mushroom_retention_emergency_attempted" }));
   })().catch(() => {

@@ -36,7 +36,7 @@ test('emergency cleanup is off the response path and only runs after an hour wit
  const exports={};
  new Script(ts.transpileModule(section,{compilerOptions:{module:ts.ModuleKind.CommonJS,target:ts.ScriptTarget.ES2022}}).outputText)
   .runInNewContext({exports,Date:Clock,waitUntil:p=>scheduled.push(p),
-   readMushroomRetentionStatus:async()=>({lastSucceededAt:successAt}),
+   readMushroomRetentionStatus:async()=>({lastSucceededAt:successAt,pending:0,lastBatchSaturated:false}),
    runMushroomRetention:async()=>{runs++},console,
    MUSHROOM_RETENTION_INTERVAL_SECONDS:300,RETENTION_EMERGENCY_AFTER_SECONDS:3600});
  exports.scheduleRetentionEmergencyFallback();
@@ -45,4 +45,20 @@ test('emergency cleanup is off the response path and only runs after an hour wit
  exports.scheduleRetentionEmergencyFallback();
  await scheduled[1];assert.equal(runs,1);
  exports.scheduleRetentionEmergencyFallback();assert.equal(scheduled.length,2);
+});
+
+test('emergency cleanup keeps draining saturated bounded batches',async()=>{
+ let now=1800000000000,runs=0;
+ const scheduled=[];
+ class Clock extends Date { static now(){return now;} }
+ const source=readFileSync(new URL('../lib/cloud.ts',import.meta.url),'utf8');
+ const section=source.slice(source.indexOf('// GitHub\'s scheduled event'),source.indexOf('export async function runMushroomRetention'));
+ const exports={};
+ new Script(ts.transpileModule(section,{compilerOptions:{module:ts.ModuleKind.CommonJS,target:ts.ScriptTarget.ES2022}}).outputText)
+  .runInNewContext({exports,Date:Clock,waitUntil:p=>scheduled.push(p),
+   readMushroomRetentionStatus:async()=>({lastSucceededAt:Math.floor(now/1000)-60,
+     pending:0,lastBatchSaturated:true}),runMushroomRetention:async()=>{runs++},console,
+   MUSHROOM_RETENTION_INTERVAL_SECONDS:300,RETENTION_EMERGENCY_AFTER_SECONDS:3600});
+ exports.scheduleRetentionEmergencyFallback();await scheduled[0];assert.equal(runs,1);
+ now+=300001;exports.scheduleRetentionEmergencyFallback();await scheduled[1];assert.equal(runs,2);
 });
