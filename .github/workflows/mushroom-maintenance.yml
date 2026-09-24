@@ -3,9 +3,9 @@ name: Mushroom maintenance
 on:
   schedule:
     # Keep cleanup independent of map traffic and the user's Windows PC.
-    - cron: '7,22,37,52 * * * *'
+    - cron: '1,16,31,46 * * * *'
     # A separate hourly health check limits alert volume during outages.
-    - cron: '11 * * * *'
+    - cron: '9 * * * *'
   workflow_dispatch:
 
 permissions:
@@ -40,7 +40,7 @@ jobs:
           fi
           REQUEST_FAILED="$request_failed" RESPONSE="$response" python3 - <<'PY'
           import json, os, sys, urllib.request
-          hourly = os.environ.get('SCHEDULE') == '11 * * * *'
+          hourly = os.environ.get('SCHEDULE') == '9 * * * *'
           problems = []
           failed = False
           try:
