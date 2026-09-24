@@ -650,7 +650,7 @@ export default function AdminClient({
         </article>
         <article>
           <span>每日自動換區</span>
-          <strong>{!dashboard ? "讀取中…" : dashboard.rotation.enabled ? "07:30 / 19:30 啟用" : "未啟用"}</strong>
+          <strong>{!dashboard ? "讀取中…" : dashboard.rotation.enabled ? "04:00 / 12:00 / 20:00 啟用" : "未啟用"}</strong>
           <small>{dashboard ? `下次換區 ${formatTime(dashboard.rotation.next_switch_at)}・台北時間` : "等待有效的後台資料"}</small>
         </article>
         <article className={soak?.verdict === "pass" ? styles.healthGood :
@@ -751,7 +751,7 @@ export default function AdminClient({
       {page==='fleet'&&<section className={styles.fleetPanel}>
         <div className={styles.panelTitle}>
           <div><span>AGENT FLEET</span><h2>全球掃描節點</h2></div>
-          <small>每日 07:30、19:30（台北）換區。詳細控制預設收合。</small>
+          <small>每日 04:00、12:00、20:00（台北）換區。詳細控制預設收合。</small>
         </div>
         <div className={styles.agentGrid}>
           {dashboard?.agents.map((agent) => (

@@ -4,113 +4,96 @@ import {
   planDailyRotation, planManualRedeploy, ROTATION_DAYS, rotationWindow,
 } from "../lib/rotation-plan.mjs";
 
-test("switches at 07:30 and 19:30 Asia/Taipei", () => {
-  const beforeMorning = rotationWindow(Date.parse("2026-07-22T23:29:59Z"));
-  const morning = rotationWindow(Date.parse("2026-07-22T23:30:00Z"));
-  const beforeEvening = rotationWindow(Date.parse("2026-07-23T11:29:59Z"));
-  const evening = rotationWindow(Date.parse("2026-07-23T11:30:00Z"));
-  assert.equal(beforeMorning.scheduleDate, "2026-07-22-pm");
-  assert.equal(morning.scheduleDate, "2026-07-23-am");
-  assert.equal(beforeEvening.scheduleDate, "2026-07-23-am");
-  assert.equal(evening.scheduleDate, "2026-07-23-pm");
-  assert.equal(morning.nextSwitchAt, Date.parse("2026-07-23T11:30:00Z"));
-  assert.equal(evening.nextSwitchAt, Date.parse("2026-07-23T23:30:00Z"));
+const agents = ["agent-4", "agent-3", "agent-2", "agent-1"];
+const atTaipei = (day, time) => Date.parse(`${day}T${time}:00+08:00`);
+
+test("switches every eight hours at 04:00, 12:00 and 20:00 Taipei", () => {
+  const checks = [
+    ["03:59", "2026-09-24-americas", "americas"],
+    ["04:00", "2026-09-25-asia", "asia"],
+    ["11:59", "2026-09-25-asia", "asia"],
+    ["12:00", "2026-09-25-emea", "emea"],
+    ["19:59", "2026-09-25-emea", "emea"],
+    ["20:00", "2026-09-25-americas", "americas"],
+  ];
+  for (const [time, scheduleDate, slot] of checks) {
+    const window = rotationWindow(atTaipei("2026-09-25", time));
+    assert.equal(window.scheduleDate, scheduleDate);
+    assert.equal(window.slot, slot);
+  }
+  const start = rotationWindow(atTaipei("2026-09-25", "04:00"));
+  assert.equal(start.nextSwitchAt - atTaipei("2026-09-25", "04:00"), 8 * 3_600_000);
 });
 
-test("manual redeploy avoids both current and next scheduled routes", () => {
-  const now = Date.parse("2026-08-03T05:00:00Z");
-  const agents = ["primary", "agent-2", "agent-3", "agent-4"];
-  const current = planDailyRotation(agents, now);
-  const manual = planManualRedeploy(agents, now);
-  const next = planDailyRotation(agents, current.nextSwitchAt);
-  const currentIds = new Set(current.assignments.map((item) => item.id));
-  const nextIds = new Set(next.assignments.map((item) => item.id));
-  assert.equal(manual.assignments.length, 4);
-  assert.equal(manual.assignments.every((item) => !currentIds.has(item.id)), true);
-  assert.equal(manual.assignments.every((item) => !nextIds.has(item.id)), true);
-  assert.ok(manual.assignments.every((item) => item.cityCount >= 25 && item.cityCount <= 30));
+test("the one-time early EMEA window expires at noon and never recurs", () => {
+  const early = rotationWindow(atTaipei("2026-09-24", "10:30"));
+  assert.equal(early.slot, "emea");
+  assert.equal(early.earlyPreview, true);
+  assert.equal(early.nextSwitchAt, atTaipei("2026-09-24", "20:00"));
+  assert.equal(rotationWindow(atTaipei("2026-09-25", "10:30")).slot, "asia");
 });
 
-test("assigns four Agents distinct balanced priority routes without Taiwan or Japan", () => {
-  const seenBundles = new Set();
-  const seenPacks = new Set();
-  for (let slot = 0; slot < ROTATION_DAYS.length; slot += 1) {
-    const now = Date.parse("2026-07-21T23:30:00Z") + slot * 12 * 60 * 60_000;
-    const plan = planDailyRotation(["agent-4", "agent-3", "agent-2", "agent-1"], now);
-    assert.equal(plan.assignments.length, 4);
-    assert.equal(new Set(plan.assignments.map((item) => item.id)).size, 4);
-    const counts = plan.assignments.map((item) => item.cityCount);
-    assert.ok(Math.max(...counts) - Math.min(...counts) <= 5);
-    assert.ok(Math.min(...counts) >= 25);
-    const slotPacks = new Set();
-    for (const assignment of plan.assignments) {
-      seenBundles.add(assignment.id);
-      for (const pack of assignment.packs) {
-        assert.equal(slotPacks.has(pack), false, `${pack} was assigned twice in one slot`);
-        slotPacks.add(pack);
-        seenPacks.add(pack);
+test("covers every selected regional pack exactly once without Taiwan or Japan", () => {
+  assert.equal(ROTATION_DAYS.length, 3);
+  const all = new Set();
+  for (const slot of ROTATION_DAYS) {
+    const seen = new Set();
+    assert.equal(slot.length, 4);
+    for (const route of slot) {
+      assert.ok(route.cityCount > 0);
+      for (const pack of route.packs) {
+        assert.equal(seen.has(pack), false, `${pack} repeats within a slot`);
+        assert.equal(all.has(pack), false, `${pack} repeats across slots`);
+        seen.add(pack); all.add(pack);
       }
     }
   }
-  assert.equal(seenBundles.size, 16);
-  assert.equal(seenPacks.has("tw"), false);
-  assert.equal(seenPacks.has("jp"), false);
-  assert.ok(seenPacks.has("in"));
-  assert.ok(seenPacks.has("us-east"));
-  assert.ok(seenPacks.has("mx"));
-  assert.ok(seenPacks.has("br"));
-  assert.ok(seenPacks.has("nz"));
-  assert.ok(seenPacks.has("ae"));
-  assert.ok(seenPacks.has("ro"));
-  assert.ok(seenPacks.has("fi"));
-  assert.ok(seenPacks.has("us-west"));
+  assert.equal(all.size, 67);
+  assert.equal(all.has("tw"), false);
+  assert.equal(all.has("jp"), false);
+  for (const pack of ["in", "au", "nz", "ae", "gb", "de", "it", "es", "fr",
+    "se", "is", "eg", "ma", "us-east", "us-central", "us-west", "mx", "br", "ca"])
+    assert.equal(all.has(pack), true, `${pack} is missing`);
 });
 
-test("each scheduled route is already safely in its local new day", () => {
-  // 07:30 Taipei is the risky boundary: UTC+1 Europe would only be 00:30,
-  // so route selection must use the curated UTC+2-or-later groups instead.
-  const morning = planDailyRotation(
-    ["agent-1", "agent-2", "agent-3"],
-    Date.parse("2026-09-01T23:30:00Z"),
-  );
-  assert.equal(morning.slot, "morning");
-  assert.ok(morning.assignments.every((route) => route.id.startsWith("morning-")));
-
-  // 19:30 Taipei maps to the morning of the same local date in the Americas.
-  const evening = planDailyRotation(
-    ["agent-1", "agent-2", "agent-3"],
-    Date.parse("2026-09-01T11:30:00Z"),
-  );
-  assert.equal(evening.slot, "evening");
-  assert.ok(evening.assignments.every((route) => route.id.startsWith("evening-")));
-});
-
-test("morning and evening assignments never repeat the previous routes", () => {
-  const morning = planDailyRotation(
-    ["agent-1", "agent-2", "agent-3"],
-    Date.parse("2026-07-22T00:00:00Z"),
-  );
-  const evening = planDailyRotation(
-    ["agent-1", "agent-2", "agent-3"],
-    Date.parse("2026-07-22T12:00:00Z"),
-  );
-  const morningRoutes = new Set(morning.assignments.map((item) => item.id));
-  for (const assignment of evening.assignments) {
-    assert.equal(morningRoutes.has(assignment.id), false);
+test("all three slots pass the local-day guard in summer and winter", () => {
+  for (const day of ["2026-09-25", "2027-01-15"]) {
+    for (const [time, slot] of [["04:00", "asia"], ["12:00", "emea"], ["20:00", "americas"]]) {
+      const plan = planDailyRotation(agents, atTaipei(day, time));
+      assert.equal(plan.slot, slot);
+      assert.equal(plan.assignments.length, 4);
+      assert.equal(new Set(plan.assignments.map((item) => item.id)).size, 4);
+      assert.ok(plan.assignments.every((item) => item.id.startsWith(slot)));
+    }
   }
 });
 
-test("reverses the four routes between Agents on the next cycle", () => {
-  const first = planDailyRotation(
-    ["agent-1", "agent-2", "agent-3", "agent-4"],
-    Date.parse("2026-07-22T00:00:00Z"),
-  );
-  const nextCycle = planDailyRotation(
-    ["agent-1", "agent-2", "agent-3", "agent-4"],
-    Date.parse("2026-07-24T00:00:00Z"),
-  );
-  assert.equal(first.assignments[0].id, nextCycle.assignments[3].id);
-  assert.equal(first.assignments[1].id, nextCycle.assignments[2].id);
-  assert.equal(first.assignments[2].id, nextCycle.assignments[1].id);
-  assert.equal(first.assignments[3].id, nextCycle.assignments[0].id);
+test("a paused fourth Agent does not drop a quarter of the world", () => {
+  for (const [time, slotIndex] of [["04:00", 0], ["12:00", 1], ["20:00", 2]]) {
+    const plan = planDailyRotation(agents.slice(0, 3), atTaipei("2026-09-25", time));
+    const expected = new Set(ROTATION_DAYS[slotIndex].flatMap((route) => route.packs));
+    const assigned = plan.assignments.flatMap((route) => route.packs);
+    assert.deepEqual(new Set(assigned), expected);
+    assert.equal(assigned.length, expected.size);
+    const counts = plan.assignments.map((route) => route.cityCount);
+    assert.ok(Math.max(...counts) - Math.min(...counts) <= 12);
+  }
+});
+
+test("manual redeploy stays in the eligible region and changes Agent order", () => {
+  const now = atTaipei("2026-09-25", "13:00");
+  const current = planDailyRotation(agents, now);
+  const manual = planManualRedeploy(agents, now);
+  assert.equal(manual.slot, "emea");
+  assert.equal(manual.nextSwitchAt, current.nextSwitchAt);
+  assert.deepEqual(new Set(manual.assignments.flatMap((item) => item.packs)),
+    new Set(current.assignments.flatMap((item) => item.packs)));
+  assert.notEqual(manual.assignments[0].packs.join(), current.assignments[0].packs.join());
+});
+
+test("the next day reverses route ownership between Agents", () => {
+  const first = planDailyRotation(agents, atTaipei("2026-09-25", "12:00"));
+  const second = planDailyRotation(agents, atTaipei("2026-09-26", "12:00"));
+  assert.equal(first.assignments[0].id, second.assignments[3].id);
+  assert.equal(first.assignments[3].id, second.assignments[0].id);
 });

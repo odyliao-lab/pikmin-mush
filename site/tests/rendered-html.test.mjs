@@ -195,7 +195,7 @@ test("includes durable multi-agent leases, v2 protocol routes, and migrations", 
   assert.match(rotation, /scanProfile: "global"/);
   assert.match(fleet, /buildScanPlan\(config, null, \{ cycle: nextCycle \}\)/);
   assert.match(fleet, /1km 偏移網格/);
-  assert.match(rotation, /每日 07:30.*每日 19:30/s);
+  assert.match(rotation, /每日 04:00.*每日 12:00.*每日 20:00/s);
   assert.match(rotation, /SELECT \* FROM scan_rotation_runs WHERE schedule_date=\?/);
   assert.match(rotation, /30 \* 60_000/);
   assert.match(rotation, /existingPlan/);

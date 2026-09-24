@@ -28,6 +28,8 @@ export type ScanConfig = {
   hopDelayS: number;
   cooldownS: number;
   loop: boolean;
+  /** Scheduled fleet only: evenly sample this many grid points per city each cycle. */
+  rotationSamplesPerCity?: number;
   custom?: {
     latMin: number;
     latMax: number;
@@ -602,6 +604,9 @@ export function normalizeScanConfig(input: unknown): ScanConfig {
     // 的說明），跨城市現在真的固定等這麼多秒，不會因為距離遠而被拉長。
     cooldownS: bounded(body.cooldownS ?? 10, 0, 300, "跨城市冷卻"),
     loop: body.loop !== false,
+    ...(body.rotationSamplesPerCity == null ? {} : {
+      rotationSamplesPerCity: bounded(body.rotationSamplesPerCity, 1, 32, "每城輪替取樣點數"),
+    }),
   };
   if (mode === "custom") {
     const latMin = bounded(customBody.latMin, -90, 90, "南界");
@@ -724,7 +729,14 @@ export function buildScanPlan(
     // 疊加的安全邊際沒有實測依據，改成直接用 cooldownS，跨城市時間可以真的
     // 固定在使用者設定的秒數（例如 10 秒），不會被遠距離城市拉長。
     const travelCooldown = previous ? config.cooldownS : 0;
-    grid(region, config.gridStepM, phase).forEach((point, pointIndex) => {
+    const fullGrid = grid(region, config.gridStepM, phase);
+    const sampleLimit = config.rotationSamplesPerCity ?? fullGrid.length;
+    const selectedIndices = fullGrid.length <= sampleLimit
+      ? fullGrid.map((_, index) => index)
+      : Array.from({ length: sampleLimit }, (_, index) =>
+        (Math.floor(index * fullGrid.length / sampleLimit) + cycle * sampleLimit) % fullGrid.length);
+    selectedIndices.forEach((pointIndex, sampleIndex) => {
+      const point = fullGrid[pointIndex];
       targets.push({
         country: region.country,
         city: region.name,
@@ -732,7 +744,7 @@ export function buildScanPlan(
         lng: Number(point.lng.toFixed(7)),
         regionIndex,
         pointIndex,
-        cooldownS: pointIndex === 0 ? Math.round(travelCooldown) : 0,
+        cooldownS: sampleIndex === 0 ? Math.round(travelCooldown) : 0,
       });
     });
     previous = regionCenter;

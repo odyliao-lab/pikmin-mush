@@ -37,16 +37,24 @@ function packNames(packIds: string[]) {
   });
 }
 
-function scanConfig(base: unknown, packs: string[]): ScanConfig {
+function scanConfig(base: unknown, packs: string[], agentCount: number): ScanConfig {
   const previous = base && typeof base === "object" ? base as Record<string, unknown> : {};
+  const cities = packs.reduce((count, id) => count +
+    (COUNTRY_PACK_CATALOG.find((pack) => pack.id === id)?.cities.length ?? 0), 0);
+  // Keep every city reachable within an eight-hour slot even on a slower
+  // phone. Repeated cycles advance through the full grid instead of always
+  // restarting at the same few positions.
+  const samplesPerCity = Math.max(1, Math.min(8,
+    Math.floor(200 * Math.max(1, agentCount) / Math.max(1, cities))));
   return normalizeScanConfig({
     ...previous,
     mode: "auto",
     countryPacks: packs,
     // Scheduled fleet coverage always returns to the 1km global profile.
-    // Do not inherit a one-off 500m precision run into the next 07:30/19:30
+    // Do not inherit a one-off 500m precision run into a scheduled rotation
     // rotation, otherwise the queue can unexpectedly grow fourfold.
     scanProfile: "global",
+    rotationSamplesPerCity: samplesPerCity,
     loop: true,
   });
 }
@@ -169,10 +177,11 @@ export async function ensureDailyRotation(now = Date.now()) {
       countries: packNames(assignment.packs),
     }));
     const selectedPacks = [...new Set(assignments.flatMap((item) => item.packs))];
-    const config = scanConfig(previousConfig, selectedPacks);
+    const config = scanConfig(previousConfig, selectedPacks, assignments.length);
     const { regions, targets } = buildScanPlan(config, null);
 
-    const slotLabel = planned.slot === "morning" ? "每日 07:30" : "每日 19:30";
+    const slotLabel = planned.slot === "asia" ? "每日 04:00" :
+      planned.slot === "emea" ? "每日 12:00" : "每日 20:00";
     await stopActiveJobs(now, slotLabel);
     const created = await db.prepare(`INSERT INTO scan_jobs (
         status, config_json, plan_json, total_points, loop, message,
@@ -226,13 +235,15 @@ export async function rotationStatus(now = Date.now()) {
   return {
     enabled: Boolean(setting?.enabled),
     timezone: setting?.timezone ?? "Asia/Taipei",
-    switch_minute: Number(setting?.switch_minute ?? 450),
+    // The legacy DB field is retained for compatibility; the plan now owns
+    // all three switch times, so do not report the old 07:30 value as active.
+    switch_minute: 4 * 60,
     schedule_date: window.scheduleDate,
     next_switch_at: window.nextSwitchAt,
     status: run?.status ?? "pending",
     job_id: run?.job_id == null ? null : Number(run.job_id),
     assignments,
-    message: run?.message ?? "等待 07:30 / 19:30 換區",
+    message: run?.message ?? "等待 04:00 / 12:00 / 20:00 換區",
   };
 }
 
@@ -277,7 +288,7 @@ export async function redeployDailyRotation(now = Date.now()) {
     countries: packNames(assignment.packs),
   }));
   const selectedPacks = [...new Set(assignments.flatMap((item) => item.packs))];
-  const config = scanConfig(previousConfig, selectedPacks);
+  const config = scanConfig(previousConfig, selectedPacks, assignments.length);
   const { regions, targets } = buildScanPlan(config, null);
 
   await stopActiveJobs(now, "手動重新分配");

@@ -28,7 +28,7 @@ Thermal incidents and manual rechecks must be annotated, not silently discarded.
 1. Corrected shadow >=24h, >=2 eligible regions each >=30 normal targets and
    >=1 recorded scan hour, zero orphan observations/events.
 2. Durable server-side experiment record, original plan snapshot, exactly one
-   healthy agent, compare-and-swap revision, 07:30/19:30 activation, 24h observation
+   healthy agent, compare-and-swap revision, 04:00/12:00/20:00 activation, 24h observation
    across normal rotations, and explicit rollback must be implemented/tested
    before arming. Exclusions Japan/Taiwan, local-date safety, non-overlap and
    20% exploration remain invariants. Other agents keep the standard plan.
