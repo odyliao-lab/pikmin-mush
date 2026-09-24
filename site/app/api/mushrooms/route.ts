@@ -1,6 +1,5 @@
 import {
   ensureSchema, noStoreJson, readMushroomRetentionStatus, runtime,
-  scheduleMushroomRetention,
 } from "../../../lib/cloud";
 import { publicAgent, type ScanAgentRow } from "../../../lib/fleet";
 import { MIN_MUSHROOM_LEVEL } from "../../../lib/mushroom-policy.mjs";
@@ -337,6 +336,5 @@ async function readMushrooms(request: Request, trace: ReturnType<typeof createQu
     mushrooms: publicMushrooms,
   });
   response.headers.set('X-Map-Returned', String(publicMushrooms.length));
-  scheduleMushroomRetention();
   return response;
 }

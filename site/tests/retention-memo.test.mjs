@@ -26,22 +26,3 @@ test('retention checks coalesce as read-only probes and retry transient errors',
  assert.match(section,/MUSHROOM_INVALIDATION_BATCH_SIZE/);
  assert.match(section,/MUSHROOM_HISTORY_BATCH_SIZE/);
 });
-
-test('retention scheduling does not await cleanup in the response path',async()=>{
- let resolve,scheduled=[];
- const pending=new Promise(r=>{resolve=r});
- const db={prepare(){return {bind(){return this},first(){return pending}}}};
- const source=readFileSync(new URL('../lib/cloud.ts',import.meta.url),'utf8');
- const section=source.slice(source.indexOf('export async function readMushroomRetentionStatus'));
- const exports={};
- new Script(ts.transpileModule(section,{compilerOptions:{module:ts.ModuleKind.CommonJS,target:ts.ScriptTarget.ES2022}}).outputText)
-  .runInNewContext({exports,Date,runtime:()=>({DB:db}),retentionStatus:r=>r,
-   waitUntil:p=>scheduled.push(p),console,
-   MUSHROOM_RETENTION_SECONDS:7*86400,LEVEL_TWO_THREE_INVALID_AFTER_SECONDS:2*86400,
-   MUSHROOM_RETENTION_INTERVAL_SECONDS:300,MUSHROOM_RETENTION_BATCH_SIZE:1000,
-   MUSHROOM_INVALIDATION_BATCH_SIZE:250,MUSHROOM_HISTORY_BATCH_SIZE:500});
- assert.equal(exports.scheduleMushroomRetention(),undefined);
- assert.equal(scheduled.length,1);
- resolve({last_run_at:Math.floor(Date.now()/1000),last_deleted:0,pending:0});
- await scheduled[0];
-});

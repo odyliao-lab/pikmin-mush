@@ -1,4 +1,4 @@
-import { env, waitUntil } from "cloudflare:workers";
+import { env } from "cloudflare:workers";
 import { isUsefulMushroomLevel } from "./mushroom-policy.mjs";
 import { EVENT_SPOT_SEED } from "./event-spots";
 import { observationStatements } from "./observations.mjs";
@@ -699,13 +699,6 @@ export async function readMushroomRetentionStatus(): Promise<MushroomRetentionSt
   const row = await runtime().DB.prepare(`SELECT *
     FROM maintenance_state WHERE name='mushroom-retention'`).first();
   return retentionStatus(row);
-}
-
-/** Run bounded cleanup after the response, retaining the D1 lease across isolates. */
-export function scheduleMushroomRetention(): void {
-  waitUntil(runMushroomRetention().catch(() => {
-    console.warn(JSON.stringify({ event: "mushroom_retention_failed" }));
-  }));
 }
 
 export async function runMushroomRetention(): Promise<MushroomRetentionStatus> {

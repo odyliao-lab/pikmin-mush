@@ -1,6 +1,6 @@
 import {
   ensureSchema, parseTsv, plain, readBoundedUtf8, runtime,
-  scheduleMushroomRetention, upsertMushrooms,
+  upsertMushrooms,
 } from "../../../../lib/cloud";
 import {
   agentRequestVersions, authorizeFleetAgent, touchAgent,
@@ -69,6 +69,5 @@ export async function POST(request: Request) {
     agentId: agent.id, type: "upload", rows: rows.length, bytes: body.bytes,
   });
   await touchAgent(agent.id, agentRequestVersions(request));
-  scheduleMushroomRetention();
   return plain(`accepted=${rows.length}\n`);
 }
