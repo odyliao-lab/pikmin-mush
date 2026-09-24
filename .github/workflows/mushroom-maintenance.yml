@@ -28,21 +28,25 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          python3 - <<'PY'
+          request_failed=0
+          response=''
+          if [[ -z "$MAINTENANCE_TOKEN" ]]; then
+            request_failed=1
+          else
+            response="$(curl --fail-with-body --silent --show-error --max-time 90 \
+              -X POST -H "Authorization: Bearer $MAINTENANCE_TOKEN" \
+              -H 'Accept: application/json' \
+              https://mush.odyliao.cc/api/controller/maintenance)" || request_failed=1
+          fi
+          REQUEST_FAILED="$request_failed" RESPONSE="$response" python3 - <<'PY'
           import json, os, sys, urllib.request
           hourly = os.environ.get('SCHEDULE') == '11 * * * *'
           problems = []
           failed = False
           try:
-              token = os.environ['MAINTENANCE_TOKEN']
-              if len(token) < 32:
-                  raise ValueError('missing maintenance secret')
-              request = urllib.request.Request(
-                  'https://mush.odyliao.cc/api/controller/maintenance',
-                  headers={'Authorization': 'Bearer ' + token, 'Accept': 'application/json'},
-                  method='POST')
-              with urllib.request.urlopen(request, timeout=90) as reply:
-                  data = json.load(reply)
+              if os.environ['REQUEST_FAILED'] != '0':
+                  raise ValueError('maintenance request failed')
+              data = json.loads(os.environ['RESPONSE'])
               retention, alerts = data['retention'], data['alerts']
               print('retention', {key: retention[key] for key in
                      ('lastSucceededAt', 'lastDeleted', 'pending', 'lastBatchSaturated',
