@@ -3,9 +3,9 @@ name: Mushroom maintenance
 on:
   schedule:
     # Keep cleanup independent of map traffic and the user's Windows PC.
-    - cron: '1,16,31,46 * * * *'
+    - cron: '7,22,37,52 * * * *'
     # A separate hourly health check limits alert volume during outages.
-    - cron: '9 * * * *'
+    - cron: '13 * * * *'
   workflow_dispatch:
 
 permissions:
@@ -41,8 +41,8 @@ jobs:
               https://mush.odyliao.cc/api/controller/maintenance)" || request_failed=1
           fi
           REQUEST_FAILED="$request_failed" RESPONSE="$response" python3 - <<'PY'
-          import json, os, sys, urllib.request
-          hourly = os.environ.get('SCHEDULE') == '9 * * * *'
+          import json, os, sys, time, urllib.error, urllib.request
+          hourly = os.environ.get('SCHEDULE') == '13 * * * *'
           problems = []
           failed = False
           try:
@@ -55,8 +55,10 @@ jobs:
                       'consecutiveFailures', 'lastDurationMs')})
               if alerts['maintenanceStale'] or alerts['maintenanceFailing']:
                   problems.append('清理未正常完成')
-              if alerts['retentionBacklog']:
-                  problems.append(f"清理積壓：待刪 {retention['pending']}、批次達上限 {retention['lastBatchSaturated']}")
+              # Reaching one bounded history batch is not proof of backlog.
+              # The exact mushroom pending count is the actionable signal.
+              if retention['pending'] > 0:
+                  problems.append(f"蘑菇過期資料待刪：{retention['pending']}")
               if alerts['uploadSilentAgents']:
                   problems.append('兩小時無成功上傳：' + ', '.join(alerts['uploadSilentAgents']))
           except Exception:
@@ -72,12 +74,24 @@ jobs:
               sys.exit(1)
           request = urllib.request.Request(webhook, data=json.dumps({'content': message}).encode(),
                                            headers={'Content-Type': 'application/json'}, method='POST')
-          try:
-              with urllib.request.urlopen(request, timeout=20) as reply:
-                  if reply.status not in (200, 204):
-                      raise RuntimeError('Discord alert was not accepted')
-          except Exception:
-              print('Discord alert was not accepted', file=sys.stderr)
-              sys.exit(1)
+          for attempt in range(2):
+              try:
+                  with urllib.request.urlopen(request, timeout=20) as reply:
+                      if reply.status not in (200, 204):
+                          raise RuntimeError('Discord alert was not accepted')
+                  break
+              except urllib.error.HTTPError as error:
+                  if error.code == 429 and attempt == 0:
+                      try:
+                          delay = float(error.headers.get('Retry-After', '1'))
+                      except ValueError:
+                          delay = 1
+                      time.sleep(min(max(delay, 0), 10))
+                      continue
+                  print(f'::warning::Discord maintenance alert HTTP {error.code}; cleanup request result is separate', file=sys.stderr)
+                  break
+              except Exception:
+                  print('::warning::Discord maintenance alert failed; cleanup request result is separate', file=sys.stderr)
+                  break
           sys.exit(1 if failed else 0)
           PY

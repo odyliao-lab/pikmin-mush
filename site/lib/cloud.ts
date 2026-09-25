@@ -23,6 +23,10 @@ const MUSHROOM_RETENTION_SECONDS = 7 * 24 * 60 * 60;
 const LEVEL_TWO_THREE_INVALID_AFTER_SECONDS = 2 * 24 * 60 * 60;
 const MUSHROOM_RETENTION_INTERVAL_SECONDS = 5 * 60;
 const RETENTION_EMERGENCY_AFTER_SECONDS = 60 * 60;
+// GitHub schedule events can be delayed or dropped. Keep the one-hour cleanup
+// fallback, but only page the operator for a sustained scheduling gap.
+const RETENTION_SCHEDULE_ALERT_AFTER_SECONDS = 3 * 60 * 60;
+const RETENTION_SCHEDULE_ALERT_REPEAT_SECONDS = 24 * 60 * 60;
 const MUSHROOM_RETENTION_BATCH_SIZE = 1_000;
 const MUSHROOM_INVALIDATION_BATCH_SIZE = 250;
 const MUSHROOM_HISTORY_BATCH_SIZE = 500;
@@ -710,17 +714,17 @@ async function notifyMissingScheduledMaintenance(nowMs: number): Promise<void> {
   const now = Math.floor(nowMs / 1_000);
   const scheduled = await db.prepare(`SELECT last_run_at FROM maintenance_state
     WHERE name='mushroom-retention-scheduled'`).first<{ last_run_at: number }>();
-  if (scheduled?.last_run_at && now - scheduled.last_run_at < RETENTION_EMERGENCY_AFTER_SECONDS) return;
+  if (scheduled?.last_run_at && now - scheduled.last_run_at < RETENTION_SCHEDULE_ALERT_AFTER_SECONDS) return;
   await db.prepare(`INSERT OR IGNORE INTO maintenance_state (name)
     VALUES ('mushroom-retention-schedule-alert')`).run();
   const claim = await db.prepare(`UPDATE maintenance_state SET last_run_at=?
     WHERE name='mushroom-retention-schedule-alert' AND last_run_at<?`)
-    .bind(now, now - RETENTION_EMERGENCY_AFTER_SECONDS).run();
+    .bind(now, now - RETENTION_SCHEDULE_ALERT_REPEAT_SECONDS).run();
   if (Number(claim.meta.changes ?? 0) === 0) return;
   try {
     const response = await fetch(webhook, {
       method: "POST", headers: { "content-type": "application/json" },
-      body: JSON.stringify({ content: "【蘑菇維護排程警示】GitHub 定時清理超過一小時沒有成功回報；站台已由 Agent 上傳啟動安全備援。請檢查 GitHub Actions 排程。" }),
+      body: JSON.stringify({ content: "【蘑菇維護排程警示】GitHub 定時清理超過三小時沒有成功回報；站台已由 Agent 上傳啟動安全備援。請檢查 GitHub Actions 排程。同一問題一天內不重複提醒。" }),
       signal: AbortSignal.timeout(7_000),
     });
     if (!response.ok) throw new Error("discord rejected alert");

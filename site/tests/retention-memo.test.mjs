@@ -64,7 +64,7 @@ test('emergency cleanup keeps draining saturated bounded batches',async()=>{
  now+=300001;exports.scheduleRetentionEmergencyFallback();await scheduled[1];assert.equal(runs,2);
 });
 
-test('missing scheduled cleanup sends one throttled Discord warning, not a manual-run heartbeat',async()=>{
+test('missing scheduled cleanup alerts after three hours and repeats at most daily',async()=>{
  const source=readFileSync(new URL('../lib/cloud.ts',import.meta.url),'utf8');
  const section=source.slice(source.indexOf('async function notifyMissingScheduledMaintenance'),
    source.indexOf('// GitHub\'s scheduled event'));
@@ -85,11 +85,17 @@ test('missing scheduled cleanup sends one throttled Discord warning, not a manua
  new Script(`${ts.transpileModule(section,{compilerOptions:{module:ts.ModuleKind.CommonJS,
    target:ts.ScriptTarget.ES2022}}).outputText}\nexports.notify=notifyMissingScheduledMaintenance;`)
   .runInNewContext({exports,runtime:()=>({DB:db,MAINTENANCE_DISCORD_WEBHOOK:
-    'https://discord.com/api/webhooks/test'}),RETENTION_EMERGENCY_AFTER_SECONDS:3600,
+    'https://discord.com/api/webhooks/test'}),
+   RETENTION_SCHEDULE_ALERT_AFTER_SECONDS:3*3600,
+   RETENTION_SCHEDULE_ALERT_REPEAT_SECONDS:24*3600,
    fetch:async()=>{sends++;return {ok:true}},AbortSignal,console});
  const t=1800000000000;
- await exports.notify(t);await exports.notify(t+300000);assert.equal(sends,1);
- scheduledAt=Math.floor((t+3601000)/1000);
- await exports.notify(t+3601000);assert.equal(sends,1);
- await exports.notify(t+7202000);assert.equal(sends,2);
+ scheduledAt=Math.floor(t/1000)-2*3600;
+ await exports.notify(t);assert.equal(sends,0);
+ scheduledAt=Math.floor(t/1000)-3*3600-1;
+ await exports.notify(t);assert.equal(sends,1);
+ await exports.notify(t+4*3600*1000);assert.equal(sends,1);
+ await exports.notify(t+24*3600*1000+1000);assert.equal(sends,2);
+ scheduledAt=Math.floor((t+25*3600*1000)/1000);
+ await exports.notify(t+25*3600*1000);assert.equal(sends,2);
 });
