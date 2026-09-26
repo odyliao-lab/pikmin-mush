@@ -10,8 +10,12 @@ export function archiveAndDeleteTargets(db, jobId, now) {
   // D1 batch is atomic: archive failure must prevent destructive queue deletion.
   return db.batch([
     db.prepare(`INSERT OR IGNORE INTO scan_target_history
-      (id,job_id,cycle,country,verification_kind,archived_at)
-      SELECT id,job_id,cycle,country,verification_kind,? FROM scan_targets WHERE job_id=?`)
+      (id,job_id,cycle,country,verification_kind,archived_at,
+       verification_batch,verification_mushroom_id,status,leased_at,completed_at,completed_agent_id,lat,lng)
+      SELECT id,job_id,cycle,country,verification_kind,?,
+       verification_batch,verification_mushroom_id,
+       CASE WHEN status IN ('completed','failed') THEN status ELSE 'cancelled' END,
+       leased_at,completed_at,completed_agent_id,lat,lng FROM scan_targets WHERE job_id=?`)
       .bind(now,jobId),
     db.prepare('DELETE FROM scan_targets WHERE job_id=?').bind(jobId),
   ]);

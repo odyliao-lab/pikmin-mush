@@ -2,6 +2,7 @@ import {
   controllerAuthorized, ensureSchema, noStoreJson, readBoundedUtf8, runtime,
 } from "../../../../lib/cloud";
 import { activeJob, type ScanJobRow } from "../../../../lib/scans";
+import { REPORT_EVIDENCE_SQL, reportEvidence } from '../../../../lib/report-evidence.mjs';
 
 type Candidate = {
   id: string;
@@ -66,6 +67,9 @@ export async function POST(request: Request) {
   }
 
   const db = runtime().DB;
+  if (input.contract === 2 && (kind === 'giant-recheck' || replaceExisting || candidates.length > (kind === 'candidate' ? 80 : 30))) {
+    return noStoreJson({error:'contract 2 requires bounded, immutable waves'},400);
+  }
   if (kind === "giant-recheck") {
     const now = Date.now();
     const rows = await db.prepare(`SELECT id, lat, lng FROM mushrooms
@@ -87,8 +91,13 @@ export async function POST(request: Request) {
     "SELECT COUNT(*) AS count FROM scan_targets WHERE verification_batch=?",
   ).bind(batch).first<{ count: number }>();
   const existingCount = Number(existing?.count ?? 0);
+  if (input.contract === 2) {
+    const archived = await db.prepare('SELECT id FROM scan_target_history WHERE verification_batch=? LIMIT 1')
+      .bind(batch).first();
+    if (archived) return noStoreJson({ok:true,batch,existing:true,archived:true,contract:2});
+  }
   if (existingCount && !replaceExisting) {
-    return noStoreJson({ ok: true, batch, existing: true });
+    return noStoreJson({ ok: true, batch, existing: true, contract: input.contract === 2 ? 2 : 1 });
   }
   const agent = await db.prepare(`SELECT id, region_tags_json, current_lat, current_lng
     FROM scan_agents WHERE id=? AND enabled=1`).bind(agentId).first<{
@@ -141,18 +150,23 @@ export async function POST(request: Request) {
         Number(agent.current_lat), Number(agent.current_lng), candidates.length,
         agentId, batch, now, now));
   }
-  await db.prepare(`UPDATE scan_targets SET status='cancelled', updated_at=?
+  if (input.contract !== 2) await db.prepare(`UPDATE scan_targets SET status='cancelled', updated_at=?
     WHERE required_agent_id=? AND verification_kind=?
       AND verification_batch<>? AND status='queued'`)
     .bind(now, agentId, kind, batch).run();
   // A two-day giant recheck can contain far more rows than a notification
   // batch. Keep each D1 batch bounded so one busy report cannot exceed the
   // statement limit and silently leave Agent1 without its follow-up queue.
-  for (let offset = 0; offset < inserts.length; offset += 50) {
+  if (input.contract === 2) {
+    // At most 80 candidates + return. One atomic batch avoids acknowledging a
+    // half-created wave as existing after a request interruption.
+    await db.batch(inserts);
+  } else for (let offset = 0; offset < inserts.length; offset += 50) {
     await db.batch(inserts.slice(offset, offset + 50));
   }
   return noStoreJson({
     ok: true,
+    contract: input.contract === 2 ? 2 : 1,
     batch,
     kind,
     job_id: Number((job as ScanJobRow).id),
@@ -169,6 +183,13 @@ export async function GET(request: Request) {
   await ensureSchema();
   const batch = cleanBatch(new URL(request.url).searchParams.get("batch"));
   if (!batch) return noStoreJson({ error: "invalid batch" }, 400);
+  if (new URL(request.url).searchParams.get('contract') === '2') {
+    const rows = await runtime().DB.prepare(REPORT_EVIDENCE_SQL).bind(batch,batch).all();
+    if (!rows.results.length) return noStoreJson({error:'batch not found'},404);
+    const candidates = rows.results.map(row => reportEvidence(row));
+    return noStoreJson({ok:true,contract:2,batch,candidates,
+      complete:candidates.every(row => ['completed','failed','cancelled'].includes(row.status))});
+  }
   const rows = await runtime().DB.prepare(`SELECT
       t.verification_mushroom_id AS id, t.status, t.leased_at, t.completed_at,
       t.verification_kind, t.verification_result,

@@ -272,7 +272,16 @@ export const scanTargetHistory = sqliteTable("scan_target_history", {
   country: text("country").notNull(),
   verificationKind: text("verification_kind").notNull(),
   archivedAt: integer("archived_at").notNull(),
-}, table => [index("scan_target_history_archived_idx").on(table.archivedAt)]);
+  verificationBatch: text("verification_batch").notNull().default(""),
+  verificationMushroomId: text("verification_mushroom_id").notNull().default(""),
+  status: text("status").notNull().default("cancelled"),
+  leasedAt: integer("leased_at").notNull().default(0),
+  completedAt: integer("completed_at").notNull().default(0),
+  completedAgentId: text("completed_agent_id").notNull().default(""),
+  lat: real("lat").notNull().default(0),
+  lng: real("lng").notNull().default(0),
+}, table => [index("scan_target_history_archived_idx").on(table.archivedAt),
+  index("scan_target_history_verification_idx").on(table.verificationBatch)]);
 
 export const scanAgentEvents = sqliteTable("scan_agent_events", {
   id: integer("id").primaryKey({ autoIncrement: true }),
