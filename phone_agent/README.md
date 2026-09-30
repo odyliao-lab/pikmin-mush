@@ -2,12 +2,14 @@
 
 ## 153 實機地圖入口
 
-Libra 可啟用 `VISUAL_RECOVERY_ENABLED=1`（其他機型預設關閉）。部署前用
+Libra 與已校準的 Scorpio 可啟用 `VISUAL_RECOVERY_ENABLED=1`（其他機型預設關閉）。部署前用
 `build-ui-probe.ps1 -NdkRoot <NDK>` 建置 `bin/ui-probe`，一起安裝
 `visual-recovery.sh`。此模式關閉自動確認鍵；連續兩點失敗才辨識畫面，
 連續三點失敗才冷重啟。冷啟動時在固定節點檢查畫面，不直接盲點。
 兩張新截圖一致才關警告、關活動頁或從主畫面右往左滑；未知畫面不操作。
-目前只驗證 Libra 1440×3120、RGBA8888、實體螢幕與 153 UI。
+目前校準 Libra 1440×3120 與 Scorpio 1220×2712、RGBA8888、實體螢幕與 153 UI。
+Scorpio profile 可辨識主畫面、活動挑戰和功能選單，分別滑進地圖或關閉已辨識頁面；
+尚未校準的警告保持 unknown，不盲點。153 deferred hook 的啟動等待需按裝置驗證。
 畫面比對是保守色彩特徵而非 OCR；改版、比例、遮罩不符會拒絕操作。
 截圖僅暫存在手機模組私有檔案，辨識後刪除，不上傳。
 
