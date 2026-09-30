@@ -1,5 +1,5 @@
 #!/system/bin/sh
-# Opt-in Libra-only recovery. Unknown/changed screens never receive input.
+# Opt-in calibrated recovery. Unknown/changed screens never receive input.
 visual_foreground() {
   timeout -k 1 5 dumpsys activity activities 2>/dev/null |
     grep -E 'topResumedActivity|ResumedActivity:' | grep -q "$PKG"
@@ -24,7 +24,7 @@ visual_recover() {
   # recognition result after dismissing a modal or changing the page.
   VISUAL_A="$(visual_state)"
   [ "$VISUAL_A" != "$VISUAL_PREVIOUS" ] || return 0
-  case "$VISUAL_A" in 'warning '*|'activity '*|'dashboard 0 0') ;; *) return 0;; esac
+  case "$VISUAL_A" in 'warning '*|'activity '*|'menu '*|'dashboard 0 0') ;; *) return 0;; esac
   sleep 1
   scan_can_run || return 2
   VISUAL_B="$(visual_state)"
@@ -34,6 +34,7 @@ visual_recover() {
     'warning 720 1730') game_tap 720 1730;;
     'warning 720 1690') game_tap 720 1690;;
     'activity 140 2895') game_tap 140 2895;;
+    'activity 120 2450'|'menu 120 2450') game_tap 120 2450;;
     'dashboard 0 0') enter_map_view;;
     *) return 0;;
   esac

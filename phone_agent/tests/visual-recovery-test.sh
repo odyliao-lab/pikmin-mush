@@ -16,6 +16,11 @@ STATE='activity 140 2895'; result=$(visual_recover)
 case "$result" in 'tap 140 2895'*) ;; *) exit 1;; esac
 STATE='dashboard 0 0'; result=$(visual_recover)
 case "$result" in swipe*) ;; *) exit 1;; esac
+STATE='activity 120 2450'; result=$(visual_recover)
+case "$result" in 'tap 120 2450'*) ;; *) exit 1;; esac
+STATE='menu 120 2450'; result=$(visual_recover)
+case "$result" in 'tap 120 2450'*) ;; *) exit 1;; esac
+STATE='warning 610 1415'; [ -z "$(visual_recover)" ]
 STATE='warning 1 2'; [ -z "$(visual_recover)" ]
 PAUSED=1; if visual_recover; then exit 1; else [ "$?" = 2 ]; fi
 PAUSED=0; FOREGROUND=0; [ -z "$(visual_recover)" ]
