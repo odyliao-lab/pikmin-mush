@@ -8,6 +8,14 @@
 - 新增七座標、14天週期、來源標記、日期邊界、既有點保留及revision回歸測試。發布前按RELEASE_GATES執行網站測試與production audit。
 - 發布安全門檻所需的Next同系列修補版16.3.8獨立commit；不混入未完工的換區功能或手機修正。
 
+## 2026-10-02 — Scorpio 禁止進入地點提示復原
+
+- 裝置可連線、電量與溫度正常，但被遊戲提示擋在主畫面；持續刷新逾時及冷重開，並非無蘑菇即可解釋。
+- 補 Scorpio 1220x2712 專用固定文字／確認按鈕模板，沿用兩張新畫面一致、前景與暫停檢查；未知提示及普通白色視窗不盲點。
+- native 建置、雙解析度 fixture、提示正反例、visual recovery 與 map-entry 測試通過。只部署 Scorpio，保留原檔、憑證、上傳 offset 和分配。
+- 手機自動 warning → dashboard → map 復原；後續 object、ACK、1/6/4 行擷取、accepted=4 上傳及公開 API 14 筆近期 Scorpio 資料證明端到端恢復。手機 artifact 雜湊與本機一致。
+- 不需網站發布；不宣稱其他未校準提示或多日穩定性已驗收。詳見 docs/SCORPIO_UI_RECOVERY.md。
+
 ## 2026-09-22 — Issue #95 公開地圖查詢負載改善
 
 - 線上補正：PR #103／Sites 86 的分頁與入站正常，但相同 POP 連續請求仍為 cache MISS。官方 Workers-for-Platforms 規則停用 `caches.default`，改用獨立命名 cache；加 16 筆／約 8 MiB、15 秒不延展的記憶體回退及快取來源標示，不放寬平台隔離權限。

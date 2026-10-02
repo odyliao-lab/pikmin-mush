@@ -46,3 +46,19 @@ with tempfile.TemporaryDirectory() as tmp:
             data[k:k+4]=bytes((r,g,b,255))
         check(data,want)
 print('Scorpio ui probe fixtures passed')
+header = (root / 'ui-warning-scorpio.h').read_text()
+with tempfile.TemporaryDirectory() as tmp:
+    file = pathlib.Path(tmp) / 'screen.raw'
+    data = bytearray(blank)
+    samples = list(re.finditer(r'\{(\d+),(\d+),(\d+),(\d+),(\d+)\}', header))
+    for m in samples:
+        x,y,r,g,b = map(int,m.groups()); k=16+(y*1220+x)*4
+        data[k:k+4] = bytes((r,g,b,255))
+    check(data, 'warning 610 1448')
+    # Generic white modal, changed button/text and shifted dialog must not tap.
+    check(struct.pack('<IIII',1220,2712,1,0)+bytes([255])*(1220*2712*4), 'unknown')
+    for m in samples[:10]:
+        x,y,*_ = map(int,m.groups()); k=16+(y*1220+x)*4
+        data[k:k+4] = bytes((0,0,0,255))
+    check(data, 'unknown')
+print('Scorpio restricted notice fixtures passed')

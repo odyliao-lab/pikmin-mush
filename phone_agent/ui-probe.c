@@ -6,6 +6,7 @@
 typedef struct { int x,y,r,g,b; } Sample;
 typedef struct { const char *name; int x,y; const Sample *samples; int count; } Template;
 #include "ui-templates.h"
+#include "ui-warning-scorpio.h"
 #include "ui-templates-scorpio.h"
 int main(int argc, char **argv) {
   if (argc != 2) { puts("unknown"); return 0; }

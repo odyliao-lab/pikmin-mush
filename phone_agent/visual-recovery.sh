@@ -33,6 +33,7 @@ visual_recover() {
   case "$VISUAL_B" in
     'warning 720 1730') game_tap 720 1730;;
     'warning 720 1690') game_tap 720 1690;;
+    'warning 610 1448') game_tap 610 1448;;
     'activity 140 2895') game_tap 140 2895;;
     'activity 120 2450'|'menu 120 2450') game_tap 120 2450;;
     'dashboard 0 0') enter_map_view;;
