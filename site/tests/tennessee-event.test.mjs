@@ -23,9 +23,21 @@ test('Nashville adds seven exact user coordinates with distinct rewards and prov
     assert.match(row.coordinateNote,/使用者提供/);
     assert.match(row.cooldownNote,/14 天/);
     assert.match(row.eligibilityNote,/官方公告/);
-    assert.equal(row.startAt,Date.parse('2026-10-02T00:00:00-05:00')/1000);
-    assert.equal(row.endAt,Date.parse('2026-11-01T23:59:59-06:00')/1000);
+    assert.equal(row.startAt,Date.parse('2026-10-03T15:00:00Z')/1000);
+    assert.equal(row.endAt,Date.parse('2026-11-02T00:00:00Z')/1000);
+    assert.match(row.eligibilityNote,/2026\/10\/03 23:00–2026\/11\/02 08:00/);
   }
   assert.ok(exported.EVENT_SPOT_SEED.some(s=>s.id==='jp-nintendo-tokyo'));
-  assert.ok(CATALOGUE_REVISION>2026090501);
+  assert.ok(CATALOGUE_REVISION>2026100201);
+});
+
+test('Nashville official boundaries convert across daylight-saving transition',()=>{
+  const row=exported.EVENT_SPOT_SEED.find(s=>s.id==='us-nashville-mini-walk-gift-sticker');
+  const format=(t,timeZone)=>new Intl.DateTimeFormat('sv-SE',{
+    timeZone,year:'numeric',month:'2-digit',day:'2-digit',hour:'2-digit',minute:'2-digit',hourCycle:'h23'
+  }).format(new Date(t*1000));
+  assert.equal(format(row.startAt,'America/Chicago'),'2026-10-03 10:00');
+  assert.equal(format(row.endAt,'America/Chicago'),'2026-11-01 18:00');
+  assert.equal(format(row.startAt,'Asia/Taipei'),'2026-10-03 23:00');
+  assert.equal(format(row.endAt,'Asia/Taipei'),'2026-11-02 08:00');
 });

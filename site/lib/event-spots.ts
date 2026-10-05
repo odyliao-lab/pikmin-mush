@@ -30,17 +30,17 @@ const permanent = (spot: SpotInput) => make("permanent", spot);
 const limited = (spot: SpotInput) => make("limited", spot);
 
 // User-supplied GPS/rewards; official notice confirms seven spots and 14-day
-// cooldown but announces Oct 3 10:00 CT through Nov 1 18:00 CT. Keep the user's
-// Oct 2 availability explicitly attributed, not presented as official.
+// cooldown. Use the official Central-time window, including the DST change:
+// Oct 3 is CDT (UTC-5); Nov 1 at 18:00 is CST (UTC-6).
 const nashville = (id: string, lat: number, lng: number, reward: string) => limited({
   id: `us-nashville-mini-walk-${id}`, country: "美國", city: "田納西州－納許維爾 Nashville",
   name: `田納西 MINI WALK — ${reward}`, lat, lng, rewardKind: "gold_seedling",
   rewardSummary: `${reward}飾品金色花苗`, cooldownNote: "每個地點每 14 天可領取 1 次",
-  startAt: seconds("2026-10-02T00:00:00-05:00"), endAt: seconds("2026-11-01T23:59:59-06:00"),
-  eligibilityNote: "使用者提供期間：10/02–11/01；官方公告：當地10/03 10:00至11/01 18:00；實際開放以遊戲為準",
+  startAt: seconds("2026-10-03T10:00:00-05:00"), endAt: seconds("2026-11-01T18:00:00-06:00"),
+  eligibilityNote: "官方公告（美國中部時間）：2026/10/03 10:00–2026/11/01 18:00；台灣時間：2026/10/03 23:00–2026/11/02 08:00；實際開放以遊戲為準",
   coordinateNote: "座標與飾品對應由使用者提供，非官方座標；尚未實地複核，請以遊戲地圖確認",
   verificationStatus: "community", sourceTitle: "Pikmin Bloom Nashville 2026 MINI WALK 官方公告；座標由使用者提供",
-  sourceUrl: "https://pikminbloom.com/es/news/oct26-nashville", lastVerifiedAt: seconds("2026-10-02T00:00:00Z"),
+  sourceUrl: "https://pikminbloom.com/zh_hant/news/oct26-nashville", lastVerifiedAt: seconds("2026-10-02T00:00:00Z"),
 });
 
 export const EVENT_SPOT_SEED: EventSpotSeed[] = [

@@ -218,3 +218,8 @@ cmake -G Ninja -DCMAKE_TOOLCHAIN_FILE=ndk/.../android.toolchain.cmake -DANDROID_
 - 根因在 `site/app/api/admin/scans/start/route.ts`：它先把完整 `targets` 陣列序列化並寫入 `scan_jobs.plan_json`，再呼叫 `materializeTargets()`。29,624 點的 `plan_json` 已超出 D1/SQLite 單一字串/資料列可接受大小，因此失敗發生在 `scan_jobs` INSERT，`materializeTargets()` **尚未執行**。
 - 結果：此輪 `db.batch()` 呼叫數為 **0**；沒有建立可量測的 job、沒有 `scan_targets` 寫入，因此不存在 partial materialization 或可比對的 target row count。原本「30,000 點 cap」雖在 `buildScanPlan()` 層允許，實際上受 `plan_json` 儲存模型限制而不可達。
 - 後續：先設計並實作不依賴完整 `plan_json` 的可恢復工作描述（例如僅持久化 normalized config/regions、分段生成與寫入 targets，並保存 materialization progress）。完成後再重新執行接近 30,000 點的實測，記錄真正的 batch 數、D1 寫入耗時、完成列數與 Worker headroom；不要把此次 `SQLITE_TOOBIG` 當成同步 materialization 可安全支援 30,000 點的證據。
+# 2026-10-02：Nashville MINI WALK 官方活動時間校正
+
+- 使用者改採中文官方公告：美國中部時間 2026/10/03 10:00 至 2026/11/01 18:00；撤回先前使用者提供的 10/02 起始日期。
+- 開始為 CDT UTC−5，結束已切回 CST UTC−6；台灣對應為 2026/10/03 23:00 至 2026/11/02 08:00。七個點位統一使用精確 UTC 時戳，詳情同時標示兩個時區。
+- catalogue revision 升至 2026100202 以原子更新既有資料；使用者座標的 community 註記與 14 天領取限制不變。加入夏令／標準時間交界的雙時區回歸測試，未更動 HTML/CSP 或機隊排程。
