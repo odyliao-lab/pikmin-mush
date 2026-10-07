@@ -1,0 +1,1 @@
+CREATE INDEX `gps_unlock_budgets_window_idx` ON `gps_unlock_budgets` (`window`);

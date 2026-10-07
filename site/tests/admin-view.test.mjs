@@ -65,6 +65,7 @@ test('actual admin component renders only the selected surface and preserves nat
    if(p==='react/jsx-runtime')return jsx;
    if(p==='next/link')return{__esModule:true,default:({children,href})=>jsx.jsx('a',{href,children})};
    if(p.endsWith('/report-audit'))return{__esModule:true,default:()=>jsx.jsx('div',{children:'情報流程測試入口'})};
+   if(p.endsWith('/gps-settings'))return{__esModule:true,default:()=>jsx.jsx('div',{children:'GPS 複製密碼'})};
    if(p.endsWith('/use-visible-polling'))return{useVisiblePolling(){}};
    if(p.endsWith('/admin-view.mjs'))return{ADMIN_PAGES,agentState,needsAttention,ageLabel};
    if(p.endsWith('/scan-plans'))return{COUNTRY_PACK_LABELS:[]};

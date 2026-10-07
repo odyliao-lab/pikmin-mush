@@ -8,6 +8,7 @@ import { QUERY_CONTRACT_VERSION, DISCOVERY_SQL, UNDER_FIVE_SQL, discoveryWindow 
 import { listOrder, cursorPredicate, searchPredicate } from "../../../lib/list-query.mjs";
 import { createMemo, createPublicReader, createQueryTrace } from "../../../lib/public-read.mjs";
 import { acquirePublicRead } from "../../../lib/public-read-guard.mjs";
+import {access as gpsAccess, privateJson} from '../../../lib/gps-access.mjs';
 
 const MAX_PAGE_SIZE = 1_000;
 const readPublic = createPublicReader({
@@ -103,12 +104,33 @@ function resolveScanLocation(lat: number, lng: number) {
 }
 
 export async function GET(request: Request) {
-  return readPublic(request, (trace: ReturnType<typeof createQueryTrace>) => readMushrooms(request, trace));
+  try {
+    // Controller reads retain their exact filters, pagination and report contract.
+    const controller=controllerAuthorized(request);
+    const permission = controller ? {owner:false,authorized:true,expires_at:null} : await gpsAccess(request,runtime());
+    if(permission.authorized) {
+      const load=async (trace: ReturnType<typeof createQueryTrace>)=>{
+        const response=await readMushrooms(request,trace,permission);
+        response.headers.set('Cache-Control','private, no-store');
+        response.headers.set('Vary','Cookie, oai-authenticated-user-email, Authorization');
+        response.headers.set('X-Map-Cache','BYPASS');
+        response.headers.delete('Access-Control-Allow-Origin');
+        return response;
+      };
+      // Password holders keep the existing public request budget; owner and
+      // controller automation retain their authenticated read behaviour.
+      if(!permission.owner&&!controller){const headers=new Headers(request.headers);headers.set('Cache-Control','no-store');return readPublic(new Request(request,{headers}),load);}
+      const trace=createQueryTrace(),response=await load(trace);trace.finish({cache:'BYPASS',status:response.status});return response;
+    }
+    return readPublic(request, (trace: ReturnType<typeof createQueryTrace>) => readMushrooms(request, trace, permission));
+  } catch {return privateJson({error:'temporarily_unavailable'},503);}
 }
 
-async function readMushrooms(request: Request, trace: ReturnType<typeof createQueryTrace>) {
+async function readMushrooms(request: Request, trace: ReturnType<typeof createQueryTrace>, permission: {owner:boolean;authorized:boolean;expires_at:number|null}) {
   const now = Date.now();
   const url = new URL(request.url);
+  // Spatial probing must not reveal coordinates through counts/empty responses.
+  if(!permission.authorized)url.searchParams.delete('bbox');
   const bbox = parseBbox(url.searchParams.get("bbox"));
   if (bbox === "invalid") return noStoreJson({ error: "invalid bbox" }, 400);
   const levels = parseLevels(url.searchParams.get("levels"));
@@ -133,7 +155,11 @@ async function readMushrooms(request: Request, trace: ReturnType<typeof createQu
     url.searchParams.get('discovered_within_hours'),url.searchParams.get('discovered_from'),url.searchParams.get('discovered_to')]);
   try {
     order = listOrder(url.searchParams);
-    search = searchPredicate(url.searchParams.get('q'), SCAN_LOCATION_CATALOG);
+    const q=url.searchParams.get('q')||'';
+    if(!permission.authorized && q && !SCAN_LOCATION_CATALOG.some(c=>`${c.country}-${c.city}`.toLowerCase().includes(q.toLowerCase()))) {
+      return noStoreJson({error:'解鎖 GPS 後才能搜尋 POI 或座標'},403);
+    }
+    search = searchPredicate(q, SCAN_LOCATION_CATALOG, {locationOnly:!permission.authorized});
     if (cursor?.scope) {
       if (cursor.scope !== scope) throw new Error('cursor query mismatch');
       if (cursor.window) {
@@ -281,6 +307,7 @@ async function readMushrooms(request: Request, trace: ReturnType<typeof createQu
   const publicMushrooms = rawRows.map((mushroom) => {
     const visible = {...mushroom};
     delete visible.query_low; delete visible.query_value;
+    if(!permission.authorized) {visible.lat=null;visible.lng=null;delete visible.cluster;}
     const firstSeen = Number(mushroom.first_seen ?? 0);
     const challengeStarted = Math.floor(Number(mushroom.start_ms ?? 0) / 1000);
     return {
@@ -328,7 +355,7 @@ async function readMushrooms(request: Request, trace: ReturnType<typeof createQu
       online_count: agents.filter((agent) => agent.online).length,
       total_count: agents.length,
     },
-    live_agents: liveAgents,
+    live_agents: permission.authorized ? liveAgents : [],
     retention: {
       policy_days: 7,
       level_2_3_inactive_after_days: 2,
@@ -337,6 +364,7 @@ async function readMushrooms(request: Request, trace: ReturnType<typeof createQu
       pending: retention?.pending ?? 0,
     },
     } : {}),
+    gps_access: permission,
     mushrooms: publicMushrooms,
   });
   response.headers.set('X-Map-Returned', String(publicMushrooms.length));
