@@ -5,6 +5,16 @@ import {createApi} from './helpers/mushroom-api.mjs';
 import {Script} from 'node:vm';
 function fixture(){const db=new DatabaseSync(':memory:');db.exec(readFileSync(new URL('../drizzle/0025_wakeful_major_mapleleaf.sql',import.meta.url),'utf8'));return {db,env:{COPY_AUDIT_HASH_KEY:'test-only-secret'.repeat(4),DB:{prepare(sql){let args=[];return {bind(...a){args=a;return this},async first(){return db.prepare(sql).get(...args)},async run(){return db.prepare(sql).run(...args)}}}}}};}
 const request=(cookie='',headers={})=>new Request('https://example.test/api/gps/access',{headers:{cookie,...headers}});
+
+test('GPS password accepts four characters and rejects shorter or oversized input',async()=>{
+ const {db,env}=fixture();const now=1000000;
+ for(const password of ['', 'abc', 'x'.repeat(129)])assert.equal((await setPassword(env,password,now)).status,400);
+ assert.equal(db.prepare('SELECT count(*) AS n FROM gps_access_settings').get().n,0);
+ assert.equal((await setPassword(env,'aB7!',now)).status,200);
+ assert.equal((await unlock(request(),env,'aB7!',now)).status,200);
+ assert.equal((await setPassword(env,'x'.repeat(128),now+1)).status,200);
+ const form=readFileSync(new URL('../app/admin/gps-settings.tsx',import.meta.url),'utf8');assert.match(form,/minLength=\{4\}/);assert.doesNotMatch(form,/minLength=\{12\}/);db.close();
+});
 test('owner is exact allowlist; CSRF rejects missing and foreign origin',()=>{
  assert.equal(ownerEmail(' ODY.LIAO@gmail.com '),true);assert.equal(ownerEmail('other@gmail.com'),false);
  for(const origin of ['','https://evil.test'])assert.equal(browserWrite(new Request('https://example.test/api/gps/unlock',{headers:{origin,'Content-Type':'application/json'}})),false);
