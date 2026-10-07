@@ -325,6 +325,16 @@ export const publicReadBudgets = sqliteTable("public_read_budgets", {
   updatedAt: integer("updated_at").notNull(),
 }, table => [index("public_read_budgets_updated_idx").on(table.updatedAt)]);
 
+export const gpsAccessSettings = sqliteTable('gps_access_settings', {
+  id: integer('id').primaryKey(), salt: text('salt').notNull(),
+  passwordHash: text('password_hash').notNull(), revision: integer('revision').notNull(),
+  updatedAt: integer('updated_at').notNull(),
+});
+export const gpsUnlockBudgets = sqliteTable('gps_unlock_budgets', {
+  source: text('source').primaryKey(), window: integer('window').notNull(),
+  attempts: integer('attempts').notNull(),
+}, table => [index('gps_unlock_budgets_window_idx').on(table.window)]);
+
 export const scanRotationRuns = sqliteTable("scan_rotation_runs", {
   scheduleDate: text("schedule_date").primaryKey(),
   status: text("status").notNull().default("running"),

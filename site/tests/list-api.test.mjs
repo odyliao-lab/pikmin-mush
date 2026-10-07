@@ -11,7 +11,8 @@ test('real API SQL preserves global counts, Chinese search and sorted cursor con
  const exports={};
  const source=readFileSync(new URL('../app/api/mushrooms/route.ts',import.meta.url),'utf8');
  new Script(ts.transpileModule(source,{compilerOptions:{module:ts.ModuleKind.CommonJS,target:ts.ScriptTarget.ES2022}}).outputText).runInNewContext({exports,URL,URLSearchParams,TextEncoder,TextDecoder,btoa,atob,Date,require(p){
-  if(p.endsWith('/cloud'))return {ensureSchema:async()=>{},readMushroomRetentionStatus:async()=>({}),scheduleMushroomRetention:()=>{},runtime:()=>({DB:adapter}),noStoreJson:(data,status=200)=>Response.json(data,{status})};
+  if(p.endsWith('/cloud'))return {controllerAuthorized:()=>true,ensureSchema:async()=>{},readMushroomRetentionStatus:async()=>({}),scheduleMushroomRetention:()=>{},runtime:()=>({DB:adapter}),noStoreJson:(data,status=200)=>Response.json(data,{status})};
+  if(p.endsWith('/gps-access.mjs'))return {privateJson:(data,status=200)=>Response.json(data,{status})};
   if(p.endsWith('/fleet'))return {publicAgent:()=>({})};
   if(p.endsWith('/mushroom-policy.mjs'))return {MIN_MUSHROOM_LEVEL:2};
   if(p.endsWith('/scan-plans'))return {COUNTRY_PACK_CATALOG:[{name:'台灣',cities:[['台北',25,121]]}]};

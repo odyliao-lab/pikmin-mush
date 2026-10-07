@@ -12,7 +12,7 @@ export function publicCacheKey(request) {
     params.set(name, value);
   }
   // Versioned namespace; ignore cache-busters, but never merge distinct filters/cursors.
-  return new Request(`${url.origin}/__map_read_cache/v1?${params}`);
+  return new Request(`${url.origin}/__map_read_cache/v2-redacted?${params}`);
 }
 
 export function createMemo({ now = Date.now, ttlMs = 15_000, maxEntries = 128 } = {}) {
@@ -95,7 +95,7 @@ export function createQueryTrace({ now = Date.now, sample = Math.random, log = v
   };
 }
 
-export function createPublicReader({ now = Date.now, cache = () => globalThis.caches?.open('pikmin-public-map-v1'),
+export function createPublicReader({ now = Date.now, cache = () => globalThis.caches?.open('pikmin-public-map-v2-redacted'),
   trusted = () => false, admit = async () => ({ allowed: true, release: async () => {} }),
   memory = createResponseMemo({ now }), limit = createReadLimiter({ now }), trace = () => createQueryTrace({ now }) } = {}) {
   return async (request, load) => {

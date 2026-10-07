@@ -49,7 +49,7 @@ test('production default opens a named cache without accessing disabled caches.d
     const cached = await read(url('cache=brief'), async () => { throw Error('cache should hit'); });
     assert.equal(cached.headers.get('X-Map-Cache'), 'HIT');
     assert.equal(cached.headers.get('X-Map-Cache-Backend'), 'named');
-    assert.deepEqual(names, ['pikmin-public-map-v1', 'pikmin-public-map-v1']);
+    assert.deepEqual(names, ['pikmin-public-map-v2-redacted', 'pikmin-public-map-v2-redacted']);
   } finally {
     if (previous) Object.defineProperty(globalThis, 'caches', previous);
     else delete globalThis.caches;

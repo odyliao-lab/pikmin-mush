@@ -512,10 +512,7 @@ export function maintenanceAuthorized(request: Request) {
 }
 
 export function adminEmails() {
-  return new Set((runtime().ADMIN_EMAILS ?? "")
-    .split(",")
-    .map((email) => email.trim().toLowerCase())
-    .filter(Boolean));
+  return new Set(['ody.liao@gmail.com']);
 }
 
 export function isAdminEmail(email: string | null | undefined) {

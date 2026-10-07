@@ -3,6 +3,7 @@
 import { useCallback, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import ReportAudit from './report-audit';
+import GpsSettings from './gps-settings';
 import {useVisiblePolling} from './use-visible-polling';
 import {ADMIN_PAGES, agentState, needsAttention, ageLabel} from '../../lib/admin-view.mjs';
 import { COUNTRY_PACK_LABELS } from "../../lib/scan-plans";
@@ -1082,6 +1083,7 @@ export default function AdminClient({
           </>}
         </section></details>}
       </div>
+      <GpsSettings />
       {page==='reports'&&<ReportAudit />}
       </div>
     </main>

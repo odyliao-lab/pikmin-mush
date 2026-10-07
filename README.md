@@ -23,6 +23,8 @@ Pikmin Bloom 蘑菇全球掃描、集中排程與公開地圖系統。Root Andro
 
 ### 公開地圖與清單
 
+- GPS 授權：未解鎖訪客僅看清單及城市，精確座標／地圖點位不回傳。唯一管理員登入後直接顯示 GPS；其他訪客須輸入管理員設定的密碼取得 12 小時授權。更換密碼撤銷舊授權；Discord 使用獨立服務認證，不受此限制。詳見 [GPS_ACCESS.md](docs/GPS_ACCESS.md)。
+
 - 手機友善的 Leaflet／OpenStreetMap 地圖與清單；地圖預設每 20 秒刷新，清單第一頁每分鐘更新。載入多頁時保留瀏覽位置與快照時間，可隨時按「立即刷新」回到最新第一頁。
 - 等級、類型多選、國家／城市／POI／GPS 搜尋與多種排序；活動類型預設不顯示。
 - 預設以最新發現排序，優先且異色標示參加人數未滿 5 人的蘑菇；圖示會依等級和低人數狀態變化。
@@ -113,7 +115,7 @@ npm run lint
 npm test
 ```
 
-`.env.local` 只在本機保存必要資料，絕不可提交。`ADMIN_EMAILS` 管理後台 allowlist；`AGENT_TOKEN`、`CONTROLLER_TOKEN` 僅為 legacy 相容／維修，新 Agent 均用個別 token 雜湊保存。
+`.env.local` 只在本機保存必要資料，絕不可提交。後台唯一帳號為 Sites 認證的 `ody.liao@gmail.com`；舊 `ADMIN_EMAILS` 不再擴增權限。`AGENT_TOKEN`、`CONTROLLER_TOKEN` 僅為相容／維修與服務查詢，新 Agent 均用個別 token 雜湊保存。
 
 ### Native 模組
 
@@ -157,7 +159,7 @@ Native 或 Agent 變更必須完成實機端到端驗證：版本簽章、hook l
 
 | 路由 | 權限 | 用途 |
 | --- | --- | --- |
-| `GET /api/mushrooms` | 公開 | 未過期蘑菇；支援 `bbox`、`limit`、cursor |
+| `GET /api/mushrooms` | 公開清單／授權 GPS | 未過期蘑菇；精確 `bbox`／GPS 限管理員、密碼授權或控制器 |
 | `GET /api/event-spots` | 公開 | 活動金盆資料與有效狀態篩選 |
 | `GET /api/admin/metrics?hours=24` | 管理者 | fleet health 與 soak report |
 | `/api/admin/scans/**` | 管理者 | 建立、查看、暫停、恢復、停止工作 |
@@ -171,7 +173,7 @@ Native 或 Agent 變更必須完成實機端到端驗證：版本簽章、hook l
 
 ## 安全與維運
 
-- `/admin` 依 `ADMIN_EMAILS` 與 Sites authenticated-user header 授權；所有後台寫入檢查 same-origin。
+- `/admin` 限 Sites 認證的唯一管理員；GPS 密碼寫入需明確同來源 JSON 請求，密碼雜湊與授權由伺服器驗證。
 - 每台 Agent 使用獨立 token，伺服器只保存雜湊；rotation 有受限過渡期，可立即撤銷。
 - 公開 API 不回傳 token、精確裝置位置、target／lease、版本或內部計數器。發現 Agent 名稱只代表資料出處，不代表即時位置。
 - 站點啟用 HSTS、CSP、`nosniff`、frame denial、referrer 與 permissions policy；上傳採 bounded UTF-8 parsing。
@@ -180,7 +182,7 @@ Native 或 Agent 變更必須完成實機端到端驗證：版本簽章、hook l
 
 ## 外部通知與限制
 
-Discord 通知服務是獨立 repo／獨立排程，使用公開 API 發送即時批次、早晚報與營運摘要；通知規則、複查、去重、排程及 webhook 需在該服務維護，不能混入本 repo。
+Discord 通知服務是獨立 repo／獨立排程，使用控制器認證查詢完整蘑菇資料，發送即時批次、定期情報與營運摘要；通知規則、複查、去重、排程及 webhook 需在該服務維護，不能混入本 repo。
 
 - Native hook 與遊戲版本強綁；版本變更要重新 dump、定位 RVA／簽章並實機驗證。
 - 未 root、未裝 Magisk／Zygisk 的裝置或模擬器不能直接成為同等 Agent。

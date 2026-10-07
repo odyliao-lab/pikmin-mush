@@ -80,7 +80,7 @@ test("hardens uploads, public telemetry, controller credentials, and browser pol
   assert.match(upload, /MAX_PARTIAL_BYTES = 64_000/);
   assert.doesNotMatch(upload, /request\.text\(\)/);
   assert.doesNotMatch(publicApi, /\bagents,\s*\n/);
-  assert.match(publicApi, /live_agents: liveAgents/);
+  assert.match(publicApi, /live_agents: permission.authorized \? liveAgents : \[\]/);
   assert.match(publicApi, /Public map markers expose the assigned scan target/);
   assert.match(publicApi, /SELECT id, lat, lng, country, city FROM scan_targets/);
   assert.match(map, /renderLiveAgents/);

@@ -33,7 +33,7 @@ export function cursorPredicate(order, cursor) {
 
 // Bound parameters, not string-built user SQL. Country/city searches match the
 // same catalog neighbourhood (120km) used by the public location label.
-export function searchPredicate(raw, catalog) {
+export function searchPredicate(raw, catalog, {locationOnly=false} = {}) {
   const q = String(raw || '').trim().toLowerCase();
   if (q.length > 120) throw new Error('search too long');
   if (!q) return {q, sql:'', bindings:[]};
@@ -41,6 +41,10 @@ export function searchPredicate(raw, catalog) {
   const pair = /^-?\d+(?:\.\d+)?,-?\d+(?:\.\d+)?$/.test(compact) ? compact.split(',').map(Number) : [999,999];
   const cities = catalog.filter(c => `${c.country}-${c.city}`.toLowerCase().includes(q))
     .map(c => [c.lat, c.lng, Math.max(.01, Math.cos(c.lat*Math.PI/180)) ** 2]);
+  if(locationOnly)return {q,sql:`EXISTS (SELECT 1 FROM json_each(?) c WHERE
+    (lat-json_extract(c.value,'$[0]'))*(lat-json_extract(c.value,'$[0]')) +
+    (lng-json_extract(c.value,'$[1]'))*(lng-json_extract(c.value,'$[1]'))*json_extract(c.value,'$[2]') <= ?)`,
+    bindings:[JSON.stringify(cities),(120/111)**2]};
   return {q, sql:`(instr(lower(id), ?) > 0 OR instr(CAST(lat AS TEXT)||','||CAST(lng AS TEXT), ?) > 0 OR (abs(lat-?) < 0.000001 AND abs(lng-?) < 0.000001) OR EXISTS (
     SELECT 1 FROM json_each(?) c WHERE
     (lat-json_extract(c.value,'$[0]'))*(lat-json_extract(c.value,'$[0]')) +
