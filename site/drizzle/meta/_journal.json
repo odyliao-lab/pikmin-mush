@@ -169,6 +169,13 @@
       "when": 1791269702993,
       "tag": "0023_puzzling_cyclops",
       "breakpoints": true
+    },
+    {
+      "idx": 24,
+      "version": "6",
+      "when": 1791347855141,
+      "tag": "0024_optimal_mongoose",
+      "breakpoints": true
     }
   ]
 }

@@ -1,5 +1,5 @@
 import {
-  ensureSchema, noStoreJson, readMushroomRetentionStatus, runtime,
+  ensureSchema, noStoreJson, readMushroomRetentionStatus, runtime, controllerAuthorized,
 } from "../../../lib/cloud";
 import { publicAgent, type ScanAgentRow } from "../../../lib/fleet";
 import { MIN_MUSHROOM_LEVEL } from "../../../lib/mushroom-policy.mjs";
@@ -7,9 +7,13 @@ import { COUNTRY_PACK_CATALOG } from "../../../lib/scan-plans";
 import { QUERY_CONTRACT_VERSION, DISCOVERY_SQL, UNDER_FIVE_SQL, discoveryWindow } from "../../../lib/query-contract.mjs";
 import { listOrder, cursorPredicate, searchPredicate } from "../../../lib/list-query.mjs";
 import { createMemo, createPublicReader, createQueryTrace } from "../../../lib/public-read.mjs";
+import { acquirePublicRead } from "../../../lib/public-read-guard.mjs";
 
 const MAX_PAGE_SIZE = 1_000;
-const readPublic = createPublicReader();
+const readPublic = createPublicReader({
+  trusted: controllerAuthorized,
+  admit: (request: Request) => acquirePublicRead(runtime().DB, request, runtime().COPY_AUDIT_HASH_KEY ?? ""),
+});
 const countMemo = createMemo();
 const metadataMemo = createMemo({ maxEntries: 1 });
 const EVENT_TYPE_IDS = [10, 14, 15, 16, 19, 20, 21, 22, 23, 24, 25];
