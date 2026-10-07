@@ -40,6 +40,7 @@ export function createApi({ size = 2305 } = {}) {
       if(p.endsWith('/public-read.mjs'))return {...publicRead,
         createMemo:options=>publicRead.createMemo({...options,now:()=>clock}),
         createPublicReader:()=>publicRead.createPublicReader({now:()=>clock,trace:()=>publicRead.createQueryTrace({log:()=>{}})})};
+      if(p.endsWith('/public-read-guard.mjs'))return {acquirePublicRead:()=>{throw Error('Admission must be tested with real D1 fixture');}};
       throw Error(p);
     }});
   return {db,statements,GET:exports.GET,advance:ms=>{clock+=ms},now:()=>clock,

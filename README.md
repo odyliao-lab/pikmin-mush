@@ -2,10 +2,7 @@
 
 Pikmin Bloom 蘑菇全球掃描、集中排程與公開地圖系統。Root Android 裝置上的 Zygisk 模組擷取遊戲地圖資料；常駐手機 Agent 依雲端派發的座標掃描，透過 HTTPS 上傳至 Codex Sites／Cloudflare D1。公開網站提供地圖、清單與活動金盆，受保護後台管理工作、裝置與輪替。
 
-- 公開地圖：<https://mush.odyliao.cc/>
-- 活動金盆：<https://mush.odyliao.cc/event-spots.html>
-- 管理後台：<https://mush.odyliao.cc/admin>
-- GitHub：<https://github.com/odyliao-lab/pikmin-mush>
+- 站台入口與管理後台網址由維運者私下提供，不在 README 公開。
 - 建置目錄：`F:\Codex\Pikmin_Dev`（避免 Google Drive 中文路徑影響 Android CMake）
 
 > [!IMPORTANT]

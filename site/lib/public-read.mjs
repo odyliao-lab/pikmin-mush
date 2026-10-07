@@ -96,11 +96,12 @@ export function createQueryTrace({ now = Date.now, sample = Math.random, log = v
 }
 
 export function createPublicReader({ now = Date.now, cache = () => globalThis.caches?.open('pikmin-public-map-v1'),
+  trusted = () => false, admit = async () => ({ allowed: true, release: async () => {} }),
   memory = createResponseMemo({ now }), limit = createReadLimiter({ now }), trace = () => createQueryTrace({ now }) } = {}) {
   return async (request, load) => {
     const url = new URL(request.url);
     if (request.method !== 'GET' || url.pathname !== '/api/mushrooms') return load(trace());
-    const metric = trace(), retry = limit(request);
+    const metric = trace(), isTrusted = trusted(request), retry = isTrusted ? 0 : limit(request);
     if (retry) {
       metric.finish({ cache: 'BYPASS', status: 429 });
       return Response.json({ error: 'rate_limited', retry_after: retry }, {
@@ -136,7 +137,15 @@ export function createPublicReader({ now = Date.now, cache = () => globalThis.ca
         }
       } catch { /* cache failure must not become a data outage */ }
     }
+    let admission;
     try {
+      admission = isTrusted ? { allowed: true } : await admit(request);
+      if (!admission.allowed) {
+        metric.finish({cache:'BYPASS',status:429});
+        return Response.json({error:'rate_limited',retry_after:admission.retryAfter}, {
+          status:429,headers:{'Cache-Control':'no-store','Retry-After':String(admission.retryAfter),'Access-Control-Allow-Origin':'*'},
+        });
+      }
       const response = await load(metric);
       const state = eligible ? 'MISS' : 'BYPASS';
       response.headers.set('X-Map-Cache', state);
@@ -159,6 +168,10 @@ export function createPublicReader({ now = Date.now, cache = () => globalThis.ca
       return Response.json({ error: 'temporarily_unavailable' }, {
         status: 503, headers: { 'Cache-Control': 'no-store', 'Retry-After': '10', 'Access-Control-Allow-Origin': '*' },
       });
+    } finally {
+      if (admission?.release) {
+        try { await admission.release(); } catch { /* bounded lease expires; never replay the read */ }
+      }
     }
   };
 }

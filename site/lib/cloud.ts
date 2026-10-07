@@ -872,6 +872,10 @@ async function performMushroomRetention(): Promise<MushroomRetentionStatus> {
     SELECT id FROM scan_target_history WHERE archived_at < ? ORDER BY archived_at LIMIT ?
   )`).bind((cutoff-86400)*1000, MUSHROOM_HISTORY_BATCH_SIZE).run());
   stage = "record_success";
+  await retentionStep("delete_public_read_budgets", () => db.prepare(`DELETE FROM public_read_budgets
+    WHERE source IN (SELECT source FROM public_read_budgets WHERE updated_at<?
+      ORDER BY updated_at LIMIT 500)`)
+    .bind(now-3600).run());
   const lastInvalidated = Number(invalidated.meta.changes ?? 0);
   const lastObservationsDeleted = Number(observations.meta.changes ?? 0);
   const lastTargetsDeleted = Number(targets.meta.changes ?? 0);
