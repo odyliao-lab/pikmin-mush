@@ -40,7 +40,7 @@ export async function access(request,env,now=Math.floor(Date.now()/1000)) {
   return row && String(row.revision)===revision ? {owner:false,authorized:true,expires_at:expiry}:denied;
 }
 export async function setPassword(env,password,now=Math.floor(Date.now()/1000)) {
-  if(typeof password!=='string'||password.length<12||password.length>128)return privateJson({error:'密碼需為 12–128 個字元'},400);
+  if(typeof password!=='string'||password.length<4||password.length>128)return privateJson({error:'密碼需為 4–128 個字元'},400);
   // Ensure signing is configured before persisting a usable password.
   await sign(env.COPY_AUDIT_HASH_KEY,'configuration-check');
   const salt=hex(crypto.getRandomValues(new Uint8Array(16))),hash=await passwordHash(password,salt);

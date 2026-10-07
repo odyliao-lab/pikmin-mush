@@ -12,7 +12,7 @@ search. Password holders can load exact map markers and copy GPS; inline GPS
 text remains owner-only. Coordinates already delivered cannot be retracted;
 shared passwords can still be shared. This is access control, not copy prevention.
 
-Owner sets a 12–128 character password in the console's “GPS 複製密碼” disclosure.
+Owner sets a 4–128 character password in the console's “GPS 複製密碼” disclosure.
 Until configured, visitor GPS access fails closed. Passwords are salted PBKDF2
 SHA256 (100000 iterations), never plaintext in storage. Browser grants are
 purpose-separated HMAC-signed `__Host-` HttpOnly/Secure/SameSite=Strict cookies,
