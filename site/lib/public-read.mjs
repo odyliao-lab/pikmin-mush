@@ -98,7 +98,7 @@ export function createQueryTrace({ now = Date.now, sample = Math.random, log = v
 export function createPublicReader({ now = Date.now, cache = () => globalThis.caches?.open('pikmin-public-map-v2-redacted'),
   trusted = () => false, admit = async () => ({ allowed: true, release: async () => {} }),
   memory = createResponseMemo({ now }), limit = createReadLimiter({ now }), trace = () => createQueryTrace({ now }) } = {}) {
-  return async (request, load) => {
+  return async (request, load, { bypassCache = false } = {}) => {
     const url = new URL(request.url);
     if (request.method !== 'GET' || url.pathname !== '/api/mushrooms') return load(trace());
     const metric = trace(), isTrusted = trusted(request), retry = isTrusted ? 0 : limit(request);
@@ -114,7 +114,9 @@ export function createPublicReader({ now = Date.now, cache = () => globalThis.ca
       });
     }
     // Explicit opt-in: existing notifier / verification reads remain uncached.
-    const eligible = url.searchParams.get('cache') === 'brief' && !request.headers.has('Authorization') &&
+    // Server-only policy: keep the original framework Request (which may be a
+    // Proxy in Workers), but never read or populate shared caches for GPS grants.
+    const eligible = !bypassCache && url.searchParams.get('cache') === 'brief' && !request.headers.has('Authorization') &&
       !/no-cache|no-store/.test(request.headers.get('Cache-Control') || '');
     const key = eligible ? publicCacheKey(request) : null;
     // Sites runs in an isolated Workers-for-Platforms namespace: caches.default
