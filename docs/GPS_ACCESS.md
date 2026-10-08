@@ -25,6 +25,9 @@ purpose-separated keyed hashes, not stored IP addresses. Cleanup deletes at most
 20 source budgets older than 24 hours per admitted attempt, using a window index.
 It never touches mushroom or report state. Password-holder map reads retain the
 public read guard. Owner/controller exact reads bypass shared response caching.
+Granted visitor reads use an explicit server-side cache bypass and preserve the
+original framework request: cloning a Vinext request Proxy fails in Workers.
+Regression coverage includes Workers proxies and real shared admission SQL.
 Anonymous responses use a new redacted cache namespace so old GPS cache entries
 cannot be reused. All security/status endpoints are private/no-store.
 

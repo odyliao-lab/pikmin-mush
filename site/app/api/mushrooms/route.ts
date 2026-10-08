@@ -119,7 +119,7 @@ export async function GET(request: Request) {
       };
       // Password holders keep the existing public request budget; owner and
       // controller automation retain their authenticated read behaviour.
-      if(!permission.owner&&!controller){const headers=new Headers(request.headers);headers.set('Cache-Control','no-store');return readPublic(new Request(request,{headers}),load);}
+      if(!permission.owner&&!controller) return readPublic(request,load,{bypassCache:true});
       const trace=createQueryTrace(),response=await load(trace);trace.finish({cache:'BYPASS',status:response.status});return response;
     }
     return readPublic(request, (trace: ReturnType<typeof createQueryTrace>) => readMushrooms(request, trace, permission));
