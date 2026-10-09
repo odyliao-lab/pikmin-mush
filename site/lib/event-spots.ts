@@ -83,15 +83,6 @@ export const EVENT_SPOT_SEED: EventSpotSeed[] = [
   limited({ id: "jp-miyajima-sa-shop", country: "日本", city: "廿日市", name: "宮島 SA（下行線）特設商店", lat: 34.35412, lng: 132.31685, rewardKind: "gold_seedling", rewardSummary: "紅色照片徽章飾品金色花苗", cooldownNote: "活動全期間限領 1 次", eligibilityNote: "文章標示為活動點；請以遊戲顯示為準" }),
   limited({ id: "jp-miyajima-sa-torii", country: "日本", city: "廿日市", name: "宮島 SA（下行線）鳥居地標", lat: 34.35445, lng: 132.3164, rewardKind: "mixed", rewardSummary: "隨機顏色運勢飾品金色花苗", cooldownNote: "活動全期間限領 1 次", eligibilityNote: "文章標示為活動點；請以遊戲顯示為準" }),
 
-  // IKEA Taiwan — marked time-limited by the selected source, without an end date.
-  limited({ id: "tw-ikea-taipei-city", country: "台灣", city: "台北", name: "IKEA 台北城市店", lat: 25.053043, lng: 121.547896, rewardKind: "gold_seedling", rewardSummary: "工具飾品金色花苗", cooldownNote: "每 7 天 1 次", eligibilityNote: "文章標示為時間限定；請以遊戲顯示為準" }),
-  limited({ id: "tw-ikea-neihu", country: "台灣", city: "台北", name: "IKEA 內湖店", lat: 25.061003, lng: 121.577915, rewardKind: "gold_seedling", rewardSummary: "工具飾品金色花苗", cooldownNote: "每 7 天 1 次", eligibilityNote: "文章標示為時間限定；請以遊戲顯示為準" }),
-  limited({ id: "tw-ikea-xinzhuang", country: "台灣", city: "新北", name: "IKEA 新莊店", lat: 25.041472, lng: 121.465305, rewardKind: "gold_seedling", rewardSummary: "工具飾品金色花苗", cooldownNote: "每 7 天 1 次", eligibilityNote: "文章標示為時間限定；請以遊戲顯示為準" }),
-  limited({ id: "tw-ikea-xindian", country: "台灣", city: "新北", name: "IKEA 新店店", lat: 24.972151, lng: 121.530928, rewardKind: "gold_seedling", rewardSummary: "工具飾品金色花苗", cooldownNote: "每 7 天 1 次", eligibilityNote: "文章標示為時間限定；請以遊戲顯示為準" }),
-  limited({ id: "tw-ikea-taoyuan", country: "台灣", city: "桃園", name: "IKEA 桃園店", lat: 25.013313, lng: 121.217437, rewardKind: "gold_seedling", rewardSummary: "工具飾品金色花苗", cooldownNote: "每 7 天 1 次", eligibilityNote: "文章標示為時間限定；請以遊戲顯示為準" }),
-  limited({ id: "tw-ikea-taichung", country: "台灣", city: "台中", name: "IKEA 台中店", lat: 24.14783, lng: 120.643133, rewardKind: "gold_seedling", rewardSummary: "工具飾品金色花苗", cooldownNote: "每 7 天 1 次", eligibilityNote: "文章標示為時間限定；請以遊戲顯示為準" }),
-  limited({ id: "tw-ikea-chiayi", country: "台灣", city: "嘉義", name: "IKEA 嘉義城市店", lat: 23.478116, lng: 120.438024, rewardKind: "gold_seedling", rewardSummary: "工具飾品金色花苗", cooldownNote: "每 7 天 1 次", eligibilityNote: "文章標示為時間限定；請以遊戲顯示為準" }),
-  limited({ id: "tw-ikea-kaohsiung", country: "台灣", city: "高雄", name: "IKEA 高雄店", lat: 22.605726, lng: 120.303909, rewardKind: "gold_seedling", rewardSummary: "工具飾品金色花苗", cooldownNote: "每 7 天 1 次", eligibilityNote: "文章標示為時間限定；請以遊戲顯示為準" }),
 
   // Seattle Aquarium MINI WALK, 2026-05-23 through 2026-09-07.
   limited({ id: "us-seattle-aquarium-coral", country: "美國", city: "西雅圖", name: "西雅圖水族館 MINI WALK — 珊瑚", lat: 47.607915, lng: -122.342669, rewardKind: "gold_seedling", rewardSummary: "珊瑚飾品金色花苗", cooldownNote: "每 7 天 1 次", startAt: seconds("2026-05-23T00:00:00-07:00"), endAt: seconds("2026-09-07T23:59:59-07:00") }),
