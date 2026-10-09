@@ -43,7 +43,28 @@ const nashville = (id: string, lat: number, lng: number, reward: string) => limi
   sourceUrl: "https://pikminbloom.com/zh_hant/news/oct26-nashville", lastVerifiedAt: seconds("2026-10-02T00:00:00Z"),
 });
 
+// Current-year claim window, not the termination of this permanent annual event.
+// Preserve the user's 10:00 local start and disclose the official 09:00 discrepancy.
+const oceanExpo = (id: string, name: string, lat: number, lng: number, reward: string, postcard = false) => limited({
+  id: `jp-ocean-expo-mini-walk-${id}`, country: "日本", city: "沖繩－海洋博公園",
+  name: `海洋博公園漫步各地迷你活動 — ${name}`, lat, lng,
+  rewardKind: postcard ? "mixed" : "gold_seedling", rewardSummary: reward,
+  startAt: seconds("2026-10-07T10:00:00+09:00"), endAt: seconds("2026-12-31T23:59:59+09:00"),
+  cooldownNote: "每個曆年可參加 1 次；各特殊地點與任務獎勵各領取 1 次；次年 1/1 00:00 可再參加",
+  eligibilityNote: "常設活動；本列為 2026 年度領取期限。使用者提供日本時間 10/07 10:00 開始（台灣 09:00），官方公告為日本時間 09:00；年度截止日本 12/31 23:59（台灣 22:59）。需親自到場、使用 v154 以上；滑動 4 個特殊地點的任務獎勵為藍色金色禮物貼紙金色花苗，並非每個點位獎勵。",
+  coordinateNote: "座標與各地點獎勵由使用者提供，非官方精確座標；尚未實地複核，請以遊戲地圖確認",
+  verificationStatus: "community", sourceTitle: "Pikmin Bloom 海洋博公園漫步各地迷你活動官方公告；點位與獎勵由使用者提供",
+  sourceUrl: "https://pikminbloom.com/zh_hant/news/oct26-oceanexpominiwalk", lastVerifiedAt: seconds("2026-10-09T00:00:00Z"),
+});
+
 export const EVENT_SPOT_SEED: EventSpotSeed[] = [
+  oceanExpo("churaumi-aquarium", "沖繩美麗海水族館", 26.693512, 127.877850, "活動明信片", true),
+  oceanExpo("okichan-theater", "Okichan 劇場", 26.692926, 127.875831, "活動明信片", true),
+  oceanExpo("okinawa-village", "沖繩鄉土村", 26.690939, 127.877518, "夏季貼紙飾品金色花苗"),
+  oceanExpo("tropical-dream-center", "熱帶夢幻中心", 26.687729, 127.876157, "紅色照片鈕扣徽章飾品金色花苗"),
+  oceanExpo("oceanic-culture-museum", "海洋文化館", 26.690656, 127.877971, "珊瑚飾品金色花苗"),
+  oceanExpo("emerald-beach", "翡翠海灘", 26.698471, 127.878590, "衝浪板鑰匙圈飾品金色花苗"),
+  oceanExpo("sunset-square", "夕陽廣場", 26.684883, 127.875184, "活動明信片", true),
   nashville("gift-sticker", 36.1590240, -86.7765040, "禮物貼紙"),
   nashville("orchestra", 36.1601300, -86.7757420, "管弦樂器"),
   nashville("chocolate", 36.1609840, -86.7753650, "巧克力"),
