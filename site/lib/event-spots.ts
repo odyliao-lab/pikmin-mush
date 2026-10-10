@@ -57,7 +57,24 @@ const oceanExpo = (id: string, name: string, lat: number, lng: number, reward: s
   sourceUrl: "https://pikminbloom.com/zh_hant/news/oct26-oceanexpominiwalk", lastVerifiedAt: seconds("2026-10-09T00:00:00Z"),
 });
 
+// Melbourne is on AEDT (UTC+11) during this event; GPS is user-supplied.
+const paxAus = (id: string, venue: string, lat: number, lng: number, reward: string, ticketed: boolean) => limited({
+  id: `au-melbourne-pax-2026-${id}`, country: "澳洲", city: "墨爾本 Melbourne",
+  name: `PAX Aus 2026 — ${venue}`, lat, lng, rewardKind: "gold_seedling",
+  rewardSummary: `${reward}飾品金色花苗`,
+  startAt: seconds("2026-10-09T10:00:00+11:00"), endAt: seconds("2026-10-11T18:00:00+11:00"),
+  cooldownNote: "活動期間每位玩家每個特殊地點限領 1 棵金色花苗",
+  eligibilityNote: `${ticketed ? "僅限持票區域，需持票入場" : "一般大眾可前往"}；地點為墨爾本會展中心（MCEC）。墨爾本當地時間 2026/10/09 10:00–10/11 18:00（AEDT，UTC+11）；台灣時間 10/09 07:00–10/11 15:00。進入會場另有散步 2,000 步地點挑戰，獎勵為黃色金色禮物貼紙金色花苗，非本點位獎勵；活動可能變更，以遊戲與現場規則為準。`,
+  coordinateNote: "精確座標由使用者提供，非官方座標；尚未實地複核，請以遊戲地圖確認",
+  verificationStatus: "community", sourceTitle: "Pikmin Bloom PAX Aus 2026 官方公告；座標由使用者提供",
+  sourceUrl: "https://pikminbloom.com/news/oct26-paxaus", lastVerifiedAt: seconds("2026-10-10T00:00:00Z"),
+});
+
 export const EVENT_SPOT_SEED: EventSpotSeed[] = [
+  paxAus("chess", "桌遊大廳（棋子）", -37.826408, 144.952772, "棋子", true),
+  paxAus("popcorn", "電影院（爆米花）", -37.82472, 144.95225, "爆米花", false),
+  paxAus("blue-mario", "Pikmin Bloom 攤位（藍色超級瑪利歐鑰匙圈）", -37.825547, 144.953019, "藍色超級瑪利歐鑰匙圈", false),
+  paxAus("rock-game-pak", "Nintendo 攤位（岩石遊戲卡匣）", -37.825357, 144.954512, "岩石遊戲卡匣", true),
   oceanExpo("churaumi-aquarium", "沖繩美麗海水族館", 26.693512, 127.877850, "活動明信片", true),
   oceanExpo("okichan-theater", "Okichan 劇場", 26.692926, 127.875831, "活動明信片", true),
   oceanExpo("okinawa-village", "沖繩鄉土村", 26.690939, 127.877518, "夏季貼紙飾品金色花苗"),
