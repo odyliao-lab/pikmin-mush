@@ -439,6 +439,8 @@ void il2cpp_dump(const char *outDir) {
 #define TARGET_PIKMIN_153_VERSION_CODE 1788751814
 #define TARGET_PIKMIN_154_VERSION "154.0"
 #define TARGET_PIKMIN_154_VERSION_CODE 1789606828
+#define TARGET_PIKMIN_155_VERSION "155.0"
+#define TARGET_PIKMIN_155_VERSION_CODE 1791279164
 // 152.0 retains the MapManager registration callback that receives the
 // MapPoiBlocker instances used by the scanner.  MapObjectManager has a distinct
 // two-argument UI registration method, but it is not the callback that
@@ -461,6 +463,9 @@ void il2cpp_dump(const char *outDir) {
 #define RVA154_MapObjectManager_RegisterMapObject 0x5A77300
 #define RVA154_LocationController_Update 0x71DADB8
 #define RVA154_SetOverride 0x71DB918
+#define RVA155_MapObjectManager_RegisterMapObject 0x5AF3F60
+#define RVA155_LocationController_Update 0x726D168
+#define RVA155_SetOverride 0x726DCC8
 
 static const uint8_t SIG_RegisterMapObject[] = {
     0xFE, 0x67, 0xBC, 0xA9, 0xF8, 0x5F, 0x01, 0xA9,
@@ -924,6 +929,9 @@ void install_hooks(const char *game_data_dir) {
     void *target154 = (void *) (il2cpp_base + RVA154_MapObjectManager_RegisterMapObject);
     void *update154 = (void *) (il2cpp_base + RVA154_LocationController_Update);
     void *override154 = (void *) (il2cpp_base + RVA154_SetOverride);
+    void *target155 = (void *) (il2cpp_base + RVA155_MapObjectManager_RegisterMapObject);
+    void *update155 = (void *) (il2cpp_base + RVA155_LocationController_Update);
+    void *override155 = (void *) (il2cpp_base + RVA155_SetOverride);
     const bool is152 =
         target_signature_matches(target152, SIG_RegisterMapObject,
                                  sizeof(SIG_RegisterMapObject)) &&
@@ -945,16 +953,23 @@ void install_hooks(const char *game_data_dir) {
                                  sizeof(SIG_LocationController_Update)) &&
         target_signature_matches(override154, SIG_SetOverride,
                                  sizeof(SIG_SetOverride));
-    if (!is152 && !is153 && !is154) {
+    const bool is155 = !is152 && !is153 && !is154 &&
+        target_signature_matches(target155, SIG153_MapObjectManager_RegisterMapObject,
+                                 sizeof(SIG153_MapObjectManager_RegisterMapObject)) &&
+        target_signature_matches(update155, SIG_LocationController_Update,
+                                 sizeof(SIG_LocationController_Update)) &&
+        target_signature_matches(override155, SIG_SetOverride,
+                                 sizeof(SIG_SetOverride));
+    if (!is152 && !is153 && !is154 && !is155) {
         LOGE("[HOOK] no supported Pikmin profile matched; refusing hooks");
         return;
     }
-    void *target = is152 ? target152 : (is153 ? target153 : target154);
-    void *upd = is152 ? update152 : (is153 ? update153 : update154);
-    void *set_override = is152 ? override152 : (is153 ? override153 : override154);
+    void *target = is155 ? target155 : (is152 ? target152 : (is153 ? target153 : target154));
+    void *upd = is155 ? update155 : (is152 ? update152 : (is153 ? update153 : update154));
+    void *set_override = is155 ? override155 : (is152 ? override152 : (is153 ? override153 : override154));
     LOGI("[HOOK] verified Pikmin %s (%d) libil2cpp signatures",
-         is152 ? TARGET_PIKMIN_152_VERSION : (is153 ? TARGET_PIKMIN_153_VERSION : TARGET_PIKMIN_154_VERSION),
-         is152 ? TARGET_PIKMIN_152_VERSION_CODE : (is153 ? TARGET_PIKMIN_153_VERSION_CODE : TARGET_PIKMIN_154_VERSION_CODE));
+         is155 ? TARGET_PIKMIN_155_VERSION : (is152 ? TARGET_PIKMIN_152_VERSION : (is153 ? TARGET_PIKMIN_153_VERSION : TARGET_PIKMIN_154_VERSION)),
+         is155 ? TARGET_PIKMIN_155_VERSION_CODE : (is152 ? TARGET_PIKMIN_152_VERSION_CODE : (is153 ? TARGET_PIKMIN_153_VERSION_CODE : TARGET_PIKMIN_154_VERSION_CODE)));
     snprintf(g_mush_path, sizeof(g_mush_path), "%s/files/mushrooms.tsv", game_data_dir);
     snprintf(g_scan_ready_path, sizeof(g_scan_ready_path), "%s/files/scan.ready", game_data_dir);
     snprintf(g_query_ready_path, sizeof(g_query_ready_path), "%s/files/map_query.ready", game_data_dir);
@@ -969,7 +984,7 @@ void install_hooks(const char *game_data_dir) {
     } else {
         A64HookFunction(target, (void *) hooked_MapObjectManagerRegisterMapObject,
                         (void **) &orig_MapObjectManagerRegisterMapObject);
-        LOGI("[HOOK] 153/154 MapObjectManager hook installed, orig=%p",
+        LOGI("[HOOK] 153/154/155 MapObjectManager hook installed, orig=%p",
              (void *) orig_MapObjectManagerRegisterMapObject);
         pthread_t map_hook_thread;
         pthread_create(&map_hook_thread, nullptr,
