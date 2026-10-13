@@ -28,7 +28,7 @@ const ROUTES = {
 };
 export const ROTATION_DAYS = Object.values(ROUTES);
 
-// Used only when fewer than four Agents are available, so no country pack is
+// Used when the fleet size differs from four, so no country pack is
 // silently dropped just because a phone is paused or temporarily offline.
 const PACK_CITY_COUNTS = {
   in: 12, kr: 8, th: 8, my: 8, sg: 1, id: 8, ph: 8, vn: 8, au: 10, nz: 8,
@@ -175,7 +175,7 @@ export function planDailyRotation(agentIds, now = Date.now()) {
   const agents = [...new Set(agentIds.map(String).filter(Boolean))].sort();
   const window = rotationWindow(now);
   if (!agents.length) return { ...window, assignments: [] };
-  if (agents.length > 4) throw new Error("自動輪替最多支援 4 個啟用 Agent");
+  if (agents.length > 5) throw new Error("自動輪替最多支援 5 個啟用 Agent");
   return {
     ...window, cycle: window.dayOffset, dayIndex: 0,
     assignments: assignmentsFor(agents, window, window.dayOffset, now),
@@ -186,7 +186,7 @@ export function planManualRedeploy(agentIds, now = Date.now()) {
   const agents = [...new Set(agentIds.map(String).filter(Boolean))].sort();
   const window = rotationWindow(now);
   if (!agents.length) return { ...window, assignments: [] };
-  if (agents.length > 4) throw new Error("手動重新分配最多支援 4 個啟用 Agent");
+  if (agents.length > 5) throw new Error("手動重新分配最多支援 5 個啟用 Agent");
   return {
     ...window, cycle: window.dayOffset + 1, dayIndex: 0,
     assignments: assignmentsFor(agents, window, window.dayOffset + 1, now)
