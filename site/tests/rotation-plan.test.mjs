@@ -7,6 +7,29 @@ import {
 const agents = ["agent-4", "agent-3", "agent-2", "agent-1"];
 const atTaipei = (day, time) => Date.parse(`${day}T${time}:00+08:00`);
 
+test("five Agents share all eligible packs without overlaps or empty routes", () => {
+  const fleet = [...agents, "agent-5"];
+  for (const day of ["2026-10-14", "2027-01-15"]) {
+    for (const [index, time] of ["04:00", "12:00", "20:00"].entries()) {
+      for (const planner of [planDailyRotation, planManualRedeploy]) {
+        const plan = planner(fleet, atTaipei(day, time));
+        const expected = ROTATION_DAYS[index].flatMap(route => route.packs);
+        const actual = plan.assignments.flatMap(route => route.packs);
+        assert.equal(plan.assignments.length, 5);
+        assert.equal(new Set(plan.assignments.map(route => route.agentId)).size, 5);
+        assert.equal(new Set(actual).size, actual.length);
+        assert.deepEqual([...actual].sort(), [...expected].sort());
+        assert.ok(plan.assignments.every(route => route.packs.length && route.cityCount > 0));
+        const counts = plan.assignments.map(route => route.cityCount);
+        assert.ok(Math.max(...counts)-Math.min(...counts) <= 12);
+        assert.equal(plan.nextSwitchAt, planner(agents, atTaipei(day,time)).nextSwitchAt);
+      }
+    }
+  }
+  for (const planner of [planDailyRotation, planManualRedeploy])
+    assert.throws(() => planner([...fleet,"agent-6"], atTaipei("2026-10-14","04:00")), /最多支援 5/);
+});
+
 test("switches every eight hours at 04:00, 12:00 and 20:00 Taipei", () => {
   const checks = [
     ["03:59", "2026-09-24-americas", "americas"],
