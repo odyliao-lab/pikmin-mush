@@ -116,7 +116,7 @@ if [ ! -x "$MAGISK_SU" ]; then
   MAGISK_SU="$(command -v su 2>/dev/null)"
 fi
 AGENT_ID="${AGENT_ID:-primary}"
-AGENT_VERSION="${AGENT_VERSION:-2.2.1}"
+AGENT_VERSION="${AGENT_VERSION:-2.2.2}"
 GAME_VERSION="${GAME_VERSION:-$(dumpsys package "$PKG" 2>/dev/null |
   sed -n 's/^[[:space:]]*versionName=//p' | head -n 1 | tr -d '\r')}"
 MODULE_VERSION="${MODULE_VERSION:-151.0}"
@@ -129,6 +129,14 @@ if [ "$VISUAL_RECOVERY_ENABLED" = "1" ]; then
     exit 1
   fi
   . "$MODDIR/visual-recovery.sh"
+fi
+POPUP_RECOVERY_ENABLED="${POPUP_RECOVERY_ENABLED:-0}"
+if [ "$POPUP_RECOVERY_ENABLED" = 1 ]; then
+  if [ ! -r "$MODDIR/popup-recovery.sh" ] || [ ! -x "$MODDIR/bin/popup-probe" ]; then
+    echo "[popup] recovery dependencies missing; refusing blind recovery"
+    exit 1
+  fi
+  . "$MODDIR/popup-recovery.sh"
 fi
 [ -n "$TOKEN" ] || TOKEN="$(cat "$MODDIR/token" 2>/dev/null)"
 if [ -z "$TOKEN" ]; then
@@ -248,8 +256,13 @@ scan_can_run() {
     PG_STABLE_AT=-1
     return 1
   fi
-  [ "$POWER_GUARD_ENABLED" = "1" ] || return 0
-  power_guard_check
+  if [ "$POWER_GUARD_ENABLED" = "1" ]; then
+    power_guard_check || return 1
+  fi
+  if [ "${POPUP_RECOVERY_ENABLED:-0}" = 1 ] && [ "${POPUP_RECOVERY_ACTIVE:-0}" != 1 ]; then
+    popup_tick_if_due || return 1
+  fi
+  return 0
 }
 
 guarded_startup_wait() {
@@ -373,6 +386,7 @@ launch_game() {
 }
 
 game_keyevent() {
+  [ "${POPUP_RECOVERY_ENABLED:-0}" != 1 ] || return 0
   scan_can_run || return 2
   # ENTER/DPAD on a healthy Unity scene can activate a focused quest control.
   [ "${VISUAL_RECOVERY_ENABLED:-0}" != "1" ] || return 0
@@ -392,6 +406,7 @@ game_keyevent() {
 }
 
 game_tap() {
+  if [ "${POPUP_RECOVERY_ENABLED:-0}" = 1 ] && [ "${POPUP_INPUT_ALLOWED:-0}" != 1 ]; then return 0; fi
   scan_can_run || return 2
   TAP_X="$1"
   TAP_Y="$2"
@@ -411,6 +426,7 @@ game_tap() {
 }
 
 game_swipe() {
+  if [ "${POPUP_RECOVERY_ENABLED:-0}" = 1 ] && [ "${POPUP_INPUT_ALLOWED:-0}" != 1 ]; then return 0; fi
   scan_can_run || return 2
   SWIPE_X1="$1"
   SWIPE_Y1="$2"

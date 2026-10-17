@@ -112,3 +112,9 @@ MAP_SHEET_COLLAPSE_END_Y='0'
 # MAP_ENTRY_Y=1600
 # Libra-only fail-closed screen matching. Requires bin/ui-probe and visual-recovery.sh.
 VISUAL_RECOVERY_ENABLED=0
+# Opt-in155 Traditional Chinese notices + calibrated dashboard compass.
+# Install popup-recovery.sh and bin/popup-probe; unknown screens receive no input.
+# This takes precedence over legacy visual/coordinate recovery, preserving
+# manual pause, foreground checks and stock power/thermal guard decisions.
+POPUP_RECOVERY_ENABLED=0
+POPUP_RECOVERY_INTERVAL_SECONDS=30
