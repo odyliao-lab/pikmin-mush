@@ -71,3 +71,42 @@ for WINDOW_DUMP in 'mCurrentFocus=Window{123 u0 com.android.permissioncontroller
   if popup_foreground; then echo 'wrong focused window accepted' >&2; exit 1; fi
 done
 echo 'popup focused-window tests passed'
+
+# A successful Android input is only an attempt. An ignored tap must be logged
+# as unconfirmed and must not cause repeated clicks in the same recovery pass.
+popup_foreground() { [ "$FOREGROUND" = 1 ]; }
+popup_state() { echo "$STATE"; }
+scan_can_run() { :; }
+sleep() { :; }
+game_tap() { echo tap >>"$TMP/outcome-input"; }
+STATE='driving 539 1260' FOREGROUND=1
+popup_recover >"$TMP/outcome"
+[ "$(wc -l <"$TMP/outcome-input")" -eq 1 ]
+grep -q 'recovery unconfirmed kind=driving reason=screen-unchanged' "$TMP/outcome"
+if grep -q 'verified recovery\|screen state changed' "$TMP/outcome"; then exit 1; fi
+
+# An unknown post-input screen is reported as a change, never a confirmed map.
+game_tap() { STATE=unknown; }
+popup_recover >"$TMP/outcome"
+grep -q 'screen state changed kind=driving next=unknown' "$TMP/outcome"
+if grep -q 'verified recovery\|recovery unconfirmed' "$TMP/outcome"; then exit 1; fi
+
+# Losing focus in the final protection check invalidates the earlier frames.
+STATE='driving 539 1260' CHECKS=0 FOREGROUND=1
+scan_can_run() {
+  CHECKS=$((CHECKS + 1))
+  [ "$CHECKS" -ne 3 ] || FOREGROUND=0
+  return 0
+}
+game_tap() { echo unsafe >>"$TMP/outcome-input"; }
+popup_recover >"$TMP/outcome"
+[ "$(wc -l <"$TMP/outcome-input")" -eq 1 ]
+[ ! -s "$TMP/outcome" ]
+
+# Protection activating after the tap stops post-input capture and chaining.
+CHECKS=0 FOREGROUND=1
+scan_can_run() { CHECKS=$((CHECKS + 1)); [ "$CHECKS" -lt 4 ]; }
+game_tap() { :; }
+if popup_recover >"$TMP/outcome"; then exit 1; else [ "$?" = 2 ]; fi
+if grep -q 'screen state changed\|verified recovery' "$TMP/outcome"; then exit 1; fi
+echo 'popup post-input outcome/final-focus/protection tests passed'

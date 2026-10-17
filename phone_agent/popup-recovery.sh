@@ -37,14 +37,27 @@ popup_recover() {
     POPUP_B="$(popup_state)"
     [ "$POPUP_A" = "$POPUP_B" ] && popup_foreground || return 0
     scan_can_run || return 2
+    # The guard can take time or change the foreground (for example stopping
+    # the game for charging protection). Recheck focus after that final guard.
+    popup_foreground || return 0
     POPUP_INPUT_ALLOWED=1
     POPUP_TAP_RESULT=0
     game_tap "$2" "$3" || POPUP_TAP_RESULT=$?
     POPUP_INPUT_ALLOWED=0
     [ "$POPUP_TAP_RESULT" = 0 ] || return "$POPUP_TAP_RESULT"
-    echo "[popup] verified recovery kind=$1 x=$2 y=$3"
+    echo "[popup] recovery input kind=$1 x=$2 y=$3"
     POPUP_PREVIOUS="$POPUP_B"
     sleep 2
+    scan_can_run || return 2
+    POPUP_AFTER="$(popup_state)"
+    if [ "$POPUP_AFTER" = "$POPUP_PREVIOUS" ]; then
+      echo "[popup] recovery unconfirmed kind=$1 reason=screen-unchanged"
+      return 0
+    fi
+    # Unknown includes the map, transitions and unsupported screens. It proves
+    # neither a recovered map nor a completed scan; leave acceptance to object,
+    # upload and ACK evidence. Never call a successful input a recovery success.
+    echo "[popup] screen state changed kind=$1 next=$POPUP_AFTER"
   done
 }
 

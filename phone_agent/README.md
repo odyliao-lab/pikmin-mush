@@ -10,7 +10,10 @@
 登入、付費、權限、未知視窗及其他 App 不會獲得自動點擊。
 
 用 `build-popup-probe.ps1 -NdkRoot <NDK>` 建置 `bin/popup-probe`，與
-`popup-recovery.sh` 及 Agent 2.2.2 一起部署。這是獨立工具，不替換原有 `bin/ui-probe`。
+`popup-recovery.sh` 及 Agent 2.2.3 一起部署。這是獨立工具，不替換原有 `bin/ui-probe`。
+2.2.3 補入 Leo 實測的駕駛提示與主畫面渲染樣本，沒有放寬文字或按鈕比對門檻。
+輸入後會再次檢查保護狀態及畫面：未改變時記錄 `recovery unconfirmed`，改變時只記錄
+`screen state changed`；unknown 不代表已回到地圖。掃描恢復仍須以新 object、資料上傳及 ACK 驗收。
 預設關閉；啟用時停用舊的盲按鍵／座標點擊，只允許本次辨識核准的輸入。保留手動暫停、
 原廠及 Agent 熱／充電保護；保護期間不擷取畫面或輸入。截圖只在模組私有檔案短暫存在，
 辨識後刪除，不上傳；版本庫僅保留公共 UI 文字／控制項的稀疏特徵與合成測試，不收私人截圖。
