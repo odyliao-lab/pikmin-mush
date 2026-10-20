@@ -60,6 +60,13 @@ for kind, sw, sh, sx, sy, prefix in templates:
     for group in ('frame','text'):
         paint(missing_button,w,groups[prefix+'_'+group])
     check(missing_button, 'unknown')
+    if kind == 'dashboard':
+        # A white circular control or a green blob is not the compass glyph.
+        # Keep foreground and negative-space checks when backgrounds animate.
+        for color in ((255,255,255), (33,120,75)):
+            other_control = bytearray(data)
+            paint(other_control,w,[(x,y,*color) for x,y,*_ in groups[prefix+'_button']])
+            check(other_control, 'unknown')
     if kind != 'dashboard':
         shifted = blank(w,h)
         for group in ('frame','text','button'):
