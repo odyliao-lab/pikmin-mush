@@ -35,6 +35,26 @@ test('membership is immutable receipt history, not mutated public discovery or s
  db.close();
 });
 
+test('recent candidate paging uses the discovery range index instead of walking old identities',()=>{
+ const db=fixture();
+ db.exec(readFileSync(new URL('../drizzle/0029_third_giant_girl.sql',import.meta.url),'utf8'));
+ db.exec('BEGIN');
+ for(let i=0;i<512;i++){
+  const id=`new-${String(i).padStart(4,'0')}`;
+  db.prepare("INSERT INTO mushrooms SELECT ?,1000,3,2,2,35,0,0,'',1,2,1").run(id);
+  db.prepare("INSERT INTO mushroom_challenges VALUES(?,?,1000,100,'challenge_start')").run(id,id);
+ }
+ db.exec('COMMIT');
+ const plan=db.prepare('EXPLAIN QUERY PLAN '+REPORT_CANDIDATES_SQL).all(90,101,'',3,120000);
+ assert.match(plan.map(r=>r.detail).join('\n'),/SEARCH mushroom_challenges USING INDEX mushroom_challenges_discovery_idx.*first_recorded_at/);
+ const page=db.prepare(REPORT_CANDIDATES_SQL).all(90,101,'',3,120000);
+ assert.equal(page.length,501);
+ const next=db.prepare(REPORT_CANDIDATES_SQL).all(90,101,page[499].challenge_key,3,120000);
+ assert.equal(next.length,13);
+ assert.equal(new Set([...page.slice(0,500),...next].map(r=>r.challenge_key)).size,513);
+ db.close();
+});
+
 test('exact target/agent evidence survives queue rotation, without current time re-filter',async()=>{
  const db=fixture();
  const read=()=>db.prepare(REPORT_EVIDENCE_SQL).all('batch001','batch001').map(r=>reportEvidence(r,120000));

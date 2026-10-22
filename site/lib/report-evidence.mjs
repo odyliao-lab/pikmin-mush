@@ -1,12 +1,14 @@
 // Controller-only report contract. Membership uses immutable server discovery,
 // not the mutable public-map first_seen or game challenge start timestamp.
-export const REPORT_CANDIDATES_SQL = `SELECT c.key AS challenge_key,c.location_id AS id,
+export const REPORT_CANDIDATES_SQL = `WITH recent AS MATERIALIZED (
+ SELECT key,location_id,start_ms,identity_confidence,first_recorded_at FROM mushroom_challenges
+ WHERE first_recorded_at>=? AND first_recorded_at<? AND key>?
+ ) SELECT c.key AS challenge_key,c.location_id AS id,
   c.start_ms,c.identity_confidence,c.first_recorded_at AS discovered_at,
   c.first_recorded_at AS first_seen,m.lat,m.lng,m.level,m.type,
   m.challenger_count,m.challenger_capacity,m.finish_ms
- FROM mushroom_challenges c JOIN mushrooms m ON m.id=c.location_id AND m.start_ms=c.start_ms
- WHERE c.first_recorded_at>=? AND c.first_recorded_at<? AND c.key>?
-   AND m.level=? AND m.challenger_capacity>0 AND m.challenger_count>=0
+ FROM recent c JOIN mushrooms m ON m.id=c.location_id AND m.start_ms=c.start_ms
+ WHERE m.level=? AND m.challenger_capacity>0 AND m.challenger_count>=0
    AND m.challenger_count<5 AND m.challenger_count<=m.challenger_capacity
    AND m.invalidated_at=0 AND m.giant_recheck_status<>'invalid'
    AND (m.finish_ms=0 OR m.finish_ms>?)
