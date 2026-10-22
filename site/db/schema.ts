@@ -11,7 +11,8 @@ export const agentPowerPauses = sqliteTable('agent_power_pauses', {
   key:text('key').primaryKey(), agentId:text('agent_id').notNull(),
   pausedAt:integer('paused_at').notNull(), resumedAt:integer('resumed_at'),
   reason:text('reason').notNull(), receivedAt:integer('received_at').notNull(),
-}, t=>[index('power_pause_agent_time_idx').on(t.agentId,t.pausedAt)]);
+}, t=>[index('power_pause_agent_time_idx').on(t.agentId,t.pausedAt),
+  index('power_pause_retention_idx').on(t.resumedAt,t.receivedAt)]);
 
 export const reportAuditEvents = sqliteTable('report_audit_events', {
   key:text('key').primaryKey(), batch:text('batch').notNull(), phase:text('phase').notNull(),
@@ -218,6 +219,7 @@ export const scanJobs = sqliteTable("scan_jobs", {
 }, (table) => [
   index("scan_jobs_status_idx").on(table.status),
   index("scan_jobs_updated_at_idx").on(table.updatedAt),
+  index("scan_jobs_finished_idx").on(table.finishedAt),
 ]);
 
 export const scanLogs = sqliteTable("scan_logs", {
@@ -288,6 +290,7 @@ export const scanTargetHistory = sqliteTable("scan_target_history", {
   lat: real("lat").notNull().default(0),
   lng: real("lng").notNull().default(0),
 }, table => [index("scan_target_history_archived_idx").on(table.archivedAt),
+  index("scan_target_history_job_idx").on(table.jobId),
   index("scan_target_history_verification_idx").on(table.verificationBatch)]);
 
 export const scanAgentEvents = sqliteTable("scan_agent_events", {
@@ -304,6 +307,7 @@ export const scanAgentEvents = sqliteTable("scan_agent_events", {
 }, (table) => [
   index("scan_agent_events_agent_at_idx").on(table.agentId, table.at),
   index("scan_agent_events_type_at_idx").on(table.eventType, table.at),
+  index("scan_agent_events_retention_idx").on(table.at),
 ]);
 
 export const scanRotationSettings = sqliteTable("scan_rotation_settings", {
@@ -345,4 +349,19 @@ export const scanRotationRuns = sqliteTable("scan_rotation_runs", {
   updatedAt: integer("updated_at").notNull(),
 }, (table) => [
   index("scan_rotation_runs_updated_at_idx").on(table.updatedAt),
+  index("scan_rotation_runs_job_idx").on(table.jobId),
 ]);
+
+export const retentionTableStats = sqliteTable('retention_table_stats', {
+  tableName:text('table_name').primaryKey(),rowCount:integer('row_count'),countedAt:integer('counted_at'),
+  previousRowCount:integer('previous_row_count'),previousCountedAt:integer('previous_counted_at'),
+  eligibleCount:integer('eligible_count'),oldestEligibleAt:integer('oldest_eligible_at'),
+  deletedLastRun:integer('deleted_last_run').notNull().default(0),
+  checkedAt:integer('checked_at').notNull(),lastError:text('last_error').notNull().default(''),
+  databaseBytes:integer('database_bytes'),
+});
+export const retentionBackups = sqliteTable('retention_backups', {
+  tableName:text('table_name').notNull(),rowKey:text('row_key').notNull(),rowJson:text('row_json').notNull(),
+  archivedAt:integer('archived_at').notNull(),expiresAt:integer('expires_at').notNull(),batchId:text('batch_id').notNull(),
+},t=>[primaryKey({columns:[t.tableName,t.rowKey]}),index('retention_backups_expiry_idx').on(t.expiresAt),
+  index('retention_backups_batch_idx').on(t.tableName,t.batchId)]);

@@ -3,6 +3,7 @@ import {
   noStoreJson, readMushroomRetentionStatus, runMushroomRetention, runtime,
   checkMaintenanceHealth,
 } from "../../../../lib/cloud";
+import {readHistoryRetention,runHistoryRetention} from '../../../../lib/history-retention.mjs';
 
 const UPLOAD_STALE_MS = 2 * 60 * 60 * 1000;
 const MAINTENANCE_STALE_SECONDS = 30 * 60;
@@ -30,13 +31,15 @@ async function snapshot() {
       now - agent.created_at > UPLOAD_STALE_MS &&
       now - (uploadedAt.get(agent.id) ?? 0) > UPLOAD_STALE_MS,
   }));
+  const history = await readHistoryRetention(runtime().DB);
   return {
-    now, retention, fleet,
+    now, retention, history, fleet,
     alerts: {
       maintenanceStale: !retention.lastSucceededAt ||
         now / 1000 - retention.lastSucceededAt > MAINTENANCE_STALE_SECONDS,
       maintenanceFailing: retention.consecutiveFailures >= 2,
       retentionBacklog: retention.pending > 0 || retention.lastBatchSaturated,
+      historyRetentionFailing: history.tables.some(table => Boolean(table.last_error)),
       uploadSilentAgents: fleet.filter(agent => agent.uploadSilent).map(agent => agent.id),
     },
   };
@@ -59,6 +62,8 @@ export async function POST(request: Request) {
       Date.now() / 1_000 - completed.lastSucceededAt > 5 * 60) {
       throw new Error("maintenance did not complete recently");
     }
+    const history = await runHistoryRetention(runtime().DB);
+    if(history.tables.some(table => Boolean(table.last_error))) throw new Error('history maintenance incomplete');
     const source = request.headers.get("x-maintenance-event");
     if (source === "schedule" || source === "cloudflare-cron") {
       const name = source === "schedule" ? 'mushroom-retention-scheduled' : 'mushroom-retention-independent';

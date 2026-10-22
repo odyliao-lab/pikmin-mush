@@ -10,8 +10,6 @@ export async function POST(request:Request){
   db.prepare(`INSERT INTO report_audit_events(key,batch,phase,kind,at,payload) VALUES(?,?,?,?,?,?)
     ON CONFLICT(key) DO UPDATE SET at=excluded.at,payload=excluded.payload WHERE excluded.at>report_audit_events.at`)
     .bind(event.key,event.batch,event.phase,event.kind,event.at,JSON.stringify(event)),
-  db.prepare(`DELETE FROM report_audit_events WHERE key IN (SELECT key FROM report_audit_events WHERE at<? ORDER BY at LIMIT 100)`)
-    .bind(Date.now()-30*86400000),
  ]);
  return noStoreJson({ok:true,key:event.key});
 }
