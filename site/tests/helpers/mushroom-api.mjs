@@ -23,15 +23,24 @@ export function createApi({ size = 2305, gpsAuthorized = true, realAccess = fals
   for (let i=0; i<size; i++) insert.run('fixture-'+String(i).padStart(5,'0'), i%2?25:-33, i%2?121:-70,
     3, i%2?2:12, '',0,0,Math.floor(clock/1000)-3000+i,Math.floor(clock/1000)-3000+i,
     i%6,35,0,0,'',0,0,'fixture-agent','active');
-  const adapter = { prepare(sql) { let binds=[]; return {
+  const adapter = { prepare(sql) { let binds=[];
+    // D1 bind(...values) accepts numbered ?1/?2 placeholders. node:sqlite
+    // treats those as named bindings (including on Node 22), not anonymous ?.
+    const execute = method => {
+      const statement=db.prepare(sql);
+      return /\?[1-9]\d*/.test(sql)
+        ? statement[method](Object.fromEntries(binds.map((value,i)=>['?'+(i+1),value])))
+        : statement[method](...binds);
+    };
+    return {
     bind(...b){binds=b;return this;},
-    async first(){return db.prepare(sql).get(...binds);},
-    async run(){return db.prepare(sql).run(...binds);},
+    async first(){return execute('get');},
+    async run(){return execute('run');},
     async all(){
       statements.push(sql);
       if(sql.includes('FROM scan_targets')||sql.includes('FROM scanner_status'))return {results:[]};
       if(sql.includes('FROM scan_agents'))return {results:[{id:'fixture-agent',display_name:'Fixture Agent'}]};
-      return {results:db.prepare(sql).all(...binds)};
+      return {results:execute('all')};
     },
   }; } };
   const exports={};
