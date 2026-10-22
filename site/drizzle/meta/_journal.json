@@ -197,6 +197,13 @@
       "when": 1792639223641,
       "tag": "0027_history_retention",
       "breakpoints": true
+    },
+    {
+      "idx": 28,
+      "version": "6",
+      "when": 1792691891297,
+      "tag": "0028_fresh_black_tom",
+      "breakpoints": true
     }
   ]
 }
