@@ -5,6 +5,7 @@ import {readFileSync} from 'node:fs';
 import {Script} from 'node:vm';
 import ts from 'typescript';
 import * as reportEvidence from '../lib/report-evidence.mjs';
+import * as coordination from '../lib/dispatch-coordination.mjs';
 
 test('actual controller verification requires matching receipt from completed target and agent',async()=>{
  const db=new DatabaseSync(':memory:');
@@ -20,7 +21,8 @@ test('actual controller verification requires matching receipt from completed ta
  const exports={};
  new Script(ts.transpileModule(readFileSync(new URL('../app/api/controller/verification/route.ts',import.meta.url),'utf8'),{compilerOptions:{module:ts.ModuleKind.CommonJS,target:ts.ScriptTarget.ES2022}}).outputText).runInNewContext({exports,URL,require(p){
   if(p.endsWith('/cloud'))return{controllerAuthorized:()=>authorized,ensureSchema:async()=>{},runtime:()=>({DB:adapter}),noStoreJson:(d,status=200)=>Response.json(d,{status})};
-  if(p.endsWith('/scans'))return{};if(p.endsWith('/report-evidence.mjs'))return reportEvidence;throw Error(p);
+  if(p.endsWith('/scans'))return{};if(p.endsWith('/report-evidence.mjs'))return reportEvidence;
+  if(p.endsWith('/dispatch-coordination.mjs'))return coordination;throw Error(p);
  }});
  const result=async()=> (await (await exports.GET(new Request('https://test/api/controller/verification?batch=batch-test'))).json()).candidates[0];
  // Old last_seen-only code incorrectly approves this without any target receipt.
@@ -48,7 +50,8 @@ test('giant candidate POST is explicit, authenticated and distinct from the lega
  let authorized=true; const exports={};
  new Script(ts.transpileModule(readFileSync(new URL('../app/api/controller/verification/route.ts',import.meta.url),'utf8'),{compilerOptions:{module:ts.ModuleKind.CommonJS,target:ts.ScriptTarget.ES2022}}).outputText).runInNewContext({exports,URL,require(p){
   if(p.endsWith('/cloud'))return {controllerAuthorized:()=>authorized,ensureSchema:async()=>{},readBoundedUtf8:async r=>({text:await r.text()}),runtime:()=>({DB:{prepare:()=>({bind(){return this},async first(){return {count:1}}})}}),noStoreJson:(d,status=200)=>Response.json(d,{status})};
-  if(p.endsWith('/scans'))return {};if(p.endsWith('/report-evidence.mjs'))return reportEvidence;throw Error(p);
+  if(p.endsWith('/scans'))return {};if(p.endsWith('/report-evidence.mjs'))return reportEvidence;
+  if(p.endsWith('/dispatch-coordination.mjs'))return coordination;throw Error(p);
  }});
  const post=(kind,candidates)=>exports.POST(new Request('https://test/api/controller/verification',{method:'POST',body:JSON.stringify({agentId:'leo',batch:'giant-test-batch',kind,candidates})}));
  assert.equal((await post('candidate-giant',[])).status,400);

@@ -1,4 +1,12 @@
 import { index, integer, primaryKey, real, sqliteTable, text, uniqueIndex } from "drizzle-orm/sqlite-core";
+import {sql} from 'drizzle-orm';
+
+export const controllerDispatches=sqliteTable('controller_dispatches',{
+  batch:text('batch').primaryKey(),owner:text('owner').notNull(),payloadSha:text('payload_sha').notNull(),
+  admission:text('admission').notNull().unique(),agentId:text('agent_id').notNull(),jobId:integer('job_id').notNull(),
+  candidateCount:integer('candidate_count').notNull(),state:text('state').notNull().default('active'),
+  createdAt:integer('created_at').notNull(),closedAt:integer('closed_at').notNull().default(0),
+},t=>[uniqueIndex('controller_one_active_dispatch').on(t.state).where(sql`${t.state}='active'`)]);
 
 export const agentUploadReceipts = sqliteTable("agent_upload_receipts", {
   agentId: text("agent_id").notNull(), streamId: text("stream_id").notNull(),

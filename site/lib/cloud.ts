@@ -50,6 +50,7 @@ type RuntimeEnv = {
   DB: D1Database;
   AGENT_TOKEN?: string;
   CONTROLLER_TOKEN?: string;
+  VERIFICATION_DISPATCHER_ID?: string;
   MAINTENANCE_TOKEN?: string;
   INDEPENDENT_MAINTENANCE_TOKEN?: string;
   MAINTENANCE_DISCORD_WEBHOOK?: string;

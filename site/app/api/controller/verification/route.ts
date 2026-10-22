@@ -3,6 +3,7 @@ import {
 } from "../../../../lib/cloud";
 import { activeJob, type ScanJobRow } from "../../../../lib/scans";
 import { REPORT_EVIDENCE_SQL, reportEvidence } from '../../../../lib/report-evidence.mjs';
+import {admitDispatch,dispatchProof} from '../../../../lib/dispatch-coordination.mjs';
 
 type Candidate = {
   id: string;
@@ -38,6 +39,9 @@ export async function POST(request: Request) {
     return noStoreJson({ error: "invalid json" }, 400);
   }
 
+  if (!input || typeof input !== 'object' || Array.isArray(input)) {
+    return noStoreJson({ error: "invalid json object" }, 400);
+  }
   const agentId = String(input.agentId ?? "").trim().toLowerCase();
   const batch = cleanBatch(input.batch);
   const replaceExisting = input.replaceExisting === true;
@@ -67,6 +71,23 @@ export async function POST(request: Request) {
   }
 
   const db = runtime().DB;
+  const coordinatedOwner=runtime().VERIFICATION_DISPATCHER_ID;
+  if(coordinatedOwner) {
+    if(input.contract!==2||input.dispatcher_id!==coordinatedOwner||replaceExisting||
+      kind==='giant-recheck'||!candidates.length||candidates.length>(kind==='candidate'?80:30))
+      return noStoreJson({error:'coordinated immutable admission required'},409);
+    const agent=await db.prepare('SELECT id,enabled,paused,last_seen,current_lat,current_lng,region_tags_json FROM scan_agents WHERE id=?')
+      .bind(agentId).first<{id:string;enabled:number;paused:number;last_seen:number;current_lat:number|null;current_lng:number|null;region_tags_json:string}>();
+    const job=await activeJob();
+    if(!agent||!job)return noStoreJson({error:'agent or job unavailable'},409);
+    let tags;
+    try{tags=JSON.parse(agent.region_tags_json);}catch{tags=[];}
+    if(!Array.isArray(tags)||!tags[0])return noStoreJson({error:'agent region unavailable'},409);
+    const result=await admitDispatch(db,{batch,owner:coordinatedOwner,agentId,kind,candidates},
+      {...agent,country:String(tags[0])},job,Date.now());
+    return noStoreJson(result,result.http);
+  }
+  if(input.dispatcher_id)return noStoreJson({error:'coordinated mode not enabled'},503);
   if (input.contract === 2 && (kind === 'giant-recheck' || replaceExisting || candidates.length > (kind === 'candidate' ? 80 : 30))) {
     return noStoreJson({error:'contract 2 requires bounded, immutable waves'},400);
   }
@@ -188,6 +209,7 @@ export async function GET(request: Request) {
     if (!rows.results.length) return noStoreJson({error:'batch not found'},404);
     const candidates = rows.results.map(row => reportEvidence(row));
     return noStoreJson({ok:true,contract:2,batch,candidates,
+      coordination:await dispatchProof(runtime().DB,batch),
       complete:candidates.every(row => ['completed','failed','cancelled'].includes(row.status))});
   }
   const rows = await runtime().DB.prepare(`SELECT
