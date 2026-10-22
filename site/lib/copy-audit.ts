@@ -1,7 +1,6 @@
 import { runtime } from "./cloud";
 
 const COPY_AUDIT_RETENTION_SECONDS = 30 * 24 * 60 * 60;
-const COPY_AUDIT_RETENTION_INTERVAL_SECONDS = 24 * 60 * 60;
 
 export type CopyAuditInput = {
   eventType: "copy_gps" | "copy_info";
@@ -49,29 +48,11 @@ function requestContext(request: Request) {
   };
 }
 
-async function pruneCopyAuditEvents(now: number) {
-  const db = runtime().DB;
-  const lockBefore = now - COPY_AUDIT_RETENTION_INTERVAL_SECONDS;
-  await db.prepare("INSERT OR IGNORE INTO maintenance_state (name) VALUES ('copy-audit-retention')").run();
-  const claim = await db.prepare(`UPDATE maintenance_state SET last_run_at=?
-    WHERE name='copy-audit-retention' AND last_run_at<?`).bind(now, lockBefore).run();
-  if (Number(claim.meta.changes ?? 0) === 0) return;
-  const cutoff = now - COPY_AUDIT_RETENTION_SECONDS;
-  const [copies, usage] = await db.batch([
-    db.prepare("DELETE FROM copy_audit_events WHERE at<?").bind(cutoff),
-    db.prepare("DELETE FROM public_usage_events WHERE at<?").bind(cutoff),
-  ]);
-  const deleted = Number(copies.meta.changes ?? 0) + Number(usage.meta.changes ?? 0);
-  await db.prepare(`UPDATE maintenance_state SET last_deleted=?, pending=0
-    WHERE name='copy-audit-retention'`).bind(deleted).run();
-}
-
 export async function recordCopyAuditEvent(request: Request, input: CopyAuditInput) {
   const fingerprint = await sourceHash(request);
   if (!fingerprint) return false;
   const now = Math.floor(Date.now() / 1000);
   const context = requestContext(request);
-  await pruneCopyAuditEvents(now);
   await runtime().DB.prepare(`INSERT INTO copy_audit_events (
       at, bucket_minute, event_type, mushroom_id, mushroom_lat, mushroom_lng,
       mushroom_level, mushroom_type, source_hash, country, asn, device_class
@@ -96,7 +77,6 @@ export async function recordPublicUsageEvent(request: Request, input: UsageEvent
   if (!fingerprint) return false;
   const now = Math.floor(Date.now() / 1000);
   const context = requestContext(request);
-  await pruneCopyAuditEvents(now);
   await runtime().DB.prepare(`INSERT INTO public_usage_events (
       at, bucket_minute, event_type, dimension, mushroom_id, source_hash,
       country, asn, device_class

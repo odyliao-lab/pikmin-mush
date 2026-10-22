@@ -19,7 +19,7 @@ test('independent source is bound to its own key, not a forged header',()=>{
 });
 
 test('maintenance writes require the dedicated secret and report bounded health', async () => {
-  let dedicated=false, controller=false, runs=0, scheduledWrites=0, completes=true;
+  let dedicated=false, controller=false, runs=0, scheduledWrites=0, completes=true,historyFailed=false;
   const now=Date.now();
   const records=[
     {id:'active',display_name:'Aries',enabled:1,paused:0,last_seen:now-1000,
@@ -38,6 +38,10 @@ test('maintenance writes require the dedicated secret and report bounded health'
   const code=ts.transpileModule(readFileSync(new URL('../app/api/controller/maintenance/route.ts',import.meta.url),'utf8'),
     {compilerOptions:{module:ts.ModuleKind.CommonJS,target:ts.ScriptTarget.ES2022}}).outputText;
   new Script(code).runInNewContext({exports,Date,require(p){
+    if(p.endsWith('/history-retention.mjs')) return {
+      readHistoryRetention:async()=>({mode:'dry_run',tables:[]}),
+      runHistoryRetention:async()=>({mode:'dry_run',tables:historyFailed?[{last_error:'archive_and_delete'}]:[]}),
+    };
     if(p.endsWith('/cloud'))return {
       maintenanceAuthorized:()=>dedicated,controllerAuthorized:()=>controller,
       ensureSchema:async()=>{},runtime:()=>({DB:db}),
@@ -75,6 +79,10 @@ test('maintenance writes require the dedicated secret and report bounded health'
     {method:'POST',headers:{'x-maintenance-event':'cloudflare-cron'}});
   assert.equal((await exports.POST(independent)).status,200);
   assert.equal(scheduledWrites,4);
+  historyFailed=true;
+  assert.equal((await exports.POST(scheduled)).status,503);
+  assert.equal(scheduledWrites,4);
+  historyFailed=false;
   completes=false;status.lastSucceededAt=Math.floor(Date.now()/1000)-1900;
   assert.equal((await exports.POST(scheduled)).status,503);
   assert.equal(scheduledWrites,4);

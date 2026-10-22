@@ -736,6 +736,15 @@ export async function checkMaintenanceHealth(nowMs = Date.now()) {
   const times = new Map((states.results ?? []).map(r => [r.name, r.last_run_at]));
   const health = maintenanceHealth(now, status, times.get('mushroom-retention-scheduled'),
     times.get('mushroom-retention-independent'), times.get('mushroom-retention-backlog'));
+  const history = await db.prepare(`SELECT pending,consecutive_failures FROM maintenance_state
+    WHERE name='history-retention-v1-run'`).first<{pending:number;consecutive_failures:number}>();
+  const historyBacklog = await db.prepare(`SELECT last_run_at FROM maintenance_state
+    WHERE name='history-retention-v1-backlog'`).first<{last_run_at:number}>();
+  health.historyPending = Number(history?.pending||0);
+  health.historyFailing = Number(history?.consecutive_failures||0)>=2;
+  health.historyBacklogPersistent = health.historyPending>0 && Number(historyBacklog?.last_run_at)>0 &&
+    nowMs-Number(historyBacklog?.last_run_at)>=24*60*60_000;
+  if(health.historyFailing || health.historyBacklogPersistent) health.severity='critical';
   await notifyMaintenanceHealth(now, status, health);
   return health;
 }
