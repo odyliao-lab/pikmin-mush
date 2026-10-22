@@ -204,6 +204,13 @@
       "when": 1792691891297,
       "tag": "0028_fresh_black_tom",
       "breakpoints": true
+    },
+    {
+      "idx": 29,
+      "version": "6",
+      "when": 1792693145624,
+      "tag": "0029_third_giant_girl",
+      "breakpoints": true
     }
   ]
 }

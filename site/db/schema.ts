@@ -81,7 +81,8 @@ export const mushroomChallenges = sqliteTable("mushroom_challenges", {
   startMs: integer("start_ms").notNull(), identityConfidence: text("identity_confidence").notNull(),
   firstRecordedAt: integer("first_recorded_at").notNull(),
   lastObservedAt: integer("last_observed_at").notNull(),
-}, (t) => [index("mushroom_challenges_location_idx").on(t.locationId, t.lastObservedAt)]);
+}, (t) => [index("mushroom_challenges_location_idx").on(t.locationId, t.lastObservedAt),
+  index('mushroom_challenges_discovery_idx').on(t.firstRecordedAt,t.key)]);
 export const mushroomObservations = sqliteTable("mushroom_observations", {
   key: text("key").primaryKey(), challengeKey: text("challenge_key").notNull(),
   agentId: text("agent_id").notNull(), receivedAt: integer("received_at").notNull(),

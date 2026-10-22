@@ -1,0 +1,1 @@
+CREATE INDEX `mushroom_challenges_discovery_idx` ON `mushroom_challenges` (`first_recorded_at`,`key`);
