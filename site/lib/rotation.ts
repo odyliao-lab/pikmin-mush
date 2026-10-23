@@ -37,7 +37,8 @@ function packNames(packIds: string[]) {
   });
 }
 
-function scanConfig(base: unknown, packs: string[], agentCount: number): ScanConfig {
+function scanConfig(base: unknown, packs: string[], agentCount: number, slot: string,
+  assignments: Array<{packs:string[]}>): ScanConfig {
   const previous = base && typeof base === "object" ? base as Record<string, unknown> : {};
   const cities = packs.reduce((count, id) => count +
     (COUNTRY_PACK_CATALOG.find((pack) => pack.id === id)?.cities.length ?? 0), 0);
@@ -55,6 +56,9 @@ function scanConfig(base: unknown, packs: string[], agentCount: number): ScanCon
     // rotation, otherwise the queue can unexpectedly grow fourfold.
     scanProfile: "global",
     rotationSamplesPerCity: samplesPerCity,
+    // Explicitly clear inherited weighting outside noon's EMEA window.
+    rotationCitySampling: slot==='emea' ? {policy:'berlin-3x-v1',
+      donorCountries:packNames(assignments.find(route=>route.packs.includes('de'))?.packs??[])} : undefined,
     loop: true,
   });
 }
@@ -177,7 +181,7 @@ export async function ensureDailyRotation(now = Date.now()) {
       countries: packNames(assignment.packs),
     }));
     const selectedPacks = [...new Set(assignments.flatMap((item) => item.packs))];
-    const config = scanConfig(previousConfig, selectedPacks, assignments.length);
+    const config = scanConfig(previousConfig, selectedPacks, assignments.length, planned.slot,assignments);
     const { regions, targets } = buildScanPlan(config, null);
 
     const slotLabel = planned.slot === "asia" ? "每日 04:00" :
@@ -288,7 +292,7 @@ export async function redeployDailyRotation(now = Date.now()) {
     countries: packNames(assignment.packs),
   }));
   const selectedPacks = [...new Set(assignments.flatMap((item) => item.packs))];
-  const config = scanConfig(previousConfig, selectedPacks, assignments.length);
+  const config = scanConfig(previousConfig, selectedPacks, assignments.length, planned.slot,assignments);
   const { regions, targets } = buildScanPlan(config, null);
 
   await stopActiveJobs(now, "手動重新分配");

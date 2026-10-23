@@ -30,6 +30,7 @@ export type ScanConfig = {
   loop: boolean;
   /** Scheduled fleet only: evenly sample this many grid points per city each cycle. */
   rotationSamplesPerCity?: number;
+  rotationCitySampling?: { policy: 'berlin-3x-v1'; donorCountries: string[] };
   custom?: {
     latMin: number;
     latMax: number;
@@ -616,6 +617,11 @@ export function normalizeScanConfig(input: unknown): ScanConfig {
     if (latMin > latMax || lngMin > lngMax) throw new Error("GPS 範圍上下界不正確");
     config.custom = { latMin, latMax, lngMin, lngMax };
   }
+  const sampling=body.rotationCitySampling as Record<string,unknown>|undefined;
+  if(mode==='auto' && sampling?.policy==='berlin-3x-v1' && Array.isArray(sampling.donorCountries)) {
+    config.rotationCitySampling={policy:'berlin-3x-v1',donorCountries:
+      sampling.donorCountries.filter((c):c is string=>typeof c==='string').slice(0,100)};
+  }
   return config;
 }
 
@@ -720,6 +726,27 @@ export function buildScanPlan(
   const cycle = Math.max(0, Math.floor(options.cycle ?? 0));
   const phase = config.scanProfile === "global" ? gridPhaseForCycle(cycle) : [0, 0] as const;
   let previous = currentLocation ?? null;
+  const grids=regions.map(region=>grid(region,config.gridStepM,phase));
+  const limits=grids.map(points=>Math.min(points.length,config.rotationSamplesPerCity??points.length));
+  const policy=config.rotationCitySampling;
+  if(policy?.policy==='berlin-3x-v1' && config.rotationSamplesPerCity) {
+    const berlin=regions.findIndex(r=>r.country==='德國' && r.name==='柏林 Berlin');
+    const donors=regions.map((r,i)=>({r,i})).filter(({r,i})=>i!==berlin &&
+      policy.donorCountries.includes(r.country)).sort((a,b)=>
+      `${a.r.country}/${a.r.name}`.localeCompare(`${b.r.country}/${b.r.name}`)).map(x=>x.i);
+    const desired=config.rotationSamplesPerCity*3,extra=berlin<0?0:desired-limits[berlin];
+    // Keep the original owner's target budget and at least one point per city.
+    // If degraded capacity cannot support exactly 3x, retain the base plan.
+    if(berlin>=0 && policy.donorCountries.includes('德國') && grids[berlin].length>=desired &&
+      extra>0 && donors.reduce((n,i)=>n+Math.max(0,limits[i]-1),0)>=extra) {
+      limits[berlin]=desired;
+      let remaining=extra,cursor=(Math.max(0,cycle)*extra)%donors.length;
+      while(remaining>0) {
+        const donor=donors[cursor++%donors.length];
+        if(limits[donor]>1){limits[donor]--;remaining--;}
+      }
+    }
+  }
   regions.forEach((region, regionIndex) => {
     const regionCenter = center(region);
     // 2026-08-20 之前這裡是 distance/10（上限 120 秒）疊加 cooldownS 下限，
@@ -729,8 +756,8 @@ export function buildScanPlan(
     // 疊加的安全邊際沒有實測依據，改成直接用 cooldownS，跨城市時間可以真的
     // 固定在使用者設定的秒數（例如 10 秒），不會被遠距離城市拉長。
     const travelCooldown = previous ? config.cooldownS : 0;
-    const fullGrid = grid(region, config.gridStepM, phase);
-    const sampleLimit = config.rotationSamplesPerCity ?? fullGrid.length;
+    const fullGrid = grids[regionIndex];
+    const sampleLimit = limits[regionIndex];
     const selectedIndices = fullGrid.length <= sampleLimit
       ? fullGrid.map((_, index) => index)
       : Array.from({ length: sampleLimit }, (_, index) =>

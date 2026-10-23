@@ -49,6 +49,24 @@ test('real SQLite comparison excludes rechecks, repeats, invalid receipts and un
  assert.equal(result.activation_ready,false);db.close();
 });
 
+test('city elemental statistics retain archive unknowns and exact target attribution',async()=>{
+ const {db,adapter}=fixture();
+ db.exec("ALTER TABLE scan_targets ADD COLUMN city TEXT NOT NULL DEFAULT ''; ALTER TABLE scan_target_history ADD COLUMN city TEXT NOT NULL DEFAULT ''; ALTER TABLE mushroom_observations ADD COLUMN type INTEGER DEFAULT 11;");
+ db.exec("UPDATE scan_targets SET city='Berlin' WHERE id=1; UPDATE scan_targets SET city='Hamburg' WHERE id=2; UPDATE scan_target_history SET city='wrong archive' WHERE id=1;");
+ for(const type of [12,13,17,18]){
+  db.prepare('INSERT INTO mushroom_challenges VALUES(?,?)').run(`element-${type}`,'challenge_start');
+  db.prepare('INSERT INTO mushroom_observations VALUES(?,?,?,?,?,?,?,?,?)').run(`element-${type}`,'leo',1,1995,3,1,35,0,type);
+ }
+ const result=await comparison.buildCityComparison(adapter,{from:1000000,to:3000000,hours:2});
+ const berlin=result.cities.find(r=>r.city==='Berlin');
+ assert.equal(berlin.targets,1);assert.equal(berlin.eligible_elemental,5);
+ for(const type of [11,12,13,17,18])assert.equal(berlin[`element_${type}`],1);
+ assert.equal(result.cities.find(r=>r.city==='Hamburg').eligible_elemental,1);
+ assert.ok(result.cities.some(r=>r.city===''));assert.ok(!result.cities.some(r=>r.city==='wrong archive'));
+ assert.equal(berlin.eligible_elemental_per_scan_hour,1800);
+ db.close();
+});
+
 test('actual comparison route rejects anonymous and malformed queries without weakening admin writes',async()=>{
  let authorized=false,called=0;const now=Date.now();const exports={};
  const db={prepare(){return {bind(){return this},async run(){},async first(){return {last_run_at:now-3*86400000}}}}};
@@ -61,4 +79,20 @@ test('actual comparison route rejects anonymous and malformed queries without we
  authorized=true;assert.equal((await exports.GET(new Request('https://example.test/?view=comparison&from=1'))).status,400);assert.equal(called,0);
  const response=await exports.GET(new Request(`https://example.test/?view=comparison&from=${now-86400000}&to=${now}`));
  assert.equal(response.status,200);assert.equal(called,1);assert.equal((await response.json()).activation_ready,false);
+});
+
+test('city statistics route requires admin/controller and rejects out-of-window requests before expensive reads',async()=>{
+ let authorized=false,queries=0;const exports={},now=Date.now();
+ const db={prepare(){return {async first(){return {last_run_at:now-3*86400000}}}}};
+ const source=readFileSync(new URL('../app/api/admin/allocation-cities/route.ts',import.meta.url),'utf8');
+ new Script(ts.transpileModule(source,{compilerOptions:{module:ts.ModuleKind.CommonJS}}).outputText).runInNewContext({exports,URL,Date,Number,require(path){
+   if(path.endsWith('/cloud'))return {adminAuthorized:()=>false,controllerAuthorized:()=>authorized,ensureSchema:async()=>{},runtime:()=>({DB:db}),noStoreJson:(body,status=200)=>Response.json(body,{status})};
+   return {...comparison,buildCityComparison:async()=>{queries++;return {cities:[]}}};
+ }});
+ assert.equal((await exports.GET(new Request('https://test/?from=1'))).status,403);
+ authorized=true;
+ assert.equal((await exports.GET(new Request('https://test/?from=1'))).status,400);
+ assert.equal(queries,0);
+ assert.equal((await exports.GET(new Request(`https://test/?from=${now-3600000}&to=${now}`))).status,200);
+ assert.equal(queries,1);assert.equal(exports.POST,undefined);
 });

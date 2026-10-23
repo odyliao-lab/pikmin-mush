@@ -1,0 +1,1 @@
+ALTER TABLE `scan_target_history` ADD `city` text DEFAULT '' NOT NULL;

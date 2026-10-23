@@ -288,6 +288,7 @@ export const scanTargetHistory = sqliteTable("scan_target_history", {
   jobId: integer("job_id").notNull(),
   cycle: integer("cycle").notNull(),
   country: text("country").notNull(),
+  city: text('city').notNull().default(''),
   verificationKind: text("verification_kind").notNull(),
   archivedAt: integer("archived_at").notNull(),
   verificationBatch: text("verification_batch").notNull().default(""),
