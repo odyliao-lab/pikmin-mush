@@ -23,6 +23,7 @@ function fixture() {
  INSERT INTO scan_targets VALUES(1,1,0,'X','candidate','batch001','p','completed',101000,110000,'leo',1,2);
  INSERT INTO mushroom_observations VALUES('o','p/1000',1,'leo',105,3,2,2,35,0);`);
  db.exec(readFileSync(new URL('../drizzle/0022_high_mojo.sql',import.meta.url),'utf8'));
+ db.exec("ALTER TABLE scan_targets ADD COLUMN city TEXT NOT NULL DEFAULT ''; ALTER TABLE scan_target_history ADD COLUMN city TEXT NOT NULL DEFAULT '';");
  return db;
 }
 
