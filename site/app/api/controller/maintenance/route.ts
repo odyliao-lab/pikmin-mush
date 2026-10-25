@@ -63,7 +63,13 @@ export async function POST(request: Request) {
       throw new Error("maintenance did not complete recently");
     }
     const history = await runHistoryRetention(runtime().DB);
-    if(history.tables.some(table => Boolean(table.last_error))) throw new Error('history maintenance incomplete');
+    const now = Date.now();
+    if (!Number.isFinite(history.lastSucceededAt) || !history.lastSucceededAt ||
+      history.lastSucceededAt > now + 60_000 || now - history.lastSucceededAt > 300_000 ||
+      history.lastSucceededAt < history.lastRunAt || history.consecutiveFailures > 0 ||
+      history.tables.some(table => Boolean(table.last_error))) {
+      throw new Error('history maintenance incomplete');
+    }
     const source = request.headers.get("x-maintenance-event");
     if (source === "schedule" || source === "cloudflare-cron") {
       const name = source === "schedule" ? 'mushroom-retention-scheduled' : 'mushroom-retention-independent';

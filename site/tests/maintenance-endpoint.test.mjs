@@ -40,7 +40,7 @@ test('maintenance writes require the dedicated secret and report bounded health'
   new Script(code).runInNewContext({exports,Date,require(p){
     if(p.endsWith('/history-retention.mjs')) return {
       readHistoryRetention:async()=>({mode:'dry_run',tables:[]}),
-      runHistoryRetention:async()=>({mode:'dry_run',tables:historyFailed?[{last_error:'archive_and_delete'}]:[]}),
+      runHistoryRetention:async()=>({mode:'dry_run',lastRunAt:now,lastSucceededAt:now,consecutiveFailures:0,tables:historyFailed?[{last_error:'archive_and_delete'}]:[]}),
     };
     if(p.endsWith('/cloud'))return {
       maintenanceAuthorized:()=>dedicated,controllerAuthorized:()=>controller,
