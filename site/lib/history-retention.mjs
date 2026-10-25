@@ -114,67 +114,84 @@ export async function runHistoryRetention(db, now=Date.now(), options={}) {
   const claim=await db.prepare(`UPDATE maintenance_state SET last_run_at=? WHERE name=? AND last_run_at<?`)
     .bind(now,LEASE,now-300000).run();
   if(!claim.meta.changes) return readHistoryRetention(db,now);
-  const started=Number((await db.prepare('SELECT last_run_at FROM maintenance_state WHERE name=?').bind(POLICY).first()).last_run_at);
-  const dryRun=now<started+DRY_RUN_MS;
-  const began=Date.now(), maxMs=options.maxMs??15000;
-  let remaining=2000, failed=false;
-  // Expiring the previous backup window is independently bounded. New backups
-  // per invocation cannot exceed 2000 rows, so expiry capacity keeps pace.
-  await db.prepare(`DELETE FROM retention_backups WHERE (table_name,row_key) IN
-    (SELECT table_name,row_key FROM retention_backups WHERE expires_at<? ORDER BY expires_at LIMIT 2000)`)
-    .bind(now).run();
-  const offset=Math.floor(now/900000)%RULES.length;
-  const ordered=[...RULES.slice(offset),...RULES.slice(0,offset),...INVENTORY.filter(r=>r.managed!=='extended')];
-  for(const rule of ordered) {
-    if(Date.now()-began>=maxMs) break;
-    let stage='inventory';
-    try {
-      const old=await db.prepare('SELECT * FROM retention_table_stats WHERE table_name=?').bind(rule.table).first();
-      let count=old?.row_count??null, countedAt=Number(old?.counted_at||0), bytes=old?.database_bytes??null;
-      let previousCount=old?.previous_row_count??null, previousAt=old?.previous_counted_at??null;
-      if(!countedAt || now-countedAt>=DAY) {
-        const census=await db.prepare(`SELECT COUNT(*) AS total FROM ${identifier(rule.table)}`).all();
-        previousCount=count;previousAt=countedAt||null;count=Number(census.results[0].total);countedAt=now;
-        if(Number(census.meta?.size_after)>0) bytes=Number(census.meta.size_after);
+  const began=Date.now();
+  let runStage='policy';
+  try {
+    const started=Number((await db.prepare('SELECT last_run_at FROM maintenance_state WHERE name=?').bind(POLICY).first()).last_run_at);
+    const dryRun=now<started+DRY_RUN_MS;
+    const maxMs=options.maxMs??15000;
+    let remaining=2000, failed=false;
+    // Expiring the previous backup window is independently bounded. New backups
+    // per invocation cannot exceed 2000 rows, so expiry capacity keeps pace.
+    runStage='backup_expiry';
+    await db.prepare(`DELETE FROM retention_backups WHERE (table_name,row_key) IN
+      (SELECT table_name,row_key FROM retention_backups WHERE expires_at<? ORDER BY expires_at LIMIT 2000)`)
+      .bind(now).run();
+    runStage='tables';
+    const offset=Math.floor(now/900000)%RULES.length;
+    const ordered=[...RULES.slice(offset),...RULES.slice(0,offset),...INVENTORY.filter(r=>r.managed!=='extended')];
+    for(const rule of ordered) {
+      if(Date.now()-began>=maxMs) break;
+      let stage='inventory';
+      try {
+        const old=await db.prepare('SELECT * FROM retention_table_stats WHERE table_name=?').bind(rule.table).first();
+        let count=old?.row_count??null, countedAt=Number(old?.counted_at||0), bytes=old?.database_bytes??null;
+        let previousCount=old?.previous_row_count??null, previousAt=old?.previous_counted_at??null;
+        if(!countedAt || now-countedAt>=DAY) {
+          const census=await db.prepare(`SELECT COUNT(*) AS total FROM ${identifier(rule.table)}`).all();
+          previousCount=count;previousAt=countedAt||null;count=Number(census.results[0].total);countedAt=now;
+          if(Number(census.meta?.size_after)>0) bytes=Number(census.meta.size_after);
+        }
+        let deleted=0;
+        if(rule.managed==='extended' && !dryRun && remaining>0) {
+          stage='archive_and_delete';
+          deleted=await archiveAndPrune(db,rule,now,Math.min(rule.batch,remaining));remaining-=deleted;
+        }
+        stage='backlog';
+        let eligible=0,oldest=null;
+        if(rule.days!==null) {
+          const p=predicate(rule,now);
+          const row=await db.prepare(`SELECT COUNT(*) AS count,MIN(${identifier(rule.time)}) AS oldest
+            FROM ${identifier(rule.table)} WHERE ${p.sql}`).bind(...p.args).first();
+          eligible=Number(row.count);oldest=row.oldest===null?null:Number(row.oldest)*(rule.scale||1);
+        }
+        await db.prepare(`INSERT INTO retention_table_stats
+          (table_name,row_count,counted_at,previous_row_count,previous_counted_at,eligible_count,
+           oldest_eligible_at,deleted_last_run,checked_at,last_error,database_bytes)
+          VALUES (?,?,?,?,?,?,?,?,?,'',?) ON CONFLICT(table_name) DO UPDATE SET
+           row_count=excluded.row_count,counted_at=excluded.counted_at,previous_row_count=excluded.previous_row_count,
+           previous_counted_at=excluded.previous_counted_at,eligible_count=excluded.eligible_count,
+           oldest_eligible_at=excluded.oldest_eligible_at,deleted_last_run=excluded.deleted_last_run,
+           checked_at=excluded.checked_at,last_error='',database_bytes=excluded.database_bytes`)
+          .bind(rule.table,count,countedAt,previousCount,previousAt,eligible,oldest,deleted,now,bytes).run();
+      } catch {
+        failed=true;
+        // Only safe stage labels, never a SQL error or archived row payload.
+        await db.prepare(`INSERT INTO retention_table_stats(table_name,checked_at,last_error) VALUES (?,?,?)
+          ON CONFLICT(table_name) DO UPDATE SET checked_at=excluded.checked_at,last_error=excluded.last_error`)
+          .bind(rule.table,now,stage).run();
       }
-      let deleted=0;
-      if(rule.managed==='extended' && !dryRun && remaining>0) {
-        stage='archive_and_delete';
-        deleted=await archiveAndPrune(db,rule,now,Math.min(rule.batch,remaining));remaining-=deleted;
-      }
-      stage='backlog';
-      let eligible=0,oldest=null;
-      if(rule.days!==null) {
-        const p=predicate(rule,now);
-        const row=await db.prepare(`SELECT COUNT(*) AS count,MIN(${identifier(rule.time)}) AS oldest
-          FROM ${identifier(rule.table)} WHERE ${p.sql}`).bind(...p.args).first();
-        eligible=Number(row.count);oldest=row.oldest===null?null:Number(row.oldest)*(rule.scale||1);
-      }
-      await db.prepare(`INSERT INTO retention_table_stats
-        (table_name,row_count,counted_at,previous_row_count,previous_counted_at,eligible_count,
-         oldest_eligible_at,deleted_last_run,checked_at,last_error,database_bytes)
-        VALUES (?,?,?,?,?,?,?,?,?,'',?) ON CONFLICT(table_name) DO UPDATE SET
-         row_count=excluded.row_count,counted_at=excluded.counted_at,previous_row_count=excluded.previous_row_count,
-         previous_counted_at=excluded.previous_counted_at,eligible_count=excluded.eligible_count,
-         oldest_eligible_at=excluded.oldest_eligible_at,deleted_last_run=excluded.deleted_last_run,
-         checked_at=excluded.checked_at,last_error='',database_bytes=excluded.database_bytes`)
-        .bind(rule.table,count,countedAt,previousCount,previousAt,eligible,oldest,deleted,now,bytes).run();
-    } catch {
-      failed=true;
-      // Only safe stage labels, never a SQL error or archived row payload.
-      await db.prepare(`INSERT INTO retention_table_stats(table_name,checked_at,last_error) VALUES (?,?,?)
-        ON CONFLICT(table_name) DO UPDATE SET checked_at=excluded.checked_at,last_error=excluded.last_error`)
-        .bind(rule.table,now,stage).run();
     }
+    runStage='backlog';
+    const snapshot=await readHistoryRetention(db,now);
+    const pending=dryRun?0:snapshot.tables.filter(t=>t.managed==='extended').reduce((n,t)=>n+Number(t.eligible_count||0),0);
+    await db.prepare(`INSERT OR IGNORE INTO maintenance_state(name) VALUES ('history-retention-v1-backlog')`).run();
+    await db.prepare(`UPDATE maintenance_state SET last_run_at=CASE WHEN ?=0 THEN 0
+      WHEN last_run_at=0 THEN ? ELSE last_run_at END WHERE name='history-retention-v1-backlog'`).bind(pending,now).run();
+    runStage='state';
+    await db.prepare(`UPDATE maintenance_state SET pending=?,last_succeeded_at=CASE WHEN ? THEN last_succeeded_at ELSE ? END,
+      last_failed_at=CASE WHEN ? THEN ? ELSE last_failed_at END,
+      consecutive_failures=CASE WHEN ? THEN consecutive_failures+1 ELSE 0 END,last_duration_ms=?,last_failure_stage=? WHERE name=? AND last_run_at=?`)
+      .bind(pending,failed?1:0,now,failed?1:0,now,failed?1:0,Date.now()-began,failed?'tables':'',LEASE,now).run();
+    return readHistoryRetention(db,now);
+  } catch (error) {
+    // A failure outside a table still belongs to this claimed run. Keep the
+    // previous success and expose only a fixed stage label in persisted health.
+    try {
+      await db.prepare(`UPDATE maintenance_state SET last_failed_at=?,
+        consecutive_failures=consecutive_failures+1,last_failure_stage=?,last_duration_ms=?
+        WHERE name=? AND last_run_at=?`).bind(now,runStage,Date.now()-began,LEASE,now).run();
+    } catch { /* A database outage may also prevent recording; preserve the original failure. */ }
+    throw error;
   }
-  const snapshot=await readHistoryRetention(db,now);
-  const pending=dryRun?0:snapshot.tables.filter(t=>t.managed==='extended').reduce((n,t)=>n+Number(t.eligible_count||0),0);
-  await db.prepare(`INSERT OR IGNORE INTO maintenance_state(name) VALUES ('history-retention-v1-backlog')`).run();
-  await db.prepare(`UPDATE maintenance_state SET last_run_at=CASE WHEN ?=0 THEN 0
-    WHEN last_run_at=0 THEN ? ELSE last_run_at END WHERE name='history-retention-v1-backlog'`).bind(pending,now).run();
-  await db.prepare(`UPDATE maintenance_state SET pending=?,last_succeeded_at=CASE WHEN ? THEN last_succeeded_at ELSE ? END,
-    last_failed_at=CASE WHEN ? THEN ? ELSE last_failed_at END,
-    consecutive_failures=CASE WHEN ? THEN consecutive_failures+1 ELSE 0 END,last_duration_ms=? WHERE name=?`)
-    .bind(pending,failed?1:0,now,failed?1:0,now,failed?1:0,Date.now()-began,LEASE).run();
-  return readHistoryRetention(db,now);
 }
