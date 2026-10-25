@@ -589,6 +589,7 @@ export function parseTsv(text: string): MushroomRow[] {
   for (const line of text.split("\n")) {
     const fields = line.replace(/\r$/, "").split("\t");
     if (fields.length < 4 || !fields[1] || fields[1].length > 256) continue;
+    if (!fields[2].trim() || !fields[3].trim()) continue;
     const lat = Number(fields[2]);
     const lng = Number(fields[3]);
     if (!Number.isFinite(lat) || !Number.isFinite(lng) ||
