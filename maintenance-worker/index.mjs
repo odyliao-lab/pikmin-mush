@@ -17,6 +17,7 @@ export async function runMaintenance(env, deps = {}) {
       const success = data.retention?.lastSucceededAt;
       if (!Number.isFinite(success) || success > now + 60 || now - success > 300 ||
           data.maintenanceHealth?.independentLastSucceededAt < now - 300 ||
+          data.maintenanceHealth?.independentLastSucceededAt > now + 60 ||
           !Number.isFinite(data.maintenanceHealth?.independentLastSucceededAt)) {
         throw Error('maintenance acknowledgement missing or stale');
       }
