@@ -675,7 +675,8 @@ export function mushroomUpsertStatements(db: D1Database, rows: MushroomRow[],
           THEN 0
         ELSE mushrooms.invalidated_at
       END,
-      start_ms=excluded.start_ms`;
+      start_ms=excluded.start_ms
+    WHERE mushrooms.start_ms <= 0 OR excluded.start_ms >= mushrooms.start_ms`;
   // Six rows per statement keep the 15-column snapshot below 100 bindings.
   // Flush 48 statements per batch: history must not quadruple network calls.
   const statements: D1PreparedStatement[] = [];
