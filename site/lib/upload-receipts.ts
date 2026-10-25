@@ -44,7 +44,7 @@ export async function receiveUpload(request: Request, agent: UploadAgent,
   const at = Date.now();
   const statements = [db.prepare(RECEIPT_INSERT)
     .bind(start,agent.id,stream,agent.id,stream,start,end,hash,rows.length,at),
-    ...mushroomUpsertStatements(db,rows,agent.id,agent.current_target_id,Math.floor(at/1000)),
+    ...mushroomUpsertStatements(db,rows,agent.id,agent.current_target_id,Math.floor(at/1000),JSON.stringify([stream,start,end])),
     db.prepare(`UPDATE scan_agents SET uploaded_rows=uploaded_rows+?,
       uploaded_bytes=uploaded_bytes+?,last_data_at=CASE WHEN ?>0 THEN ? ELSE last_data_at END,
       last_seen=?,updated_at=?,
