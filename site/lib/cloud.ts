@@ -625,7 +625,7 @@ export async function upsertMushrooms(rows: MushroomRow[], discoveredByAgentId =
 
 /** Callers may atomically batch these with a receipt and ingestion counters. */
 export function mushroomUpsertStatements(db: D1Database, rows: MushroomRow[],
-  discoveredByAgentId: string, targetId: number | null, now: number) {
+  discoveredByAgentId: string, targetId: number | null, now: number, receiptId: string | null = null) {
   const usefulRows = rows.filter((row) => isUsefulMushroomLevel(row.level));
   const sql = `INSERT INTO mushrooms (
       id, lat, lng, level, type, cluster, cooldown, finish_ms,
@@ -687,7 +687,7 @@ export function mushroomUpsertStatements(db: D1Database, rows: MushroomRow[],
         row.id, row.lat, row.lng, row.level, row.type, row.cluster,
         row.cooldown, row.finish_ms, now, discoveredByAgentId, now, row.challenger_count,
         row.challenger_capacity, row.total_power, row.start_ms,
-      ])), ...observationStatements(db, chunk, discoveredByAgentId, now, targetId));
+      ])), ...observationStatements(db, chunk, discoveredByAgentId, now, targetId, receiptId));
   }
   return statements;
 }

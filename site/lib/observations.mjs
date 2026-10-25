@@ -1,18 +1,20 @@
 /** No inferred historical scan time: received_at is the server ingestion time. */
-export function observationIdentity(row, agentId, receivedAt) {
+export function observationIdentity(row, agentId, receivedAt, receiptId = null) {
   const start = Number(row.start_ms) > 0 ? Number(row.start_ms) : 0;
   const challenge = JSON.stringify([row.id, start || "unresolved"]);
   return {
     challenge,
     confidence: start ? "challenge_start" : "unresolved",
-    key: JSON.stringify([challenge, agentId, receivedAt, row.level, row.type,
+    // Receipt identity separates distinct envelopes even in the same second.
+    // Legacy callers keep their original time-based deduplication.
+    key: JSON.stringify([challenge, agentId, receiptId === null ? receivedAt : ["receipt-v1", receiptId], row.level, row.type,
       row.challenger_count, row.challenger_capacity, row.total_power, row.finish_ms]),
   };
 }
 
-export function observationStatements(db, row, agentId, now, targetId = null) {
+export function observationStatements(db, row, agentId, now, targetId = null, receiptId = null) {
   const rows = Array.isArray(row) ? row : [row];
-  const identities = rows.map(row => observationIdentity(row, agentId, now));
+  const identities = rows.map(row => observationIdentity(row, agentId, now, receiptId));
   const placeholders = count => rows.map(() => `(${Array(count).fill("?").join(",")})`).join(",");
   return [
     db.prepare(`INSERT INTO mushroom_locations (id,lat,lng,first_recorded_at,last_recorded_at)
