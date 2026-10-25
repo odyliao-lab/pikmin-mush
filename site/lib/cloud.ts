@@ -595,6 +595,10 @@ export function parseTsv(text: string): MushroomRow[] {
         lat < -90 || lat > 90 || lng < -180 || lng > 180) continue;
     const level = integer(fields[6]);
     if (!isUsefulMushroomLevel(level)) continue;
+    const countText = fields[9]?.trim() ?? "";
+    const count = Number(countText);
+    // Missing/malformed evidence is not a verified empty mushroom.
+    if (!/^\d+$/.test(countText) || !Number.isSafeInteger(count) || count > 10_000) continue;
     const power = Number(fields[11] ?? 0);
     rows.push({
       id: fields[1],
@@ -605,7 +609,7 @@ export function parseTsv(text: string): MushroomRow[] {
       level,
       type: Math.max(0, Math.min(10_000, integer(fields[7]))),
       finish_ms: Math.max(0, integer(fields[8])),
-      challenger_count: Math.max(0, Math.min(10_000, integer(fields[9]))),
+      challenger_count: count,
       challenger_capacity: Math.max(0, Math.min(10_000, integer(fields[10]))),
       total_power: Number.isFinite(power) ? Math.max(0, Math.min(1e15, power)) : 0,
       start_ms: Math.max(0, integer(fields[12])),
