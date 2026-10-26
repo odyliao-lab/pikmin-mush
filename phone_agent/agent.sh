@@ -116,7 +116,7 @@ if [ ! -x "$MAGISK_SU" ]; then
   MAGISK_SU="$(command -v su 2>/dev/null)"
 fi
 AGENT_ID="${AGENT_ID:-primary}"
-AGENT_VERSION="${AGENT_VERSION:-2.2.3}"
+AGENT_VERSION="${AGENT_VERSION:-2.2.4}"
 GAME_VERSION="${GAME_VERSION:-$(dumpsys package "$PKG" 2>/dev/null |
   sed -n 's/^[[:space:]]*versionName=//p' | head -n 1 | tr -d '\r')}"
 MODULE_VERSION="${MODULE_VERSION:-151.0}"
@@ -137,6 +137,11 @@ if [ "$POPUP_RECOVERY_ENABLED" = 1 ]; then
     exit 1
   fi
   . "$MODDIR/popup-recovery.sh"
+fi
+SCAN_RECOVERY_ENABLED="${SCAN_RECOVERY_ENABLED:-0}"
+if [ "$SCAN_RECOVERY_ENABLED" = 1 ]; then
+  [ -r "$MODDIR/scan-recovery.sh" ] || { echo '[recovery] dependencies missing'; exit 1; }
+  . "$MODDIR/scan-recovery.sh"
 fi
 [ -n "$TOKEN" ] || TOKEN="$(cat "$MODDIR/token" 2>/dev/null)"
 if [ -z "$TOKEN" ]; then
@@ -522,7 +527,12 @@ ensure_game_running() {
   fi
   if ! pidof "$PKG" >/dev/null 2>&1; then
     launch_game || return 1
-    guarded_startup_wait 25 || return 2
+    if [ "${SCAN_RECOVERY_ENABLED:-0}" = 1 ]; then
+      scan_recovery_started || return 1
+      scan_recovery_wait_native || return $?
+    else
+      guarded_startup_wait 25 || return 2
+    fi
     if [ "$POWER_GUARD_ENABLED" = "1" ]; then
       GUARD_COLD_START=1
       QUERY_ONLY_STREAK=0
@@ -755,6 +765,10 @@ wait_for_map_refresh() {
 }
 
 restart_game_for_scan() {
+  scan_can_run || return 2
+  if [ "${SCAN_RECOVERY_ENABLED:-0}" = 1 ]; then
+    scan_recovery_restart_allowed || return 1
+  fi
   DIAG_RESTARTS=$(( ${DIAG_RESTARTS:-0} + 1 ))
   RESTART_JOB="$1"
   RESTART_TOKEN="$2"
@@ -765,9 +779,13 @@ restart_game_for_scan() {
     rm -f "$SCAN_READY" "$QUERY_READY"
   fi
   launch_game || return 1
+  if [ "${SCAN_RECOVERY_ENABLED:-0}" = 1 ]; then
+    scan_recovery_started || return 1
+    scan_recovery_wait_native || return $?
+  fi
   if [ "$MAP_REFRESH_EXPERIMENT" = "1" ]; then
     WARMUP_SECONDS="$(number_or_zero "$MAP_HOOK_WARMUP_SECONDS")"
-    if [ "$WARMUP_SECONDS" -gt 0 ]; then
+    if [ "$WARMUP_SECONDS" -gt 0 ] && [ "${SCAN_RECOVERY_ENABLED:-0}" != 1 ]; then
       echo "[scan] hook warmup ${WARMUP_SECONDS}s before fallback refresh"
       interruptible_wait "$WARMUP_SECONDS" "$RESTART_JOB" || return 2
     fi

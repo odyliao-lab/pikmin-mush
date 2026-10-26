@@ -118,3 +118,6 @@ VISUAL_RECOVERY_ENABLED=0
 # manual pause, foreground checks and stock power/thermal guard decisions.
 POPUP_RECOVERY_ENABLED=0
 POPUP_RECOVERY_INTERVAL_SECONDS=30
+# Requires Hunter with PID-bound native.ready support; preserve opt-out on older modules.
+SCAN_RECOVERY_ENABLED=0
+SCAN_RESTART_MIN_SECONDS=300
