@@ -3,7 +3,9 @@ param(
     [string]$BuildRoot = '',
     [string]$OutputPath = '',
     [string]$GameVersion = '152.0',
-    [int]$GameVersionCode = 1787540739
+    [int]$GameVersionCode = 1787540739,
+    [ValidatePattern('^r[0-9]+(?:-[a-z0-9-]+)?$')]
+    [string]$ModuleRevision = 'r1'
 )
 
 $ErrorActionPreference = 'Stop'
@@ -53,7 +55,7 @@ Copy-Item -LiteralPath $x64Source `
 $moduleProp = @(
     'id=zygisk_pikmin_hunter'
     'name=Pikmin Hunter'
-    "version=v$GameVersion-r1"
+    "version=v$GameVersion-$ModuleRevision"
     "versionCode=$GameVersionCode"
     'author=odyliao-lab'
     "description=Pikmin Bloom $GameVersion fail-closed mushroom capture and GPS override"

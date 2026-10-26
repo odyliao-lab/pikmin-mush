@@ -17,6 +17,7 @@
 #include "il2cpp-tabledefs.h"
 #include "il2cpp-class.h"
 #include "And64InlineHook.hpp"
+#include "scanner-performance.h"
 
 #define DO_API(r, n, p) r (*n) p
 
@@ -521,6 +522,68 @@ static bool matches_target_signature(const char *name, const void *target,
 static char g_mush_path[512] = {0};    // 每次寫入才開檔，避免外部 rm 造成寫入遺失
 static char g_scan_ready_path[512] = {0};
 static char g_query_ready_path[512] = {0};
+static char g_native_ready_path[512] = {0};
+static const char *g_native_version = "";
+static int g_render_fps = 0;
+static char g_render_status_path[512] = {0};
+
+static void native_ready_marker() {
+    char tmp[540];
+    snprintf(tmp, sizeof(tmp), "%s.%d.tmp", g_native_ready_path, getpid());
+    FILE *f = fopen(tmp, "w");
+    if (!f) return;
+    fprintf(f, "%d\t%s\n", getpid(), g_native_version);
+    if (fclose(f) == 0) rename(tmp, g_native_ready_path);
+}
+
+// Executed only in LocationController.Update on Unity's main thread, only for
+// an opted-in exact155 profile. No thermal/charger/CPU-frequency controls.
+static void apply_scanner_render_limit() {
+    if (!g_render_fps || !il2cpp_domain_get || !il2cpp_runtime_invoke || !il2cpp_object_unbox) return;
+    static time_t last_check = 0;
+    time_t now = time(nullptr);
+    if (last_check && now >= last_check && now-last_check < 5) return;
+    last_check = now;
+    static const MethodInfo *setter = nullptr, *getter = nullptr;
+    static int attempts = 0;
+    if (!setter || !getter) {
+        if (++attempts > 12) { g_render_fps=0; LOGW("[PERF] render metadata unavailable; opt-out"); return; }
+        auto domain = il2cpp_domain_get();
+        if (!domain) return;
+        size_t count=0;
+        auto assemblies = il2cpp_domain_get_assemblies(domain, &count);
+        for (size_t i=0; i<count; ++i) {
+            auto image = il2cpp_assembly_get_image(assemblies[i]);
+            const char *name = image ? il2cpp_image_get_name(image) : nullptr;
+            if (!name || strcmp(name,"UnityEngine.CoreModule.dll")) continue;
+            auto klass = il2cpp_class_from_name(image,"UnityEngine","Application");
+            if (!klass) break;
+            setter = il2cpp_class_get_method_from_name(klass,"set_targetFrameRate",1);
+            getter = il2cpp_class_get_method_from_name(klass,"get_targetFrameRate",0);
+            break;
+        }
+        if (!setter || !getter) return;
+        if (!(il2cpp_method_get_flags(setter,nullptr)&METHOD_ATTRIBUTE_STATIC) ||
+            !(il2cpp_method_get_flags(getter,nullptr)&METHOD_ATTRIBUTE_STATIC)) {
+            g_render_fps=0; LOGW("[PERF] invalid render metadata; opt-out"); return;
+        }
+    }
+    Il2CppException *exc=nullptr;
+    auto boxed = il2cpp_runtime_invoke(getter,nullptr,nullptr,&exc);
+    if (exc || !boxed) { g_render_fps=0; LOGW("[PERF] render read failed; opt-out"); return; }
+    int current = *static_cast<int *>(il2cpp_object_unbox(boxed));
+    if (current == g_render_fps) return;
+    int requested=g_render_fps;
+    void *args[]={&requested};
+    il2cpp_runtime_invoke(setter,nullptr,args,&exc);
+    boxed = exc ? nullptr : il2cpp_runtime_invoke(getter,nullptr,nullptr,&exc);
+    if (exc || !boxed || *static_cast<int *>(il2cpp_object_unbox(boxed)) != requested) {
+        g_render_fps=0; LOGW("[PERF] render limit verification failed; opt-out"); return;
+    }
+    LOGI("[PERF] verified targetFrameRate=%d previous=%d",requested,current);
+    FILE *f=fopen(g_render_status_path,"w");
+    if (f) { fprintf(f,"%d\t%d\t%ld\n",getpid(),requested,(long)now); fclose(f); }
+}
 static volatile double g_cur_lat = 0, g_cur_lng = 0;
 static volatile bool g_have_target = false;
 static volatile bool g_refresh_pending = false;
@@ -665,6 +728,7 @@ static void *install_153_map_manager_hook_after_startup(void *) {
                     (void **) &orig_MapManagerRegisterMapObject);
     LOGI("[HOOK] 153 MapManager hook installed after startup, orig=%p",
          (void *) orig_MapManagerRegisterMapObject);
+    if (orig_MapManagerRegisterMapObject) native_ready_marker();
     return nullptr;
 }
 
@@ -825,6 +889,7 @@ static void hooked_MapQueryResponse(void *thiz, void *buffer, void *method) {
 
 // 在遊戲主執行緒(Update hook 內)呼叫遊戲原生的覆蓋 API
 static void hooked_LCUpdate(void *thiz, void *method) {
+    if (thiz) apply_scanner_render_limit();
     long long applied_refresh_token = 0;
     if (thiz) {
         if (!g_locController) {
@@ -973,6 +1038,19 @@ void install_hooks(const char *game_data_dir) {
     snprintf(g_mush_path, sizeof(g_mush_path), "%s/files/mushrooms.tsv", game_data_dir);
     snprintf(g_scan_ready_path, sizeof(g_scan_ready_path), "%s/files/scan.ready", game_data_dir);
     snprintf(g_query_ready_path, sizeof(g_query_ready_path), "%s/files/map_query.ready", game_data_dir);
+    snprintf(g_native_ready_path, sizeof(g_native_ready_path), "%s/files/native.ready", game_data_dir);
+    unlink(g_native_ready_path);
+    g_native_version=is155 ? "155.0" : (is154 ? "154.0" : (is153 ? "153.0" : "152.0"));
+    if (is155) {
+        char path[512];
+        snprintf(path,sizeof(path),"%s/files/scanner-render-fps.txt",game_data_dir);
+        FILE *f=fopen(path,"r");
+        g_render_fps=scanner_render_fps(f);
+        if (f) fclose(f);
+        snprintf(g_render_status_path,sizeof(g_render_status_path),"%s/files/scanner-render.status",game_data_dir);
+        unlink(g_render_status_path);
+        LOGI("[PERF] configured targetFrameRate=%d (0=unchanged)",g_render_fps);
+    }
     LOGI("[HOOK] mush log=%s", g_mush_path);
 
     LOGI("[HOOK] map registration target=%p", target);
@@ -981,6 +1059,7 @@ void install_hooks(const char *game_data_dir) {
                         (void **) &orig_MapManagerRegisterMapObject);
         LOGI("[HOOK] 152 MapManager hook installed, orig=%p",
              (void *) orig_MapManagerRegisterMapObject);
+        if (orig_MapManagerRegisterMapObject) native_ready_marker();
     } else {
         A64HookFunction(target, (void *) hooked_MapObjectManagerRegisterMapObject,
                         (void **) &orig_MapObjectManagerRegisterMapObject);
