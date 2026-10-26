@@ -1,6 +1,28 @@
 # Pikmin Scanner Agent
 
-## 153 實機地圖入口
+## 155 已知彈窗自動恢復
+
+`POPUP_RECOVERY_ENABLED=1` 啟用手機本機的已校準畫面辨識。在掃描及等待的安全檢查點，
+以 `POPUP_RECOVERY_INTERVAL_SECONDS=30` 為間隔檢查實體螢幕，不依賴電腦或 ADB。
+支援 1080×2400、1080×2160、1440×3120 的繁體中文已知安全提示、速度提示及主畫面。
+警告必須同時符合外框、已校準文字與按鈕特徵；兩張新截圖一致且遊戲仍為焦點視窗才點擊。
+關閉提示後重新辨識主畫面，使用已校準的羅盤 tap 回到地圖。文字、比例或位置不符時不操作；
+登入、付費、權限、未知視窗及其他 App 不會獲得自動點擊。
+
+用 `build-popup-probe.ps1 -NdkRoot <NDK>` 建置 `bin/popup-probe`，與
+`popup-recovery.sh` 及 Agent 2.2.3 一起部署。這是獨立工具，不替換原有 `bin/ui-probe`。
+2.2.3 補入 Leo 實測的駕駛提示與主畫面渲染樣本，沒有放寬文字或按鈕比對門檻。
+輸入後會再次檢查保護狀態及畫面：未改變時記錄 `recovery unconfirmed`，改變時只記錄
+`screen state changed`；unknown 不代表已回到地圖。掃描恢復仍須以新 object、資料上傳及 ACK 驗收。
+預設關閉；啟用時停用舊的盲按鍵／座標點擊，只允許本次辨識核准的輸入。保留手動暫停、
+原廠及 Agent 熱／充電保護；保護期間不擷取畫面或輸入。截圖只在模組私有檔案短暫存在，
+辨識後刪除，不上傳；版本庫僅保留公共 UI 文字／控制項的稀疏特徵與合成測試，不收私人截圖。
+
+現有手機先備份，再加入這項功能；保留 token、config 其他設定、upload.offset、TSV 及待送／ACK。
+只重新啟動 Agent 即可載入，無須更換 Hunter 或重開手機。Libra 的羅盤 tap 與停用的控制中心核心保持原狀；
+Scorpio 不在正式四機部署範圍。
+
+## 歷史 153 實機地圖入口
 
 Libra 與已校準的 Scorpio 可啟用 `VISUAL_RECOVERY_ENABLED=1`（其他機型預設關閉）。部署前用
 `build-ui-probe.ps1 -NdkRoot <NDK>` 建置 `bin/ui-probe`，一起安裝
@@ -13,7 +35,7 @@ Scorpio profile 可辨識主畫面、活動挑戰和功能選單，分別滑進�
 畫面比對是保守色彩特徵而非 OCR；改版、比例、遮罩不符會拒絕操作。
 截圖僅暫存在手機模組私有檔案，辨識後刪除，不上傳。
 
-經裝置畫面確認後可設定 `MAP_ENTRY_MODE=swipe`，搭配
+以下 swipe 為歷史 153 校準，不能覆蓋現行 Libra 的羅盤 tap。經裝置畫面確認後可設定 `MAP_ENTRY_MODE=swipe`，搭配
 `MAP_ENTRY_START_X`、`MAP_ENTRY_END_X`、`MAP_ENTRY_Y`，從主畫面以手指
 **右往左**進入地圖。Libra 1440×3120 實測為 `(1230,1600) → (220,1600)`。
 此模式停用 fallback 的生活紀錄下滑及探索頁點擊；其他裝置預設仍用既有 tap。
