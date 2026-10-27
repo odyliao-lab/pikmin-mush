@@ -8,6 +8,9 @@ Android 實際安裝的遊戲版本。遊戲在 Agent 未重啟時更新，也�
 部署必須一起保留此 helper；不得只修改 Agent／模組版本名稱。
 156 的 native profile、限幀選項和 PID 綁定 `native.ready` 仍需重開及實際
 object、TSV、上傳、ACK 驗收；版本相符或 native.ready 都不能代替掃描證據。
+既有手機採用保留其上傳實作的 scoped patch；Cancer 的專用 power guard、60%
+恢復門檻與限幀設定保留，Libra 保持控制中心核心停用及羅盤 tap，不依153歷史
+段落改回 swipe。完整逐台證據見 `docs/FLEET_156_VALIDATION_2026-10-27.md`。
 
 ## 155 已知彈窗自動恢復
 
