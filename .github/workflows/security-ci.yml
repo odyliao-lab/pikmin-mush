@@ -41,6 +41,11 @@ jobs:
           bash phone_agent/tests/map-entry-test.sh
           bash phone_agent/tests/visual-recovery-test.sh
           bash phone_agent/tests/popup-recovery-test.sh
+          bash phone_agent/tests/scan-recovery-test.sh
+          bash -n phone_agent/runtime-version.sh
+          bash phone_agent/tests/runtime-version-test.sh
+          c++ -std=c++17 -Wall -Wextra -Werror module/tests/scanner-performance-test.cpp -o /tmp/scanner-performance-test
+          /tmp/scanner-performance-test
           cc -O2 -Wall -Werror phone_agent/ui-probe.c -o /tmp/ui-probe
           python3 phone_agent/tests/ui-probe-test.py /tmp/ui-probe
           cc -O2 -Wall -Wextra -Werror phone_agent/popup-probe.c -o /tmp/popup-probe

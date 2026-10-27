@@ -1,5 +1,14 @@
 # Pikmin Scanner Agent
 
+## 156 版本回報
+
+Agent 2.2.5 使用 `runtime-version.sh` 在啟動及運行期間（每分鐘最多一次）讀取
+Android 實際安裝的遊戲版本。遊戲在 Agent 未重啟時更新，也不沿用舊的
+`GAME_VERSION` 設定；查詢失敗或格式錯誤回報 `unknown`，由版本相容檢查拒絕派工。
+部署必須一起保留此 helper；不得只修改 Agent／模組版本名稱。
+156 的 native profile、限幀選項和 PID 綁定 `native.ready` 仍需重開及實際
+object、TSV、上傳、ACK 驗收；版本相符或 native.ready 都不能代替掃描證據。
+
 ## 155 已知彈窗自動恢復
 
 `POPUP_RECOVERY_ENABLED=1` 啟用手機本機的已校準畫面辨識。在掃描及等待的安全檢查點，
@@ -10,7 +19,7 @@
 登入、付費、權限、未知視窗及其他 App 不會獲得自動點擊。
 
 用 `build-popup-probe.ps1 -NdkRoot <NDK>` 建置 `bin/popup-probe`，與
-`popup-recovery.sh` 及 Agent 2.2.3 一起部署。這是獨立工具，不替換原有 `bin/ui-probe`。
+`popup-recovery.sh` 及 Agent 2.2.4 一起部署。這是獨立工具，不替換原有 `bin/ui-probe`。
 2.2.3 補入 Leo 實測的駕駛提示與主畫面渲染樣本，沒有放寬文字或按鈕比對門檻。
 輸入後會再次檢查保護狀態及畫面：未改變時記錄 `recovery unconfirmed`，改變時只記錄
 `screen state changed`；unknown 不代表已回到地圖。掃描恢復仍須以新 object、資料上傳及 ACK 驗收。
@@ -21,6 +30,28 @@
 現有手機先備份，再加入這項功能；保留 token、config 其他設定、upload.offset、TSV 及待送／ACK。
 只重新啟動 Agent 即可載入，無須更換 Hunter 或重開手機。Libra 的羅盤 tap 與停用的控制中心核心保持原狀；
 Scorpio 不在正式四機部署範圍。
+
+## Cancer 低負載與冷啟動恢復（2.2.4，逐台選用）
+
+Cancer 的羅盤使用五張不同背景實機畫面的共同穩定取樣，保留外框、文字、按鈕三組與原色差門檻。
+按鈕同時保留白色羅盤圖案與綠色留白；單一白色圓鈕或綠色區塊不會獲准點擊。
+不改解析度或密度，避免破壞既有校準。`SCAN_RECOVERY_ENABLED=1` 另需部署 `scan-recovery.sh`
+及支援此契約的 Hunter；不可單獨在舊 native 上啟用。啟動最多等待 120 秒，只接受
+`native.ready` 的 PID 與目前遊戲程序、版本均一致。此檔表示 native 掛鉤就緒，不能替代
+新 target 的 object／TSV／上傳／ACK 驗收。所有等待維持手動與熱保護檢查。
+`SCAN_RESTART_MIN_SECONDS=300` 限制 fallback 冷啟動頻率，依 boot ID 與 uptime 保存，
+不把尚未就緒的第一次啟動誤當作需要立即再重啟。
+
+Hunter155 的 `files/scanner-render-fps.txt` 是另一個預設不啟用的設定，只接受15、20、30。
+檔案不存在、格式不符、版本不符或 Unity API 不可用時，保留原遊戲渲染設定。
+必須由操作者在遊戲私有目錄寫入並保留 App 擁有者；不可放 config/token。
+遊戲主執行緒經公開 `Application.targetFrameRate` metadata 設定並讀回；
+`scanner-render.status` 記錄 PID、讀回值及時間，這是 API 設定證據，不是實測畫面 FPS。
+更改此設定後重新啟動遊戲；更換 native 後必須重開手機並核對新程序及載入證據。
+不修改原廠 thermal、充電或 CPU 頻率控制，Cancer 的60%恢復門檻保持原狀。
+
+建置封裝必須明確指定 `package-module.ps1 -GameVersion 155.0 -GameVersionCode 1791279164`
+及實際 revision（如 `-ModuleRevision r2-thermal`）；歷史預設仍為152，不可省略版本。
 
 ## 歷史 153 實機地圖入口
 
