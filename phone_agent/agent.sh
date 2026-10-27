@@ -116,9 +116,10 @@ if [ ! -x "$MAGISK_SU" ]; then
   MAGISK_SU="$(command -v su 2>/dev/null)"
 fi
 AGENT_ID="${AGENT_ID:-primary}"
-AGENT_VERSION="${AGENT_VERSION:-2.2.4}"
-GAME_VERSION="${GAME_VERSION:-$(dumpsys package "$PKG" 2>/dev/null |
-  sed -n 's/^[[:space:]]*versionName=//p' | head -n 1 | tr -d '\r')}"
+AGENT_VERSION="${AGENT_VERSION:-2.2.5}"
+[ -r "$MODDIR/runtime-version.sh" ] || { echo '[version] runtime probe missing'; exit 1; }
+. "$MODDIR/runtime-version.sh"
+refresh_game_version
 MODULE_VERSION="${MODULE_VERSION:-151.0}"
 QUERY_ONLY_STREAK=0
 REFRESH_FAILURE_STREAK=0
@@ -1117,6 +1118,7 @@ fi
 LOCAL_PAUSE_LOGGED=0
 echo "[agent] started id=$AGENT_ID agent=$AGENT_VERSION game=${GAME_VERSION:-unknown} module=$MODULE_VERSION server=$SERVER_URL"
 while true; do
+  refresh_game_version
   if refresh_local_pause; then
     PG_STABLE_AT=-1
     upload_new

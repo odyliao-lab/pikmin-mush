@@ -1,5 +1,14 @@
 # Pikmin Scanner Agent
 
+## 156 版本回報
+
+Agent 2.2.5 使用 `runtime-version.sh` 在啟動及運行期間（每分鐘最多一次）讀取
+Android 實際安裝的遊戲版本。遊戲在 Agent 未重啟時更新，也不沿用舊的
+`GAME_VERSION` 設定；查詢失敗或格式錯誤回報 `unknown`，由版本相容檢查拒絕派工。
+部署必須一起保留此 helper；不得只修改 Agent／模組版本名稱。
+156 的 native profile、限幀選項和 PID 綁定 `native.ready` 仍需重開及實際
+object、TSV、上傳、ACK 驗收；版本相符或 native.ready 都不能代替掃描證據。
+
 ## 155 已知彈窗自動恢復
 
 `POPUP_RECOVERY_ENABLED=1` 啟用手機本機的已校準畫面辨識。在掃描及等待的安全檢查點，
