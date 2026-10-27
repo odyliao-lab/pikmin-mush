@@ -3,7 +3,7 @@
 Pikmin Bloom 蘑菇全球掃描、集中排程與公開地圖系統。Root Android 裝置上的 Zygisk 模組擷取遊戲地圖資料；常駐手機 Agent 依雲端派發的座標掃描，透過 HTTPS 上傳至 Codex Sites／Cloudflare D1。公開網站提供地圖、清單與活動金盆，受保護後台管理工作、裝置與輪替。
 
 - 站台入口與管理後台網址由維運者私下提供，不在 README 公開。
-- 建置目錄：`F:\Codex\Pikmin_Dev`（避免 Google Drive 中文路徑影響 Android CMake）
+- Native 建置使用本機 ASCII 路徑的乾淨工作副本；以當前環境核對 repo 與工具位置，不沿用舊電腦的固定路徑。
 
 > [!IMPORTANT]
 > Native ARM64 新增 **Pikmin Bloom 156.0／versionCode 1792142832**，保留152–155各版獨立簽章保護。升級必須換發對應模組、重開機、確認新資料擷取和上傳；不可只修改版本標籤。156的精確輸入、測試及逐台驗收見 `docs/FLEET_156_VALIDATION_2026-10-27.md`。
@@ -12,7 +12,7 @@ Pikmin Bloom 蘑菇全球掃描、集中排程與公開地圖系統。Root Andro
 
 開發中（尚未部署／啟用）：[台中唯一 dispatcher 的持久協調與全域批次／回程查核](docs/TAICHUNG_DISPATCH_COORDINATION_2026-10-23.md)。預設保留既有行為；正式切換與 Agent 端對端驗收仍待另行核准，不新增 scheduler。
 
-截至 2026-08-25，正式架構為「三台手機自主 Agent + 雲端集中協調」。正式機隊為 **Agent Aries、Agent Cancer、Agent Leo**；日常掃描不依賴 Windows、USB、ADB、固定 IP 或同一 Wi-Fi，ADB 僅供安裝、升級與維修。
+截至 2026-10-27，正式架構為「四台手機自主 Agent + 雲端集中協調」。正式機隊為 **Agent Aries、Agent Cancer、Agent Leo、Agent Libra**；日常掃描不依賴 Windows、USB、ADB、固定 IP 或同一 Wi-Fi，ADB 僅供安裝、升級與維修。Scorpio 保留為控制中心測試機，不納入掃描。
 
 - 雲端以逐點 lease 分派 target；停用、暫停、離線或 lease 逾時會安全釋放並重排。
 - 正式資料僅保留等級 2–4；等級 1 在手機與雲端擷取流程中略過。
@@ -63,7 +63,7 @@ Pikmin Bloom 蘑菇全球掃描、集中排程與公開地圖系統。Root Andro
 ```mermaid
 flowchart LR
   subgraph Android[Root Android Agent]
-    Game[Pikmin Bloom 151.0] <--> Hook[Zygisk native hook]
+    Game[Pikmin Bloom 156.0] <--> Hook[Zygisk native hook]
     Hook <--> Files[teleport.txt / mushrooms.tsv]
     Files <--> Agent[phone_agent 常駐服務]
   end
@@ -92,7 +92,7 @@ flowchart LR
 
 | 路徑 | 用途 |
 | --- | --- |
-| `module/cpp/` | Pikmin 151.0 Zygisk hook、定位與 TSV 寫入原始碼 |
+| `module/cpp/` | Pikmin 152–156 獨立簽章保護、Zygisk hook、定位與 TSV 寫入原始碼 |
 | `module/build-dual-abi.ps1` | Android NDK ARM64／x86_64 建置 |
 | `module/package-module.ps1` | Magisk ZIP 建立與路徑驗證 |
 | `phone_agent/` | Android Agent、開機服務、復原與 virtual display 工具 |
@@ -109,7 +109,8 @@ flowchart LR
 需求：Node.js `>= 22.13.0`、npm，及正式部署用 Codex Sites／D1 權限。
 
 ```powershell
-Set-Location F:\Codex\Pikmin_Dev\site
+# 從目前 repo 根目錄執行
+Set-Location .\site
 Copy-Item .env.example .env.local
 npm ci
 npm run dev
@@ -121,22 +122,22 @@ npm test
 
 ### Native 模組
 
-需求：Windows PowerShell、Android NDK r27d、CMake、Ninja、Google Platform-Tools、已 root 並啟用 Magisk／Zygisk 的 Android，以及精確的 151.0 遊戲 build。
+需求：Windows PowerShell、Android NDK r27d、CMake、Ninja、Google Platform-Tools、已 root 並啟用 Magisk／Zygisk 的 Android，以及精確的 156.0／1792142832 遊戲 build。建置前核對當前工作副本與工具路徑；舊電腦的固定路徑不是新環境已具備工具的證據。
 
 ```powershell
-Set-Location F:\Codex\Pikmin_Dev
+# 從目前乾淨 repo 根目錄執行
 powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\module\build-dual-abi.ps1
-powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\module\package-module.ps1
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\module\package-module.ps1 -GameVersion 156.0 -GameVersionCode 1792142832 -ModuleRevision r1
 ```
 
-請勿用 Windows `Compress-Archive` 自製 Magisk ZIP；一律使用專案 packaging script，確保 ZIP 內 `zygisk/` 路徑正確。
+請勿用 Windows `Compress-Archive` 自製 Magisk ZIP；一律使用專案 packaging script，確保 ZIP 內 `zygisk/` 路徑正確。腳本的歷史預設仍為152，不能省略版本參數。
 
 ### Agent 安裝／升級
 
 > [!CAUTION]
 > 方案需要 root、Magisk、Zygisk，並會讀取遊戲私有檔案、注入遊戲程序和覆寫定位。請自行評估遊戲服務條款、帳號與裝置風險。
 
-1. 確認 ABI、Magisk／Zygisk 和 **151.0／1786062771**。
+1. 確認實際 ABI、Magisk／Zygisk、遊戲版本 **156.0／1792142832**、APK 簽章及對應 native 指紋。
 2. 安裝 `module/pikmin_hunter.zip` 後重開機；native `.so` 更新也必須 reboot。
 3. 在後台建立 Agent，將一次性顯示的 ID／token 只寫入該手機私有 `config`／`token`。
 4. 部署 `phone_agent/` 到 `/data/adb/modules/pikmin_scanner_agent/`，保留既有 config／token，shell 檔權限為 `0700`。
