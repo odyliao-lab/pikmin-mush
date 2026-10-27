@@ -6,7 +6,7 @@ Pikmin Bloom 蘑菇全球掃描、集中排程與公開地圖系統。Root Andro
 - 建置目錄：`F:\Codex\Pikmin_Dev`（避免 Google Drive 中文路徑影響 Android CMake）
 
 > [!IMPORTANT]
-> Native ARM64 掃描支援 **Pikmin Bloom 154.0／versionCode 1789606828**，並保留152／153的獨立簽章保護。升級必須換發對應模組、重開機、確認新資料擷取和上傳；不可只修改版本標籤。154驗證及機隊部署紀錄見 `docs/FLEET_154_VALIDATION_2026-10-05.md`。
+> Native ARM64 新增 **Pikmin Bloom 156.0／versionCode 1792142832**，保留152–155各版獨立簽章保護。升級必須換發對應模組、重開機、確認新資料擷取和上傳；不可只修改版本標籤。156的精確輸入、測試及逐台驗收見 `docs/FLEET_156_VALIDATION_2026-10-27.md`。
 
 ## 目前狀態
 
