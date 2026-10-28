@@ -562,6 +562,7 @@ export default function AdminClient({
         </div>
         <nav>
           <Link href="/">公開地圖</Link>
+          <Link href="/admin/retention">歷史清理</Link>
           <a href={signOutPath}>登出</a>
           <span>{displayName}</span>
         </nav>

@@ -281,6 +281,7 @@ export const scanTargets = sqliteTable("scan_targets", {
     table.status,
   ),
   uniqueIndex("scan_targets_job_sequence_uidx").on(table.jobId, table.sequence),
+  index("scan_targets_retention_idx").on(table.updatedAt, table.id).where(sql`status IN ('completed','failed','cancelled')`),
 ]);
 
 export const scanTargetHistory = sqliteTable("scan_target_history", {
@@ -374,4 +375,9 @@ export const retentionBackups = sqliteTable('retention_backups', {
   tableName:text('table_name').notNull(),rowKey:text('row_key').notNull(),rowJson:text('row_json').notNull(),
   archivedAt:integer('archived_at').notNull(),expiresAt:integer('expires_at').notNull(),batchId:text('batch_id').notNull(),
 },t=>[primaryKey({columns:[t.tableName,t.rowKey]}),index('retention_backups_expiry_idx').on(t.expiresAt),
-  index('retention_backups_batch_idx').on(t.tableName,t.batchId)]);
+  index('retention_backups_batch_idx').on(t.tableName,t.batchId),index('retention_backups_archived_idx').on(t.archivedAt)]);
+
+export const historyRetentionLock = sqliteTable('history_retention_lock', {
+  id:integer('id').primaryKey(), owner:text('owner').notNull(), expiresAt:integer('expires_at').notNull(),
+  lastStartedAt:integer('last_started_at').notNull(),
+});
