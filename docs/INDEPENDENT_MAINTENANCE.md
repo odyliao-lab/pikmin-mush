@@ -13,6 +13,12 @@
 The external Worker only POSTs to the fixed HTTPS maintenance endpoint. Redirects
 are refused. It retries at most twice and requires a recent cleanup timestamp and
 an explicit independent-source acknowledgement; HTTP200 alone is insufficient.
+The transport timeout is 90 seconds, matching the GitHub fallback. Bounded
+history deletion is followed by inventory and recovery-copy verification, so a
+15-second deletion budget is not a 15-second HTTP deadline. A cancelled caller
+can leave the owner lock in place until its five-minute expiry; never force the
+lock open. This timeout change preserves the two-attempt retry cap, cron, KV,
+credentials and notification policy.
 
 ## Status and alerts
 

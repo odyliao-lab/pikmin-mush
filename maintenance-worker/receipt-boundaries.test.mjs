@@ -4,6 +4,24 @@ import {runMaintenance} from './index.mjs';
 
 const NOW = 1_800_000_000_000;
 const ENDPOINT = 'https://mush.odyliao.cc/api/controller/maintenance';
+
+test('a successful catch-up response after 26 seconds is accepted without a retry or alert', async t => {
+  // Model elapsed network time without waiting in the test. A deadline shorter
+  // than the observed production request has expired when the receipt arrives.
+  t.mock.method(AbortSignal, 'timeout', ms => {
+    const controller = new AbortController();
+    if (ms <= 26_000) controller.abort();
+    return controller.signal;
+  });
+  let calls = 0;
+  await runMaintenance(environment(), {now: NOW, fetch: async (url, options) => {
+    assert.equal(url, ENDPOINT);
+    calls++;
+    options.signal.throwIfAborted();
+    return Response.json(receipt());
+  }});
+  assert.equal(calls, 1);
+});
 function environment(webhook = '') {
   const state = new Map();
   return {MAINTENANCE_TOKEN: 'local-fixture-only-'.padEnd(32, 'x'), DISCORD_WEBHOOK: webhook,
