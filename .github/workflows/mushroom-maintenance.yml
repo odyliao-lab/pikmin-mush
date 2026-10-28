@@ -36,7 +36,13 @@ jobs:
             -H 'Accept: application/json' \
             https://mush.odyliao.cc/api/controller/maintenance)" || request_failed=1
           REQUEST_FAILED="$request_failed" RESPONSE="$response" python3 - <<'PY'
-          import json, os, time, urllib.request, urllib.error
+          import json, math, os, re, time, urllib.request, urllib.error
+          def number(obj, key):
+              value = obj.get(key)
+              return value if type(value) in (int, float) and math.isfinite(value) and value >= 0 else None
+          def boolean(obj, key):
+              value = obj.get(key)
+              return value if type(value) is bool else None
           failed = False
           message = ''
           try:
@@ -44,11 +50,27 @@ jobs:
               data = json.loads(os.environ['RESPONSE'])
               retention = data['retention']
               assert time.time() - retention['lastSucceededAt'] <= 300, 'stale cleanup receipt'
-              print('retention', {key: retention[key] for key in
-                    ('lastSucceededAt', 'lastDeleted', 'pending', 'lastBatchSaturated',
-                     'consecutiveFailures', 'lastDurationMs')})
+              print('retention', {**{key: number(retention, key) for key in
+                    ('lastSucceededAt', 'lastDeleted', 'pending', 'consecutiveFailures', 'lastDurationMs')},
+                    'lastBatchSaturated': boolean(retention, 'lastBatchSaturated')})
               # Classify/throttle cleanup notifications centrally.
-              print('maintenanceHealth', data.get('maintenanceHealth', {}).get('severity', 'legacy'))
+              # Keep the reason fields, not the full response or private fleet/history rows.
+              health = data.get('maintenanceHealth')
+              health = health if isinstance(health, dict) else {}
+              severity = health.get('severity', 'legacy')
+              severity = severity if severity in ('healthy', 'degraded', 'critical', 'legacy') else 'unknown'
+              workflow_sha = os.environ.get('GITHUB_SHA', '')
+              diagnostic = {
+                  'severity': severity, 'responseAtMs': number(data, 'now'),
+                  'workflowSha': workflow_sha if re.fullmatch('[0-9a-f]{40}', workflow_sha) else None,
+                  **{key: number(health, key) for key in
+                     ('evaluatedAt', 'cleanupAge', 'pending', 'historyPending', 'historyConsecutiveFailures',
+                      'historyBacklogSinceMs', 'githubLastSucceededAt', 'independentLastSucceededAt')},
+                  **{key: boolean(health, key) for key in
+                     ('schedulerDelayed', 'cleanupFailing', 'backlogPersistent',
+                      'historyFailing', 'historyBacklogPersistent')},
+              }
+              print('maintenanceHealth', json.dumps(diagnostic, sort_keys=True))
               silent = data['alerts']['uploadSilentAgents']
               if silent:
                   message = '【蘑菇機隊維護警示】兩小時無成功上傳：' + ', '.join(silent)

@@ -748,9 +748,11 @@ export async function checkMaintenanceHealth(nowMs = Date.now()) {
   const historyBacklog = await db.prepare(`SELECT last_run_at FROM maintenance_state
     WHERE name='history-retention-v1-backlog'`).first<{last_run_at:number}>();
   health.historyPending = Number(history?.pending||0);
-  health.historyFailing = Number(history?.consecutive_failures||0)>=2;
-  health.historyBacklogPersistent = health.historyPending>0 && Number(historyBacklog?.last_run_at)>0 &&
-    nowMs-Number(historyBacklog?.last_run_at)>=24*60*60_000;
+  health.historyConsecutiveFailures = Number(history?.consecutive_failures||0);
+  health.historyBacklogSinceMs = Number(historyBacklog?.last_run_at||0);
+  health.historyFailing = health.historyConsecutiveFailures>=2;
+  health.historyBacklogPersistent = health.historyPending>0 && health.historyBacklogSinceMs>0 &&
+    nowMs-health.historyBacklogSinceMs>=24*60*60_000;
   if(health.historyFailing || health.historyBacklogPersistent) health.severity='critical';
   await notifyMaintenanceHealth(now, status, health);
   return health;
@@ -770,18 +772,31 @@ async function notifyMaintenanceHealth(now: number, status: MushroomRetentionSta
     WHERE name=? AND last_run_at<? AND last_succeeded_at<?`)
     .bind(now, name, now - 5 * 60, now - RETENTION_SCHEDULE_ALERT_REPEAT_SECONDS).run();
   if (Number(claim.meta.changes ?? 0) === 0) return;
+  let failureStage = 'request';
+  let httpStatus: number | null = null;
   try {
     const response = await fetch(webhook, {
       method: "POST", headers: { "content-type": "application/json" },
       body: JSON.stringify({ content: maintenanceMessage(health, status), allowed_mentions: { parse: [] } }),
       signal: AbortSignal.timeout(7_000),
     });
+    httpStatus = Number.isInteger(response.status) && response.status >= 100 && response.status <= 599
+      ? response.status : null;
+    failureStage = httpStatus === null ? 'http_unknown' : `http_${httpStatus}`;
     if (!response.ok) throw new Error("discord rejected alert");
+    failureStage = 'record_success';
     await db.prepare(`UPDATE maintenance_state SET last_succeeded_at=? WHERE name=?`)
       .bind(now, name).run();
-    console.info(JSON.stringify({ event: "mushroom_retention_health_alert_sent", severity: health.severity }));
+    console.info(JSON.stringify({ event: "mushroom_retention_health_alert_sent", severity: health.severity,
+      attemptedAt: now, httpStatus }));
   } catch {
-    console.warn(JSON.stringify({ event: "mushroom_retention_health_alert_failed", severity: health.severity }));
+    // Only fixed stages and numeric status codes; never remote bodies, URLs or errors.
+    try {
+      await db.prepare(`UPDATE maintenance_state SET last_failed_at=?,last_failure_stage=?
+        WHERE name=? AND last_run_at=?`).bind(now, failureStage, name, now).run();
+    } catch { /* Logging remains available if the failure receipt cannot be stored. */ }
+    console.warn(JSON.stringify({ event: "mushroom_retention_health_alert_failed", severity: health.severity,
+      attemptedAt: now, httpStatus, failureStage }));
   }
 }
 

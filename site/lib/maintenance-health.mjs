@@ -6,14 +6,23 @@ export function maintenanceHealth(now, retention, githubAt, independentAt, backl
   const cleanupFailing = retention.consecutiveFailures >= 2 || cleanupAge === null || cleanupAge > 3600;
   const backlogPersistent = retention.pending > 0 && backlogSince > 0 && now - backlogSince >= 3600;
   const severity = cleanupFailing || backlogPersistent ? 'critical' : schedulerDelayed ? 'degraded' : 'healthy';
-  return { severity, cleanupAge, schedulerDelayed, cleanupFailing, backlogPersistent,
+  return { severity, evaluatedAt: now, cleanupAge, schedulerDelayed, cleanupFailing, backlogPersistent,
     githubLastSucceededAt: githubAt || 0, independentLastSucceededAt: independentAt || 0,
-    pending: retention.pending,historyPending:0,historyFailing:false,historyBacklogPersistent:false };
+    pending: retention.pending,historyPending:0,historyConsecutiveFailures:0,
+    historyBacklogSinceMs:0,historyFailing:false,historyBacklogPersistent:false };
 }
 
 export function maintenanceMessage(health, retention) {
   if (health.severity === 'critical') {
-    return `【蘑菇清理異常】清理逾一小時未成功、連續失敗或過期資料持續積壓。\n` +
+    const mushroom = health.cleanupFailing || health.backlogPersistent;
+    const history = health.historyFailing || health.historyBacklogPersistent;
+    const title = mushroom && history ? '資料清理異常' : history ? '歷史資料清理異常' : '蘑菇清理異常';
+    const reasons = [];
+    if (health.cleanupFailing) reasons.push('蘑菇清理逾一小時未成功或連續失敗。');
+    if (health.backlogPersistent) reasons.push('蘑菇過期資料持續積壓至少一小時。');
+    if (health.historyFailing) reasons.push('歷史資料清理連續失敗至少兩次。');
+    if (health.historyBacklogPersistent) reasons.push('歷史待清理資料持續積壓至少24小時。');
+    return `【${title}】${reasons.join('')}\n` +
       `蘑菇待清理 ${health.pending} 筆；歷史待清理 ${health.historyPending||0} 筆；` +
       `歷史清理失敗 ${health.historyFailing?'是':'否'}；蘑菇連續失敗 ${retention.consecutiveFailures} 次。請檢查清理服務，不能視為備援正常。`;
   }
