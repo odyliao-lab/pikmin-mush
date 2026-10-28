@@ -9,7 +9,9 @@ export async function runMaintenance(env, deps = {}) {
     try {
       if (!env.MAINTENANCE_TOKEN || env.MAINTENANCE_TOKEN.length < 32) throw Error('missing maintenance credential');
       const response = await request(ENDPOINT, {
-        method: 'POST', redirect: 'manual', signal: AbortSignal.timeout(25000),
+        // Catch-up deletion is followed by inventory and recovery verification.
+        // Keep the same 90-second transport allowance as the GitHub fallback.
+        method: 'POST', redirect: 'manual', signal: AbortSignal.timeout(90000),
         headers: { authorization: `Bearer ${env.MAINTENANCE_TOKEN}`, 'x-maintenance-event': 'cloudflare-cron' },
       });
       if (!response.ok) throw Error(`maintenance HTTP ${response.status}`);
