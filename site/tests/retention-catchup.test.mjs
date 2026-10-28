@@ -83,9 +83,17 @@ test('closed target index supports ordered bounded pruning; active job and activ
  const q=f.sql.prepare("INSERT INTO scan_targets(job_id,sequence,country,city,lat,lng,region_index,point_index,status,created_at,updated_at) VALUES(?,?,'','fixture',0,0,0,0,?,1,1)");
  f.sql.exec('BEGIN');for(let i=0;i<6000;i++)q.run(1,i,'completed');q.run(2,0,'completed');q.run(2,1,'leased');f.sql.exec('COMMIT');
  f.sql.prepare("INSERT INTO retention_table_stats(table_name,eligible_count,checked_at) VALUES('scan_targets',6000,?)").run(now-1);
- const plan=f.sql.prepare("EXPLAIN QUERY PLAN SELECT id FROM scan_targets WHERE status IN ('completed','failed','cancelled') AND updated_at<? ORDER BY updated_at,id LIMIT 5000").all(now);
- assert.ok(plan.some(x=>x.detail.includes('scan_targets_retention_idx')));
- const result=await runHistoryRetention(f.db,now,{catchUp:true});assert.equal(result.pendingTotal,0);
+ const batch=f.db.batch.bind(f.db);let verifiedPlan=false;
+ f.db.batch=async statements=>{
+  if(statements[0].args[0]==='scan_targets'){
+   const plan=f.sql.prepare('EXPLAIN QUERY PLAN '+statements[0].q).all(...statements[0].args);
+   assert.ok(plan.some(x=>x.detail.includes('scan_targets_retention_idx')),JSON.stringify(plan));
+   assert.ok(!plan.some(x=>x.detail.includes('SEARCH scan_targets USING INDEX scan_targets_claim_idx')),JSON.stringify(plan));
+   verifiedPlan=true;
+  }
+  return batch(statements);
+ };
+ const result=await runHistoryRetention(f.db,now,{catchUp:true});assert.equal(result.pendingTotal,0);assert.equal(verifiedPlan,true);
  assert.equal(f.count('scan_targets'),2);assert.equal(f.sql.prepare("SELECT COUNT(*) n FROM retention_backups WHERE table_name='scan_targets'").get().n,6000);
 });
 
