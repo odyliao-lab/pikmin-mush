@@ -103,6 +103,36 @@ start1792814536741. Mushroom pending/failures remain0/0. This short net decrease
 does not prove sustainable drainage or recovery, and it does not retroactively
 recover omitted reason fields from the two historical Actions responses.
 
+### Observed causes and remaining work
+
+The natural GitHub run [40638293402, job122650281491](https://github.com/odyliao-lab/pikmin-mush/actions/runs/40638293402/job/122650281491)
+at2026-10-28 13:29 Asia/Taipei used workflow SHA `4ae3f3e` and the still-live
+Site v118. Its new allowlisted parser recorded `severity=critical`,
+`historyBacklogPersistent=true`, `historyFailing=false`, `historyPending=2101060`,
+and mushroom `pending=0`, `cleanupFailing=false`, `backlogPersistent=false`,
+`schedulerDelayed=false`. This directly identifies the history backlog reason
+for that response; it does not reconstruct missing reasons for the two older
+runs40604115307/40594498954. The workflow SHA is not the Site source SHA.
+
+After v119 publication, a read-only D1 `maintenance_state` snapshot of the
+13:47 natural independent run recorded history pending2100609, zero history
+failures, backlog start1792814536741, and mushroom pending/failures0/0.
+The alert row `mushroom-retention-alert-critical` recorded
+`last_run_at=last_failed_at=1793166473`, `last_failure_stage=http_404`; its last
+success remained1792987371. The new diagnostics therefore establish an HTTP404
+delivery rejection for this attempt, separate from successful cleanup and the
+history backlog health classification. `site/lib/cloud.ts` records the response
+status before the fixed failure stage; this is not a guessed exception message.
+No response body or webhook value was read. HTTP404 alone cannot establish why
+the destination returned404, nor the cause of earlier failed attempts.
+
+Remaining work: an authorized owner should check the configured notification
+destination through its normal management interface; no credential change is
+part of this task. Observe additional natural cleanup snapshots to assess
+backlog drainage and alert recovery. The short pending decrease is not proof
+that the backlog will clear. Retention periods, budgets and schedules remain
+unchanged; no forced maintenance or notification request was sent.
+
 ## Provisioning (Cloudflare account login required)
 
 Sites owns its own Worker and D1. Do not deploy this helper over the Sites Worker,
