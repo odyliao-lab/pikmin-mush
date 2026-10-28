@@ -66,7 +66,7 @@ export async function POST(request: Request) {
     const now = Date.now();
     if (!Number.isFinite(history.lastSucceededAt) || !history.lastSucceededAt ||
       history.lastSucceededAt > now + 60_000 || now - history.lastSucceededAt > 300_000 ||
-      history.lastSucceededAt < history.lastRunAt || history.consecutiveFailures > 0 ||
+      (history.lastSucceededAt < history.lastRunAt && !history.busy) || history.consecutiveFailures > 0 ||
       history.tables.some(table => Boolean(table.last_error))) {
       throw new Error('history maintenance incomplete');
     }
@@ -80,7 +80,7 @@ export async function POST(request: Request) {
         WHERE name=?`).bind(Math.floor(Date.now() / 1_000), name).run();
     }
     const health = await checkMaintenanceHealth();
-    return noStoreJson({ ...await snapshot(), maintenanceHealth: health });
+    return noStoreJson({ ...await snapshot(), history, maintenanceHealth: health });
   } catch {
     try { await checkMaintenanceHealth(); } catch { /* caller records failed request */ }
     return noStoreJson({ error: "maintenance failed" }, 503);

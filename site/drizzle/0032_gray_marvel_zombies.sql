@@ -1,0 +1,1 @@
+CREATE INDEX `retention_backups_archived_idx` ON `retention_backups` (`archived_at`);
