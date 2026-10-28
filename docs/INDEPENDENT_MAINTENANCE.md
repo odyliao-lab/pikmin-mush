@@ -43,12 +43,23 @@ independent success in `mushroom-retention-independent`, and cleanup results in
 No notification body includes private GPS, response bodies, or secrets. No forced
 failure test should be sent to production Discord.
 
-### Diagnostic fields (2026-10-28 fix; not deployed)
+### Diagnostic fields (2026-10-28 fix; deployed as Site v119)
 
 Fix base: `7fdd9a106a724f49b6d2f854e4e636f135df80ba`, isolated branch
-`codex/maintenance-health-diagnostics-20261028`, targeting main through PR review.
-This patch is not a live
-deployment or a claim that production alert delivery has recovered.
+`codex/maintenance-health-diagnostics-20261028`. PR162 merged as
+`4ae3f3e7dd3147065f7329a7bb3f65874b6469f9`; its merge-push Security CI
+40636795505 succeeded. Site v119 was published successfully at2026-10-28
+13:35 Asia/Taipei. This is not a claim that production alert delivery or history
+retention has recovered.
+
+The Sites source commit is `1a4da3677a17c6412df855fcb6691c20fee19dd5`.
+Its complete Git tree `9ace1eedafc4737f6b6fef4664a929f6ae53996e` exactly matches
+the merged GitHub commit's `site/` subtree. The saved version ID is
+`appgprj_6a5a56aaa2e08191b31a17cdc443aa93~appgver_8e0441f6d0888191b0e340186a9550c0`;
+deployment `appgdep_6ae1898d60208191b47d039eb28a3a82` returned `succeeded`.
+The Site remains public at https://mush.odyliao.cc, with environment revision10
+and the existing independent scheduler unchanged. No manual maintenance POST,
+workflow rerun, retention change or credential change was performed.
 
 The GitHub response parser logs an allowlisted `maintenanceHealth` JSON object:
 severity, individual reason booleans, mushroom/history pending counts, history
@@ -72,7 +83,7 @@ body, exception text, URL or credential is retained. Cleanup receipts, severity
 thresholds, five-minute retry and24h success throttling are unchanged.
 
 These changes expose causes; they do not clear history backlog or establish
-recovery. After an authorized deployment, inspect existing natural runs and
+recovery. After this deployment, inspect existing natural runs and
 read-only state snapshots for reason fields, distinct history pending trends,
 and alert attempt/success/failure timestamps. A single successful cleanup or
 notification does not establish sustained recovery. Do not increase retention
