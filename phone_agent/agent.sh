@@ -197,6 +197,11 @@ run_as_shell_timeout() {
 
 ensure_system_gps_provider() {
   [ "$SYSTEM_GPS_OVERRIDE" = "1" ] || return 0
+  # MuMu may publish boot_completed before LocationManager has registered its
+  # real GPS manager. Creating a mock manager first can crash system_server
+  # when the framework later tries to register that same provider name.
+  timeout -k 1 5 dumpsys location 2>/dev/null |
+    grep -Eq '^ *gps provider([ :\[]|$)' || return 1
   appops set 2000 android:mock_location allow >/dev/null 2>&1 || return 1
   run_as_shell \
     "cmd location providers add-test-provider gps --requiresSatellite --supportsAltitude --supportsSpeed --supportsBearing --powerRequirement 3" \
@@ -1123,10 +1128,7 @@ execute_command() {
   save_seq "$seq"
 }
 
-if ! ensure_system_gps_provider; then
-  echo "[agent] system GPS provider setup failed"
-  exit 1
-fi
+SYSTEM_GPS_READY=0
 LOCAL_PAUSE_LOGGED=0
 echo "[agent] started id=$AGENT_ID agent=$AGENT_VERSION game=${GAME_VERSION:-unknown} module=$MODULE_VERSION server=$SERVER_URL"
 while true; do
@@ -1153,6 +1155,14 @@ while true; do
     [ "$POWER_GUARD_ENABLED" != "1" ] || power_guard_heartbeat
     sleep "$POLL_SECONDS"
     continue
+  fi
+  if [ "$SYSTEM_GPS_READY" != 1 ]; then
+    if ! ensure_system_gps_provider; then
+      echo '[gps] waiting for initialized GPS provider before claiming work'
+      sleep "$POLL_SECONDS"
+      continue
+    fi
+    SYSTEM_GPS_READY=1
   fi
   upload_new
   if [ "$AGENT_ID" = "primary" ] && [ "$LEGACY_COMMAND_ENABLED" = "1" ]; then
