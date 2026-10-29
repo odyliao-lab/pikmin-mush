@@ -4,8 +4,8 @@ ROOT=$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)
 TMP=$(mktemp -d)
 trap 'rm -rf "$TMP"' EXIT
 export CAPTURE_DIR="$TMP"
-cat >"$TMP/curl" <<'EOF'
-#!/bin/sh
+printf '#!%s\n' "$(command -v sh)" >"$TMP/curl"
+cat >>"$TMP/curl" <<'EOF'
 printf '%s\n' "$@" >"$CAPTURE_DIR/argv"
 cat >"$CAPTURE_DIR/stdin"
 exit "${CURL_RESULT:-0}"
