@@ -116,7 +116,7 @@ if [ ! -x "$MAGISK_SU" ]; then
   MAGISK_SU="$(command -v su 2>/dev/null)"
 fi
 AGENT_ID="${AGENT_ID:-primary}"
-AGENT_VERSION="${AGENT_VERSION:-2.2.5}"
+AGENT_VERSION="${AGENT_VERSION:-2.2.6}"
 [ -r "$MODDIR/runtime-version.sh" ] || { echo '[version] runtime probe missing'; exit 1; }
 . "$MODDIR/runtime-version.sh"
 refresh_game_version
