@@ -132,10 +132,15 @@ npm test
 ```powershell
 # 從目前乾淨 repo 根目錄執行
 powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\module\build-dual-abi.ps1
-powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\module\package-module.ps1 -GameVersion 156.0 -GameVersionCode 1792142832 -ModuleRevision r1
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\module\package-module.ps1 -GameVersion 156.0 -GameVersionCode 1792142832 -ModuleRevision r2
 ```
 
 請勿用 Windows `Compress-Archive` 自製 Magisk ZIP；一律使用專案 packaging script，確保 ZIP 內 `zygisk/` 路徑正確。腳本的歷史預設仍為152，不能省略版本參數。
+
+156.0-r2 在 `libnb.so` NativeBridge 載入 ARM64 payload 前等待 30 秒，
+保留其他 bridge 原有 5 秒等待。Gemini 的冷啟動對照顯示，只延後後續掃描
+掛鉤不足以恢復登入；需在轉譯載入前留出初始化時間。實體 ARM64 不走此路徑，
+游戲版本、簽章檢查及認證流程保持。仍須完成同 PID 的實際掃描及重開驗收。
 
 ### Agent 安裝／升級
 

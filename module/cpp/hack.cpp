@@ -6,6 +6,7 @@
 #include "il2cpp_dump.h"
 #include "log.h"
 #include "xdl.h"
+#include "nativebridge-startup.h"
 #include <cstring>
 #include <cstdio>
 #include <unistd.h>
@@ -113,8 +114,15 @@ struct NativeBridgeCallbacks {
 };
 
 bool NativeBridgeLoad(const char *game_data_dir, int api_level, void *data, size_t length) {
-    //TODO 等待houdini初始化
+#if defined(__i386__) || defined(__x86_64__)
+    auto native_bridge = GetNativeBridgeLibrary();
+    const unsigned startup_seconds = nativebridge_startup_seconds(native_bridge.c_str());
+    LOGI("NativeBridge initialization wait: %u seconds (%s)",
+         startup_seconds, native_bridge.c_str());
+    sleep(startup_seconds);
+#else
     sleep(5);
+#endif
 
     auto libart = dlopen("libart.so", RTLD_NOW);
     auto JNI_GetCreatedJavaVMs = (jint (*)(JavaVM **, jsize, jsize *)) dlsym(
@@ -167,7 +175,9 @@ bool NativeBridgeLoad(const char *game_data_dir, int api_level, void *data, size
         return false;
     }
 
+#if !defined(__i386__) && !defined(__x86_64__)
     auto native_bridge = GetNativeBridgeLibrary();
+#endif
     auto nb = dlopen("libhoudini.so", RTLD_NOW);
     if (!nb) {
         LOGI("native bridge: %s", native_bridge.data());
