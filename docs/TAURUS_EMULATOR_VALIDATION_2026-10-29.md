@@ -23,7 +23,7 @@ MuMu 6.8.0.0 / Android 15 API 35，宿主 ABI x86_64，遊戲使用 ARM64 Native
   x86_64 payload SHA-256 `339380944101ba5fd8f1d8282ef6f0592cc41ca9e7ea07bcca86857e30092cc9`。
   沒有修改 native 原始碼或只改版本標籤。開機後從 NativeBridge、精確簽章檢查、
   MapObjectManager/MapManager 掛鉤及 PID 綁定 native.ready 核對實際載入。
-- Agent 2.2.7，協定 MODULE_VERSION=156.0（revision 屬於安裝包，不放進遊戲相容性欄位）。
+- Agent 2.2.8，協定 MODULE_VERSION=156.0（revision 屬於安裝包，不放進遊戲相容性欄位）。
   遊戲版本仍由 runtime-version.sh 探測。
 - MuMu 沒有 curl；從官方 Termux 套件庫核對 metadata 及每個 deb 的 SHA-256，
   只抽取私有 runtime，不執行套件安裝腳本。位於 `/data/adb/pikmin-taurus-curl`，
@@ -46,8 +46,10 @@ symlink、無效 UID 或 chown/chmod 失敗。用真實 Android filesystem 驗�
 
 首次環境發生 Android system_server 的 LocationManagerService 重複註冊 GPS provider
 崩潰；boot_completed 不能視為 framework 完整就緒。Agent 的系統 GPS 初始化延後到
-允許掃描且已存在真正 GPS provider 後，暫停期間不初始化。Taurus 最終先使用
-`SYSTEM_GPS_OVERRIDE=0`，由 Hunter 遊戲內定位完成掃描，不建立系統 mock provider。
+允許掃描且已存在真正 GPS provider 後，暫停期間不初始化。早期基準使用
+`SYSTEM_GPS_OVERRIDE=0` 隔離問題；最終改為 `SYSTEM_GPS_OVERRIDE=1`，對齊系統
+與遊戲內座標。2.2.8 在 MuMu 尚無真實 provider 時先啟動遊戲及等待 native，
+重新核對 provider 已存在才建立 mock，不會先搶建同名 manager。
 
 原有 Control Center canary `pcc_emulator_bridge_canary` 保留但停用，避免與 Hunter
 雙重掛鉤。原有 `pcc_mumu_healthconnect` 會覆寫 system/framework/services.jar，
@@ -111,7 +113,7 @@ captured rows/bytes 與站台 observations。掃描工作來源為既有每日 1
 準備。退出逾時或備份／權限／checksum 失敗時拒絕啟動，保留 300 秒重啟間隔。
 相關正常／逾時／失敗測試也在真實 Android shell 通過。
 
-## 最終完整開機驗收
+## 2.2.7 完整開機驗收與後續限制
 
 12:48 重新啟動 MuMu instance 2，沒有人工啟動遊戲或點擊遊戲畫面。
 service 等待 120 秒後啟動 Agent；Agent 核對並備份 HPTC 快取、自行啟動遊戲，
@@ -134,6 +136,42 @@ upload_failures=0。沒有以舊有維護期間的零筆／失敗目標充當開
 `e1bdbe1113b8ea3757e81ada6f841c967bce9728b92e680026ae950e80db5190`，
 與最終測試來源一致；外部 popup-probe 每次辨識即執行核對過的新 binary。
 同一遊戲程序繼續正常掃描，沒有因驗收而停留於手動複查或暫停模式。
+
+之後累積 20 個非零 object 目標，但跨到非斯及冷恢復後連續零資料；不能將前述
+短時成功延伸為全天穩定。13:11 後確認真實 GPS provider 已就緒，備份後只改
+SYSTEM_GPS_OVERRIDE=1 並重啟 Agent，保留遊戲、native、TSV、offset 與待送狀態。
+隨後三個新的正式目標成功，座標覆蓋非斯／拉巴特：
+
+| target | 新行數 | 新 bytes | direct 耗時 | refresh_source |
+| --- | ---: | ---: | ---: | --- |
+| 1650944 | 1 | 102 | 11 秒 | object |
+| 1650949 | 3 | 325 | 10 秒 | object |
+| 1650947 | 2 | 218 | 9 秒 | object |
+
+此對照支持保留系統與 native 定位對齊，仍不將通用零資料或錯誤 0 歸為已證明
+單一原因。新增 2.2.8 的開機定位 client 順序，防止等候由遊戲首次啟動才註冊的
+provider 而無法開工；遊戲啟動失敗或 provider 仍缺少時不領工作、不搶建 mock。
+
+## 2.2.8 最終開機與定位驗收
+
+13:18 再次完整重開 MuMu instance 2，Agent 2.2.8 / SYSTEM_GPS_OVERRIDE=1。
+全部步驟自主執行：開機緩衝、快取備份、啟動遊戲、關閉 restricted 提醒、進地圖、
+等待 native、核對真實 provider 後建立 mock GPS，再領取正式工作。新遊戲 PID
+2333 與 native.ready 相符，該 boot 的 system_server fatal 為 0。
+
+經過零資料點後，以下三個新的卡薩布蘭卡目標通過；零筆 ACK 沒有拿來湊數：
+
+| target | 新行數 | 新 bytes | direct 耗時 | refresh_source |
+| --- | ---: | ---: | ---: | --- |
+| 1650954 | 2 | 206 | 12 秒 | object |
+| 1650952 | 3 | 309 | 12 秒 | object |
+| 1650953 | 2 | 206 | 10 秒 | object |
+
+offset 19131 → 19852，與這三筆新目標的 721 bytes 相符；站台 ACK 與 observations
+同步增加，13:26 metrics 顯示 healthy、upload_failures=0。實際部署原始檔 SHA-256
+`432cebda93648c57cc613e934304789831b920e0f66ead84cbb8a7e07a55c37e`，
+與測試來源相符。native 與 popup-probe 保持前述已驗證 payload，沒有換 APK。
+本次只驗證短時與完整開機，跨區空點、冷恢復耗時及跨日仍須長時觀察。
 
 ## 備份與維運限制
 

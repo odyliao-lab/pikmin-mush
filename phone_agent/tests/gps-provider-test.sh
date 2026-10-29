@@ -24,4 +24,20 @@ if ensure_system_gps_provider; then echo timeout-ignored; exit 1; fi
 SYSTEM_GPS_OVERRIDE=0
 ensure_system_gps_provider
 [ ! -e "$TMP/actions" ]
-echo 'GPS boot readiness, mock/existing provider and timeout checks passed'
+SYSTEM_GPS_OVERRIDE=1 MUMU_CODE_CACHE_REFRESH=1 TIMEOUT_FAIL=0
+GPS_DUMP='    passive provider:'
+ensure_game_running() { echo launch >>"$TMP/actions"; GPS_DUMP='    gps provider:'; }
+ensure_system_gps_provider
+[ "$(head -n 1 "$TMP/actions")" = launch ]
+[ "$(wc -l <"$TMP/actions")" -eq 4 ]
+rm "$TMP/actions"
+GPS_DUMP='    passive provider:'
+ensure_game_running() { echo launch >>"$TMP/actions"; return 1; }
+if ensure_system_gps_provider; then echo failed-bootstrap-accepted; exit 1; fi
+[ "$(wc -l <"$TMP/actions")" -eq 1 ]
+rm "$TMP/actions"
+ensure_game_running() { echo launch >>"$TMP/actions"; }
+if ensure_system_gps_provider; then echo absent-provider-after-bootstrap-accepted; exit 1; fi
+[ "$(wc -l <"$TMP/actions")" -eq 1 ]
+
+echo 'GPS readiness, existing provider, emulator bootstrap and failure checks passed'

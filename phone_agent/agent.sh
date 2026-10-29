@@ -116,7 +116,7 @@ if [ ! -x "$MAGISK_SU" ]; then
   MAGISK_SU="$(command -v su 2>/dev/null)"
 fi
 AGENT_ID="${AGENT_ID:-primary}"
-AGENT_VERSION="${AGENT_VERSION:-2.2.7}"
+AGENT_VERSION="${AGENT_VERSION:-2.2.8}"
 [ -r "$MODDIR/runtime-version.sh" ] || { echo '[version] runtime probe missing'; exit 1; }
 . "$MODDIR/runtime-version.sh"
 refresh_game_version
@@ -200,8 +200,16 @@ ensure_system_gps_provider() {
   # MuMu may publish boot_completed before LocationManager has registered its
   # real GPS manager. Creating a mock manager first can crash system_server
   # when the framework later tries to register that same provider name.
-  timeout -k 1 5 dumpsys location 2>/dev/null |
-    grep -Eq '^ *gps provider([ :\[]|$)' || return 1
+  if ! timeout -k 1 5 dumpsys location 2>/dev/null |
+      grep -Eq '^ *gps provider([ :\[]|$)'; then
+    # MuMu registers its real provider lazily when a location client starts.
+    # Start the calibrated game first, then recheck; never create a competing
+    # mock manager while the real manager is still absent.
+    [ "${MUMU_CODE_CACHE_REFRESH:-0}" = 1 ] || return 1
+    ensure_game_running || return 1
+    timeout -k 1 5 dumpsys location 2>/dev/null |
+      grep -Eq '^ *gps provider([ :\[]|$)' || return 1
+  fi
   appops set 2000 android:mock_location allow >/dev/null 2>&1 || return 1
   run_as_shell \
     "cmd location providers add-test-provider gps --requiresSatellite --supportsAltitude --supportsSpeed --supportsBearing --powerRequirement 3" \
