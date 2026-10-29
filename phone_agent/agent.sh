@@ -293,6 +293,19 @@ save_seq() {
   echo "$LAST_SEQ" >"$SEQ_FILE"
 }
 
+# Newly provisioned Agents may inherit root's private umask. Native code runs
+# as the game UID and must be able to read its own control file after creation.
+write_game_teleport() {
+  [ -d "$APP_FILES" ] && [ ! -L "$TELEPORT" ] || return 1
+  TELEPORT_OWNER="$(stat -c %u "$APP_FILES" 2>/dev/null)" || return 1
+  TELEPORT_GROUP="$(stat -c %g "$APP_FILES" 2>/dev/null)" || return 1
+  case "$TELEPORT_OWNER:$TELEPORT_GROUP" in *[!0-9:]*|:*|*:) return 1;; esac
+  [ "$TELEPORT_OWNER" -ge 10000 ] || return 1
+  (umask 077; printf '%s\n' "$1" >"$TELEPORT") || return 1
+  chown "$TELEPORT_OWNER:$TELEPORT_GROUP" "$TELEPORT" || return 1
+  chmod 600 "$TELEPORT" || return 1
+}
+
 ack() {
   seq="$1"
   ok="$2"
@@ -638,7 +651,7 @@ EOF
   [ -n "$REAPPLY_LAT" ] && [ -n "$REAPPLY_LNG" ] || return 1
   REAPPLY_TOKEN="$(date +%s)"
   REAPPLY_VALUE="$REAPPLY_LAT,$REAPPLY_LNG,$REAPPLY_TOKEN"
-  printf '%s\n' "$REAPPLY_VALUE" >"$TELEPORT"
+  write_game_teleport "$REAPPLY_VALUE" || return 1
   [ "$(cat "$TELEPORT" 2>/dev/null)" = "$REAPPLY_VALUE" ] || return 1
   printf '%s\n' "$REAPPLY_TOKEN"
 }
@@ -899,8 +912,8 @@ execute_scan_task() {
     rm -f "$SCAN_READY" "$QUERY_READY"
   fi
   scan_can_run || return
-  echo "$TELEPORT_VALUE" >"$TELEPORT"
-  if [ "$(cat "$TELEPORT" 2>/dev/null)" != "$TELEPORT_VALUE" ]; then
+  if ! write_game_teleport "$TELEPORT_VALUE" ||
+     [ "$(cat "$TELEPORT" 2>/dev/null)" != "$TELEPORT_VALUE" ]; then
     echo "[scan] GPS write failed job=$JOB_ID point=$TASK_INDEX"
     send_scan_ack "$JOB_ID" "$TASK_TARGET_ID" "$TASK_LEASE" 0 0 0
     return
@@ -1030,7 +1043,7 @@ execute_scan_task() {
     else
       TASK_MODE="legacy"
     fi
-    echo "[scan] completed point=$((TASK_INDEX + 1)) rows=+$NEW_ROWS bytes=+$NEW_BYTES mode=$TASK_MODE elapsed=${TASK_ELAPSED}s"
+    echo "[scan] completed point=$((TASK_INDEX + 1)) rows=+$NEW_ROWS bytes=+$NEW_BYTES mode=$TASK_MODE elapsed=${TASK_ELAPSED}s job=$JOB_ID target=$TASK_TARGET_ID source=$DIAG_SOURCE"
   else
     echo "[scan] ACK pending job=$JOB_ID point=$TASK_INDEX"
   fi
@@ -1051,8 +1064,7 @@ execute_command() {
       return 0
       ;;
     teleport)
-      echo "$a,$b" >"$TELEPORT"
-      if [ "$(cat "$TELEPORT" 2>/dev/null)" = "$a,$b" ]; then
+      if write_game_teleport "$a,$b" && [ "$(cat "$TELEPORT" 2>/dev/null)" = "$a,$b" ]; then
         if ensure_game_running; then
           ack "$seq" 1 "$a" "$b"
         else
