@@ -8,6 +8,7 @@ import {renderToStaticMarkup} from 'react-dom/server';
 import * as jsx from 'react/jsx-runtime';
 import {ADMIN_PAGES,ageLabel,agentState,needsAttention,pollWhileVisible} from '../lib/admin-view.mjs';
 import * as audit from '../lib/admin-report-view.mjs';
+import * as fleetPolicy from '../lib/fleet-policy.mjs';
 
 test('admin navigation and status preserve paused, unknown and last receipt semantics',()=>{
  assert.deepEqual(ADMIN_PAGES.map(p=>p.label),['總覽','機隊','情報','更多']);
@@ -69,6 +70,7 @@ test('actual admin component renders only the selected surface and preserves nat
    if(p.endsWith('/use-visible-polling'))return{useVisiblePolling(){}};
    if(p.endsWith('/admin-view.mjs'))return{ADMIN_PAGES,agentState,needsAttention,ageLabel};
    if(p.endsWith('/scan-plans'))return{COUNTRY_PACK_LABELS:[]};
+   if(p.endsWith('/fleet-policy.mjs'))return fleetPolicy;
    if(p.endsWith('.css'))return{__esModule:true,default:new Proxy({},{get:(_,k)=>k})};throw Error(p);
   }});
   const html=renderToStaticMarkup(jsx.jsx(exports.default,{displayName:'Test admin',signOutPath:'/signout'}));

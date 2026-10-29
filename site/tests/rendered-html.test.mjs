@@ -186,7 +186,7 @@ test("includes durable multi-agent leases, v2 protocol routes, and migrations", 
   assert.match(phoneAgent, /X-Agent-Id/);
   assert.match(phoneAgent, /interruptible_wait/);
   assert.match(schema, /paused: integer\("paused"\)/);
-  assert.match(fleet, /if \(agent\.paused\)/);
+  assert.match(fleet, /!agent\.enabled \|\| agent\.paused/);
   assert.match(fleet, /rotation\.status !== "completed"/);
   assert.match(control, /if \(agent\.paused\) return reply\("pause"\)/);
   assert.match(verification, /replaceExisting/);
@@ -210,7 +210,7 @@ test("includes durable multi-agent leases, v2 protocol routes, and migrations", 
   assert.match(fleet, /1km 偏移網格/);
   assert.match(rotation, /每日 04:00.*每日 12:00.*每日 20:00/s);
   assert.match(rotation, /SELECT \* FROM scan_rotation_runs WHERE schedule_date=\?/);
-  assert.match(rotation, /30 \* 60_000/);
+  assert.match(rotation, /rotationEligibleAgents/);
   assert.match(rotation, /existingPlan/);
   assert.match(rotation, /expectedPlan/);
   assert.match(rotation, /verification_kind='candidate'.*status IN \('queued','leased'\)/s);

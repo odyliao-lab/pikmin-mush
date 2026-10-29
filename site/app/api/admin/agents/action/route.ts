@@ -2,6 +2,7 @@ import {
   adminAuthorized, ensureSchema, noStoreJson, runtime, sameOrigin,
 } from "../../../../../lib/cloud";
 import { hashAgentToken, issueAgentToken } from "../../../../../lib/fleet";
+import { MAX_ENABLED_AGENTS, ROTATION_SLOTS, rotationSlots } from "../../../../../lib/fleet-policy.mjs";
 
 export async function POST(request: Request) {
   if (!adminAuthorized(request)) return noStoreJson({ error: "forbidden" }, 403);
@@ -12,6 +13,7 @@ export async function POST(request: Request) {
     action?: unknown;
     regionTags?: unknown;
     displayName?: unknown;
+    rotationSlots?: unknown;
   };
   try {
     body = await request.json();
@@ -22,11 +24,27 @@ export async function POST(request: Request) {
   const action = String(body.action ?? "");
   if (!/^[a-z0-9][a-z0-9._-]{0,63}$/.test(agentId) ||
       !["enable", "disable", "pause", "resume", "update-regions",
-        "rotate-token", "revoke-old-token", "rename", "delete"].includes(action)) {
+        "rotate-token", "revoke-old-token", "rename", "delete", "update-qualification"].includes(action)) {
     return noStoreJson({ error: "invalid action" }, 400);
   }
   const db = runtime().DB;
   const now = Date.now();
+
+  if (action === "update-qualification") {
+    if (!Array.isArray(body.rotationSlots) ||
+        body.rotationSlots.some(slot => !ROTATION_SLOTS.includes(slot))) {
+      return noStoreJson({ error: "請選擇已實測的掃描時段" }, 400);
+    }
+    // Require a disabled device so changing eligibility cannot invalidate an
+    // in-flight target. Preserve unrelated capability fields in the JSON.
+    const result = await db.prepare(`UPDATE scan_agents SET
+        capabilities_json=json_set(CASE WHEN json_valid(capabilities_json)
+          THEN capabilities_json ELSE '{}' END, '$.rotation_slots', json(?)), updated_at=?
+      WHERE id=? AND enabled=0`)
+      .bind(JSON.stringify([...new Set(body.rotationSlots)]), now, agentId).run();
+    if (!result.meta.changes) return noStoreJson({ error: "請先停用節點再設定實測資格" }, 409);
+    return noStoreJson({ ok: true, rotation_slots: [...new Set(body.rotationSlots)] });
+  }
 
   if (action === "rename") {
     const displayName = String(body.displayName ?? "").trim();
@@ -125,8 +143,19 @@ export async function POST(request: Request) {
 
   // 啟用／停用節點：停用等同除役，會立即釋放其 lease。
   const enabled = action === "enable" ? 1 : 0;
-  const result = await db.prepare("UPDATE scan_agents SET enabled=?, updated_at=? WHERE id=?")
-    .bind(enabled, now, agentId).run();
+  if (enabled) {
+    const agent = await db.prepare("SELECT capabilities_json FROM scan_agents WHERE id=?")
+      .bind(agentId).first<{ capabilities_json: string }>();
+    if (!agent) return noStoreJson({ error: "Agent 不存在" }, 404);
+    if (rotationSlots(agent.capabilities_json)?.length === 0)
+      return noStoreJson({ error: "請先設定已實測的掃描時段資格" }, 409);
+  }
+  // A single conditional write also protects simultaneous enable requests.
+  const result = await db.prepare(`UPDATE scan_agents SET enabled=?, updated_at=? WHERE id=?
+    AND (?=0 OR (SELECT COUNT(*) FROM scan_agents WHERE enabled=1 AND id<>?) < ?)`)
+    .bind(enabled, now, agentId, enabled, agentId, MAX_ENABLED_AGENTS).run();
+  if (enabled && !result.meta.changes)
+    return noStoreJson({ error: `最多可啟用 ${MAX_ENABLED_AGENTS} 個 Agent，請先停用其他節點` }, 409);
   if (!result.meta.changes) return noStoreJson({ error: "Agent 不存在" }, 404);
   if (!enabled) {
     await db.batch([

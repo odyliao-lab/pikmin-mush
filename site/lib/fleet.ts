@@ -3,7 +3,9 @@ import { activeJob, appendScanLog, parseJobConfig, parseJobPlan, type ScanJobRow
 import { ensureDailyRotation } from "./rotation";
 import { materializeTargets } from "./targets";
 import { archiveAndDeleteTargets } from "./target-history.mjs";
-import { buildScanPlan, normalizeScanConfig } from "./scan-plans";
+import { buildScanPlan, normalizeScanConfig, COUNTRY_PACK_CATALOG } from "./scan-plans";
+import { rotationSlots, ROTATION_SLOTS, qualifiedForSlot } from "./fleet-policy.mjs";
+import { ROTATION_DAYS, rotationWindow } from "./rotation-plan.mjs";
 import { classifyScanOutcome, SCAN_OUTCOME_LABELS } from "./scan-outcomes.mjs";
 import {
   HEARTBEAT_SAMPLE_MS, agentHealth, recordAgentEvent, versionCompatibility,
@@ -342,6 +344,15 @@ async function candidateTarget(
 ) {
   const db = runtime().DB;
   const tags = ignoreRegion ? [] : parseTags(agent);
+  const slots = rotationSlots(agent.capabilities_json);
+  const qualifiedPacks = slots === null ? null : new Set(ROTATION_DAYS
+    .filter((_, index) => slots.includes(ROTATION_SLOTS[index]))
+    .flatMap(routes => routes.flatMap(route => route.packs)));
+  const countries = qualifiedPacks === null ? null : COUNTRY_PACK_CATALOG
+    .filter(pack => qualifiedPacks.has(pack.id)).map(pack => pack.name);
+  if (countries?.length === 0) return null;
+  const qualificationFilter = countries === null ? "" :
+    "AND country IN (SELECT value FROM json_each(?))";
   const location = agent.current_lat == null ? null :
     { lat: Number(agent.current_lat), lng: Number(agent.current_lng) };
   const tagFilter = tags.length
@@ -354,12 +365,12 @@ async function candidateTarget(
     ? `((lat-?)*(lat-?) + (lng-?)*(lng-?)),`
     : "";
   const params: unknown[] = [
-    job.id, Number(job.cycle), agent.id, ...tags, ...tags,
+    job.id, Number(job.cycle), agent.id, ...(countries === null ? [] : [JSON.stringify(countries)]), ...tags, ...tags,
   ];
   if (location) params.push(location.lat, location.lat, location.lng, location.lng);
   return db.prepare(`SELECT * FROM scan_targets
     WHERE job_id=? AND cycle=? AND status='queued'
-      AND (required_agent_id='' OR required_agent_id=?) ${tagFilter}
+      AND (required_agent_id='' OR required_agent_id=?) ${qualificationFilter} ${tagFilter}
     ORDER BY priority DESC, ${whereTags} ${distanceOrder} sequence ASC LIMIT 1`)
     .bind(...params).first<ScanTargetRow>();
 }
@@ -383,7 +394,8 @@ export async function claimTask(agent: ScanAgentRow): Promise<ClaimedTask | null
   }
   agent = await db.prepare("SELECT * FROM scan_agents WHERE id=? AND enabled=1")
     .bind(agent.id).first<ScanAgentRow>() ?? agent;
-  if (agent.paused) {
+  if (!agent.enabled || agent.paused ||
+      !qualifiedForSlot(agent.capabilities_json, rotationWindow().slot)) {
     // 此 Agent 被後台暫停：保持在線（touch）但不派工。
     await touchAgent(agent.id);
     return null;
@@ -655,6 +667,7 @@ export function publicAgent(row: ScanAgentRow, now = Date.now()) {
     uploaded_rows: Number(row.uploaded_rows),
     uploaded_bytes: Number(row.uploaded_bytes),
     region_tags: regionTags,
+    rotation_slots: rotationSlots(row.capabilities_json),
     version: row.agent_version,
     game_version: row.game_version,
     module_version: row.module_version,

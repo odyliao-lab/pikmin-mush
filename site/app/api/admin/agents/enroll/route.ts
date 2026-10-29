@@ -22,12 +22,12 @@ export async function POST(request: Request) {
   const tokenHash = await hashAgentToken(credential.token);
   const now = Date.now();
   await runtime().DB.prepare(`INSERT INTO scan_agents (
-      id, display_name, token_hash, region_tags_json, created_at, updated_at
-    ) VALUES (?, ?, ?, ?, ?, ?)`)
+      id, display_name, token_hash, region_tags_json, enabled, capabilities_json, created_at, updated_at
+    ) VALUES (?, ?, ?, ?, 0, '{"rotation_slots":[]}', ?, ?)`)
     .bind(credential.id, name, tokenHash, JSON.stringify(regionTags), now, now).run();
   return noStoreJson({
     ok: true,
-    agent: { id: credential.id, name, region_tags: regionTags },
+    agent: { id: credential.id, name, region_tags: regionTags, enabled: false, rotation_slots: [] },
     token: credential.token,
     warning: "Token 只顯示這一次，請立即寫入該 Agent 的 config。",
   });
