@@ -4,6 +4,8 @@ import { readFileSync } from 'node:fs';
 import { Script } from 'node:vm';
 import ts from 'typescript';
 import { scanInteger } from '../lib/scan-identifiers.mjs';
+import * as policy from '../lib/fleet-policy.mjs';
+import * as plans from '../lib/rotation-plan.mjs';
 
 function load(file, deps) {
   const exports = {};
@@ -21,6 +23,7 @@ function fixture({paused = false, status = 'running', changes = 1, authorized = 
   const cloud = {runtime: () => ({DB: db}), ensureSchema: async () => {},
     plain: (s, status=200) => new Response(s, {status})};
   const fleet = load('../lib/fleet.ts', {'./cloud': cloud, './scans': {}, './rotation': {},
+    './fleet-policy.mjs': policy, './rotation-plan.mjs': plans,
     './targets': {}, './target-history.mjs': {}, './scan-plans': {}, './scan-outcomes.mjs': {},
     './metrics': {HEARTBEAT_SAMPLE_MS: 300000, recordAgentEvent: async e => events.push(e)}});
   const versions = {version: 'v', gameVersion: '154.0', moduleVersion: '154.0'};

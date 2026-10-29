@@ -1,3 +1,4 @@
+import { MAX_ENABLED_AGENTS } from "./fleet-policy.mjs";
 export const ROTATION_TIME_ZONE = "Asia/Taipei";
 export const ROTATION_SWITCH_MINUTES = [4 * 60, 12 * 60, 20 * 60];
 export const ROTATION_SWITCH_MINUTE = ROTATION_SWITCH_MINUTES[0];
@@ -175,7 +176,7 @@ export function planDailyRotation(agentIds, now = Date.now()) {
   const agents = [...new Set(agentIds.map(String).filter(Boolean))].sort();
   const window = rotationWindow(now);
   if (!agents.length) return { ...window, assignments: [] };
-  if (agents.length > 5) throw new Error("自動輪替最多支援 5 個啟用 Agent");
+  if (agents.length > MAX_ENABLED_AGENTS) throw new Error(`自動輪替最多支援 ${MAX_ENABLED_AGENTS} 個啟用 Agent`);
   return {
     ...window, cycle: window.dayOffset, dayIndex: 0,
     assignments: assignmentsFor(agents, window, window.dayOffset, now),
@@ -186,7 +187,7 @@ export function planManualRedeploy(agentIds, now = Date.now()) {
   const agents = [...new Set(agentIds.map(String).filter(Boolean))].sort();
   const window = rotationWindow(now);
   if (!agents.length) return { ...window, assignments: [] };
-  if (agents.length > 5) throw new Error("手動重新分配最多支援 5 個啟用 Agent");
+  if (agents.length > MAX_ENABLED_AGENTS) throw new Error(`手動重新分配最多支援 ${MAX_ENABLED_AGENTS} 個啟用 Agent`);
   return {
     ...window, cycle: window.dayOffset + 1, dayIndex: 0,
     assignments: assignmentsFor(agents, window, window.dayOffset + 1, now)

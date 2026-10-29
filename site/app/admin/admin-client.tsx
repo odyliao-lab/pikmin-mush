@@ -7,6 +7,7 @@ import GpsSettings from './gps-settings';
 import {useVisiblePolling} from './use-visible-polling';
 import {ADMIN_PAGES, agentState, needsAttention, ageLabel} from '../../lib/admin-view.mjs';
 import { COUNTRY_PACK_LABELS } from "../../lib/scan-plans";
+import { MAX_ENABLED_AGENTS, ROTATION_SLOTS, ROTATION_SLOT_LABELS } from "../../lib/fleet-policy.mjs";
 import styles from "./admin.module.css";
 
 type Job = {
@@ -42,6 +43,7 @@ type Agent = {
   uploaded_rows: number;
   uploaded_bytes: number;
   region_tags: string[];
+  rotation_slots: string[] | null;
   version: string;
   game_version: string;
   module_version: string;
@@ -265,6 +267,8 @@ export default function AdminClient({
   const [busy, setBusy] = useState(false);
   const [notice, setNotice] = useState("");
   const [agentName, setAgentName] = useState("");
+  const [qualificationAgentId, setQualificationAgentId] = useState("");
+  const [qualificationSlots, setQualificationSlots] = useState<string[]>([]);
   const [agentRegions, setAgentRegions] = useState("");
   const [editingAgentId, setEditingAgentId] = useState("");
   const [editingAgentRegions, setEditingAgentRegions] = useState("");
@@ -469,7 +473,7 @@ export default function AdminClient({
   };
 
   const agentAction = async (agent: Agent, action: "enable" | "disable" | "pause" | "resume" |
-    "rotate-token" | "revoke-old-token" | "rename" | "delete", displayName?: string) => {
+    "rotate-token" | "revoke-old-token" | "rename" | "delete" | "update-qualification", displayName?: string) => {
     if(['pause','disable','enable','resume'].includes(action)&&!window.confirm(`${agent.name}：${({pause:'暫停掃描',disable:'停用節點並釋放工作',enable:'啟用節點',resume:'恢復掃描'} as Record<string,string>)[action]}？`))return;
     setBusy(true);
     setNotice("");
@@ -477,7 +481,8 @@ export default function AdminClient({
       const response = await fetch("/api/admin/agents/action", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ agentId: agent.id, action, displayName }),
+        body: JSON.stringify({ agentId: agent.id, action, displayName,
+          ...(action === "update-qualification" ? { rotationSlots: qualificationSlots } : {}) }),
       });
       const result = await response.json();
       if (!response.ok) throw new Error(result.error ?? "Agent 操作失敗");
@@ -490,6 +495,9 @@ export default function AdminClient({
         setEditingAgentNameId("");
         setEditingAgentName("");
         setNotice(`${agent.name} 已重新命名為 ${result.display_name}`);
+      } else if (action === "update-qualification") {
+        setQualificationAgentId("");
+        setNotice(`${agent.name} 的實測時段資格已儲存`);
       } else if (action === "delete") {
         setDeletingAgentId("");
         setNotice(`${agent.name} 已永久自後台移除`);
@@ -753,7 +761,7 @@ export default function AdminClient({
       {page==='fleet'&&<section className={styles.fleetPanel}>
         <div className={styles.panelTitle}>
           <div><span>AGENT FLEET</span><h2>全球掃描節點</h2></div>
-          <small>每日 04:00、12:00、20:00（台北）換區。詳細控制預設收合。</small>
+          <small>最多啟用 {MAX_ENABLED_AGENTS} 台；每日 04:00、12:00、20:00（台北）按資格換區。</small>
         </div>
         <div className={styles.agentGrid}>
           {dashboard?.agents.map((agent) => (
@@ -761,6 +769,9 @@ export default function AdminClient({
               <summary><strong>{agent.name}</strong><span data-attention={needsAttention(agent)}>{agentState(agent)}</span><small>{[agent.current_country,agent.current_city].filter(Boolean).join('－')||'目前城市未回報'}</small></summary>
               <div className={styles.agentBody}>
               <code>{agent.id}</code>
+              <small>掃描資格：{agent.rotation_slots === null ? "沿用既有資格" :
+                agent.rotation_slots?.length ? agent.rotation_slots.map(slot =>
+                  ROTATION_SLOT_LABELS[slot as keyof typeof ROTATION_SLOT_LABELS]).join("・") : "尚待實測"}</small>
               <span>
                 {agent.online ? "在線" : "離線"}
                 {agent.paused ? "・已暫停掃描" : ""}・最後回報 {formatTime(agent.last_seen)}
@@ -817,6 +828,10 @@ export default function AdminClient({
                 </div>
               )}
               <div className={styles.agentActions}>
+                {!agent.enabled && <button disabled={busy} onClick={() => {
+                  setQualificationAgentId(agent.id);
+                  setQualificationSlots(agent.rotation_slots ?? [...ROTATION_SLOTS]);
+                }}>設定實測資格</button>}
                 {!dashboard.rotation.enabled && (
                   <button className={styles.agentToggle} disabled={busy}
                     onClick={() => {
@@ -834,7 +849,8 @@ export default function AdminClient({
                       {agent.paused ? "繼續掃描" : "暫停掃描"}
                     </button>
                   : null}
-                <button className={styles.agentToggle} disabled={busy}
+                <button className={styles.agentToggle} disabled={busy || (!agent.enabled &&
+                  (agent.rotation_slots?.length === 0 || (dashboard?.agents.filter(a => a.enabled).length ?? 0) >= MAX_ENABLED_AGENTS))}
                   onClick={() => agentAction(agent, agent.enabled ? "disable" : "enable")}>
                   {agent.enabled ? "停用節點" : "啟用節點"}
                 </button>
@@ -871,6 +887,16 @@ export default function AdminClient({
                   )
                 )}
               </div>
+              {qualificationAgentId === agent.id && !agent.enabled && <div className={styles.agentRegionEditor}>
+                <p>僅勾選已在這台裝置實測遊戲地圖與新資料的時段。未勾選時段不派工；空白代表尚未取得資格。</p>
+                {ROTATION_SLOTS.map(slot => <label key={slot}>
+                  <input type="checkbox" checked={qualificationSlots.includes(slot)} onChange={event =>
+                    setQualificationSlots(event.target.checked ? [...qualificationSlots, slot] : qualificationSlots.filter(s => s !== slot))} />
+                  {ROTATION_SLOT_LABELS[slot as keyof typeof ROTATION_SLOT_LABELS]}
+                </label>)}
+                <button disabled={busy} onClick={() => agentAction(agent, "update-qualification")}>儲存實測資格</button>
+                <button disabled={busy} onClick={() => setQualificationAgentId("")}>取消</button>
+              </div>}
               </div>
             </details>
           ))}
@@ -878,6 +904,7 @@ export default function AdminClient({
           {dashboard && !dashboard.agents.length && <p className={styles.empty}>尚未建立 Agent</p>}
         </div>
         <details className={styles.disclosure}><summary>建立新 Agent 憑證</summary><div className={styles.enroll}>
+          <p>新節點先保持停用。完成遊戲、模組與地區實測後，設定實測資格再啟用。</p>
           <label><span>新節點名稱</span>
             <input value={agentName} placeholder="例如：歐洲 Agent 01"
               onChange={(event) => setAgentName(event.target.value)} />

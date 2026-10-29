@@ -5,12 +5,19 @@ import {
 import { appendScanLog } from "./scans";
 import { materializeTargets } from "./targets";
 import { planDailyRotation, planManualRedeploy, rotationWindow } from "./rotation-plan.mjs";
+import { rotationEligibleAgents } from "./fleet-policy.mjs";
 
 const LOCK_STALE_MS = 5 * 60_000;
 // A cross-country target can include a 120-second cooldown plus a cold game
 // restart. Do not rebuild thousands of targets merely because an otherwise
 // healthy phone spends more than five minutes between polls.
-const AGENT_ACTIVE_MS = 30 * 60_000;
+type RotationAgent = { id: string; enabled: number; paused: number; last_seen: number; capabilities_json: string };
+
+async function eligibleAgents(now: number): Promise<RotationAgent[]> {
+  const rows = await runtime().DB.prepare(`SELECT id, enabled, paused, last_seen, capabilities_json
+    FROM scan_agents WHERE enabled=1 AND paused=0 ORDER BY id`).all<RotationAgent>();
+  return rotationEligibleAgents(rows.results, rotationWindow(now).slot, now);
+}
 
 type RotationSettingRow = {
   enabled: number;
@@ -86,10 +93,8 @@ export async function ensureDailyRotation(now = Date.now()) {
     .first<RotationSettingRow>();
   if (!setting?.enabled) return null;
 
-  const agents = await db.prepare(`SELECT id FROM scan_agents
-    WHERE enabled=1 AND paused=0 AND last_seen>? ORDER BY id`)
-    .bind(now - AGENT_ACTIVE_MS).all<{ id: string }>();
-  if (!agents.results.length) return null;
+  const agents = await eligibleAgents(now);
+  if (!agents.length) return null;
 
   // Notification verification is time-sensitive and must finish before the
   // daily route rebuild cancels the scan job that owns those targets.
@@ -101,7 +106,7 @@ export async function ensureDailyRotation(now = Date.now()) {
     .first<{ count: number }>();
   if (Number(pendingVerification?.count ?? 0) > 0) return null;
 
-  const planned = planDailyRotation(agents.results.map((agent) => agent.id), now);
+  const planned = planDailyRotation(agents.map((agent) => agent.id), now);
   const existing = await db.prepare(
     "SELECT * FROM scan_rotation_runs WHERE schedule_date=?",
   ).bind(planned.scheduleDate).first<RotationRunRow>();
@@ -258,10 +263,8 @@ export async function redeployDailyRotation(now = Date.now()) {
     .first<RotationSettingRow>();
   if (!setting?.enabled) throw new Error("每日自動換區未啟用");
 
-  const agents = await db.prepare(`SELECT id FROM scan_agents
-    WHERE enabled=1 AND paused=0 AND last_seen>? ORDER BY id`)
-    .bind(now - AGENT_ACTIVE_MS).all<{ id: string }>();
-  if (!agents.results.length) throw new Error("目前沒有可重新分配的在線 Agent");
+  const agents = await eligibleAgents(now);
+  if (!agents.length) throw new Error("目前沒有可重新分配的在線 Agent");
 
   const pendingVerification = await db.prepare(`SELECT COUNT(*) AS count
     FROM scan_targets
@@ -278,7 +281,7 @@ export async function redeployDailyRotation(now = Date.now()) {
       .bind(now).run();
   }
 
-  const planned = planManualRedeploy(agents.results.map((agent) => agent.id), now);
+  const planned = planManualRedeploy(agents.map((agent) => agent.id), now);
   const latest = await db.prepare("SELECT config_json FROM scan_jobs ORDER BY id DESC LIMIT 1")
     .first<{ config_json: string }>();
   let previousConfig: unknown = {};

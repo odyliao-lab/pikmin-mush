@@ -62,7 +62,7 @@ test('noon Berlin is exactly 3x within its original route budget; other slots cl
   const section=rotation.slice(rotation.indexOf('function scanConfig('),rotation.indexOf('async function stopActiveJobs'));
   const context={COUNTRY_PACK_CATALOG,normalizeScanConfig,packNames:ids=>ids.map(id=>COUNTRY_PACK_CATALOG.find(p=>p.id===id).name)};
   new Script(ts.transpileModule(section,{compilerOptions:{target:ts.ScriptTarget.ES2022}}).outputText).runInNewContext(context);
-  for(const count of [1,2,3,4]){
+  for(const count of [1,2,3,4,5,6]){
     for(const hour of ['04:00','12:00','20:00']){
       const plan=planDailyRotation(Array.from({length:count},(_,i)=>`a${i}`),Date.parse(`2026-10-23T${hour}:00+08:00`));
       const packs=[...new Set(plan.assignments.flatMap(r=>r.packs))];
