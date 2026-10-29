@@ -323,7 +323,10 @@ prepare_mumu_code_cache() {
   MUMU_CACHE_FILE="$MUMU_CACHE_DIR/.hptc_kache_nticlabs.pikmin"
   [ -d "$MUMU_CACHE_DIR" ] && [ ! -L "$MUMU_CACHE_DIR" ] || return 1
   [ ! -L "$MUMU_CACHE_FILE" ] || return 1
-  [ -e "$MUMU_CACHE_FILE" ] || return 0
+  if [ ! -e "$MUMU_CACHE_FILE" ]; then
+    echo '[recovery] no existing MuMu translation cache before cold launch'
+    return 0
+  fi
   [ -f "$MUMU_CACHE_FILE" ] || return 1
   MUMU_BACKUP_DIR="$MODDIR/mumu-code-cache"
   [ ! -L "$MUMU_BACKUP_DIR" ] || return 1
@@ -835,6 +838,16 @@ restart_game_for_scan() {
   echo "[scan] no new rows, restarting game session at current GPS"
   run_as_shell "am force-stop $PKG" >/dev/null 2>&1
   sleep 2
+  COLD_STOP_LEFT=15
+  while pidof "$PKG" >/dev/null 2>&1 && [ "$COLD_STOP_LEFT" -gt 0 ]; do
+    sleep 1
+    COLD_STOP_LEFT=$((COLD_STOP_LEFT - 1))
+  done
+  if pidof "$PKG" >/dev/null 2>&1; then
+    echo '[recovery] game did not stop; refusing to reuse process for cold restart'
+    return 1
+  fi
+  prepare_mumu_code_cache || return 1
   if [ "$MAP_REFRESH_EXPERIMENT" = "1" ]; then
     rm -f "$SCAN_READY" "$QUERY_READY"
   fi

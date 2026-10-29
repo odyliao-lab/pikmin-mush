@@ -47,6 +47,7 @@ jobs:
           bash -n phone_agent/service.sh
           bash phone_agent/tests/service-boot-delay-test.sh
           bash phone_agent/tests/mumu-code-cache-test.sh
+          bash phone_agent/tests/cold-restart-test.sh
           bash -n phone_agent/runtime-version.sh
           bash phone_agent/tests/runtime-version-test.sh
           c++ -std=c++17 -Wall -Wextra -Werror module/tests/scanner-performance-test.cpp -o /tmp/scanner-performance-test
