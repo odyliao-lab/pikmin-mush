@@ -45,4 +45,14 @@ printf 'different-boot 999999999\n' >"$TMP/recovery.last-start"
 scan_recovery_restart_allowed
 printf '%s not-a-number\n' "$boot" >"$TMP/recovery.last-start"
 if scan_recovery_restart_allowed; then exit 1;fi
-echo 'native readiness PID/version/protection and persistent restart backoff passed'
+SCAN_RECOVERY_CONTROL_POLL=1 SCAN_LEASE='' BLOCK=0
+guarded_startup_wait() { return 0; }
+scan_control() { echo poll >>"$TMP/polls"; echo stop; }
+if scan_recovery_wait_native; then echo missing-ready-accepted; exit 1; else [ "$?" = 1 ]; fi
+[ "$(wc -l <"$TMP/polls")" -eq 4 ]
+scan_control() { echo pause; }
+if scan_recovery_wait_native; then echo remote-pause-ignored; exit 1; else [ "$?" = 2 ]; fi
+SCAN_LEASE=test-held-lease
+scan_control() { echo stop; }
+if scan_recovery_wait_native; then echo cancelled-lease-ignored; exit 1; else [ "$?" = 2 ]; fi
+echo 'native readiness, persistent backoff, bounded presence polling and pause/stop checks passed'
