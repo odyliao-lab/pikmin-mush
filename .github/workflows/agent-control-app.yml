@@ -40,6 +40,7 @@ jobs:
           bash phone_agent/tests/power-guard-test.sh
           bash phone_agent/tests/power-guard-integration-test.sh
           bash phone_agent/tests/upload-chunk-test.sh
+          bash phone_agent/tests/auth-stdin-test.sh
           bash phone_agent/tests/popup-recovery-test.sh
           bash -n phone_agent/runtime-version.sh
           bash phone_agent/tests/runtime-version-test.sh

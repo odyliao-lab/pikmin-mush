@@ -1,5 +1,13 @@
 # Pikmin Scanner Agent
 
+## 2.2.10 私人認證傳遞
+
+一般 API 與短時 control 輪詢以 shell builtin `printf` 經 stdin 傳送 Bearer
+header，curl 使用 `-H @-`，避免 token 出現在程序參數。TSV body 仍由獨立檔案
+讀取，HTTP／TLS、逾時、DNS 選項、上傳 offset 與 ACK 行為不變。需支援從 stdin
+讀 header 的 curl（7.55+）；Gemini 的官方 Termux curl 8.23.0 已核對此能力。
+此程式更新僅部署 Gemini，不更動既有五台 Agent。
+
 ## 2.2.9 新裝與模擬器保護
 
 首次建立及重新套用 `teleport.txt` 會依遊戲 files 目錄的實際 UID/GID 設為

@@ -116,7 +116,7 @@ if [ ! -x "$MAGISK_SU" ]; then
   MAGISK_SU="$(command -v su 2>/dev/null)"
 fi
 AGENT_ID="${AGENT_ID:-primary}"
-AGENT_VERSION="${AGENT_VERSION:-2.2.9}"
+AGENT_VERSION="${AGENT_VERSION:-2.2.10}"
 [ -r "$MODDIR/runtime-version.sh" ] || { echo '[version] runtime probe missing'; exit 1; }
 . "$MODDIR/runtime-version.sh"
 refresh_game_version
@@ -156,16 +156,18 @@ case "$LAST_SEQ" in ''|*[!0-9]*) LAST_SEQ=0 ;; esac
 
 auth_curl() {
   if [ -n "$CURL_DNS_SERVERS" ]; then
+    printf 'Authorization: Bearer %s\n' "$TOKEN" |
     "$CURL_BIN" -fsS --dns-servers "$CURL_DNS_SERVERS" --connect-timeout 10 --max-time 45 \
-      -H "Authorization: Bearer $TOKEN" \
+      -H @- \
       -H "X-Agent-Id: $AGENT_ID" \
       -H "X-Agent-Version: $AGENT_VERSION" \
       -H "X-Game-Version: $GAME_VERSION" \
       -H "X-Module-Version: $MODULE_VERSION" "$@"
     return
   fi
+  printf 'Authorization: Bearer %s\n' "$TOKEN" |
   "$CURL_BIN" -fsS --connect-timeout 10 --max-time 45 \
-    -H "Authorization: Bearer $TOKEN" \
+    -H @- \
     -H "X-Agent-Id: $AGENT_ID" \
     -H "X-Agent-Version: $AGENT_VERSION" \
     -H "X-Game-Version: $GAME_VERSION" \
@@ -658,8 +660,9 @@ scan_control() {
   # several minutes. Empty/error responses fail open; lease validation still
   # happens on the normal task and ACK requests.
   if [ -n "$CURL_DNS_SERVERS" ]; then
+    printf 'Authorization: Bearer %s\n' "$TOKEN" |
     "$CURL_BIN" -fsS --dns-servers "$CURL_DNS_SERVERS" --connect-timeout 3 --max-time 5 \
-      -H "Authorization: Bearer $TOKEN" \
+      -H @- \
       -H "X-Agent-Id: $AGENT_ID" \
       -H "X-Agent-Version: $AGENT_VERSION" \
       -H "X-Game-Version: $GAME_VERSION" \
@@ -668,8 +671,9 @@ scan_control() {
       2>/dev/null
     return
   fi
+  printf 'Authorization: Bearer %s\n' "$TOKEN" |
   "$CURL_BIN" -fsS --connect-timeout 3 --max-time 5 \
-    -H "Authorization: Bearer $TOKEN" \
+    -H @- \
     -H "X-Agent-Id: $AGENT_ID" \
     -H "X-Agent-Version: $AGENT_VERSION" \
     -H "X-Game-Version: $GAME_VERSION" \
