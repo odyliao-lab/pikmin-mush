@@ -25,6 +25,7 @@ SYSTEM_GPS_OVERRIDE=0
 ensure_system_gps_provider
 [ ! -e "$TMP/actions" ]
 SYSTEM_GPS_OVERRIDE=1 MUMU_CODE_CACHE_REFRESH=1 TIMEOUT_FAIL=0
+scan_control() { echo run; }
 GPS_DUMP='    passive provider:'
 ensure_game_running() { echo launch >>"$TMP/actions"; GPS_DUMP='    gps provider:'; }
 ensure_system_gps_provider
@@ -36,6 +37,10 @@ ensure_game_running() { echo launch >>"$TMP/actions"; return 1; }
 if ensure_system_gps_provider; then echo failed-bootstrap-accepted; exit 1; fi
 [ "$(wc -l <"$TMP/actions")" -eq 1 ]
 rm "$TMP/actions"
+scan_control() { echo pause; }
+if ensure_system_gps_provider; then echo remote-pause-ignored; exit 1; fi
+[ ! -e "$TMP/actions" ]
+scan_control() { echo run; }
 ensure_game_running() { echo launch >>"$TMP/actions"; }
 if ensure_system_gps_provider; then echo absent-provider-after-bootstrap-accepted; exit 1; fi
 [ "$(wc -l <"$TMP/actions")" -eq 1 ]

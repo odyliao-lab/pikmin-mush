@@ -129,3 +129,6 @@ POPUP_RECOVERY_INTERVAL_SECONDS=30
 # Requires Hunter with PID-bound native.ready support; preserve opt-out on older modules.
 SCAN_RECOVERY_ENABLED=0
 SCAN_RESTART_MIN_SECONDS=300
+# Optional presence/lease renewal and remote-pause checks while native starts.
+# This does not ACK a point or prove successful scanning.
+SCAN_RECOVERY_CONTROL_POLL=0

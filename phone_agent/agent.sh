@@ -116,7 +116,7 @@ if [ ! -x "$MAGISK_SU" ]; then
   MAGISK_SU="$(command -v su 2>/dev/null)"
 fi
 AGENT_ID="${AGENT_ID:-primary}"
-AGENT_VERSION="${AGENT_VERSION:-2.2.8}"
+AGENT_VERSION="${AGENT_VERSION:-2.2.9}"
 [ -r "$MODDIR/runtime-version.sh" ] || { echo '[version] runtime probe missing'; exit 1; }
 . "$MODDIR/runtime-version.sh"
 refresh_game_version
@@ -206,6 +206,11 @@ ensure_system_gps_provider() {
     # Start the calibrated game first, then recheck; never create a competing
     # mock manager while the real manager is still absent.
     [ "${MUMU_CODE_CACHE_REFRESH:-0}" = 1 ] || return 1
+    BOOTSTRAP_CONTROL="$(scan_control)"
+    case "$BOOTSTRAP_CONTROL" in
+      pause) return 1;;
+      stop) [ -z "${SCAN_LEASE:-}" ] || return 1;;
+    esac
     ensure_game_running || return 1
     timeout -k 1 5 dumpsys location 2>/dev/null |
       grep -Eq '^ *gps provider([ :\[]|$)' || return 1

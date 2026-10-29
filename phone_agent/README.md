@@ -1,6 +1,6 @@
 # Pikmin Scanner Agent
 
-## 2.2.8 新裝與模擬器保護
+## 2.2.9 新裝與模擬器保護
 
 首次建立及重新套用 `teleport.txt` 會依遊戲 files 目錄的實際 UID/GID 設為
 0600，避免 root 私有 umask 讓 native 無法讀取目標；無效擁有者、symlink 或
@@ -12,6 +12,9 @@
 MuMu 專用快取選項啟用時，若真實 GPS provider 尚未註冊，先由既有安全入口
 啟動遊戲並等待 native，再次確認 provider 存在才設定 mock GPS；仍未就緒便等待，
 不先領取工作。Taurus 使用 `SYSTEM_GPS_OVERRIDE=1` 對齊系統與 native 座標。
+Taurus 另啟用 `SCAN_RECOVERY_CONTROL_POLL=1`：native 啟動等待期間每 30 秒經既有
+control API 更新在線狀態／有效 lease，並尊重後台 pause/stop；不派新點、不發成功
+ACK，也不以此作掃描驗收。冷重啟間隔為 900 秒，降低空點觸發的不必要冷啟動。
 
 Taurus 新增 1080×1920 繁體中文首頁／羅盤校準；不含帳戶、步數或頭像特徵。
 同解析度另校準已觀察到的「不要駕駛」、「不要前往禁止進入的地點」與

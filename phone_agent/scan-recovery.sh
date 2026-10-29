@@ -24,6 +24,7 @@ scan_recovery_restart_allowed() {
 
 scan_recovery_wait_native() {
   RECOVERY_LEFT=120
+  RECOVERY_CONTROL_TICKS=30
   while [ "$RECOVERY_LEFT" -gt 0 ]; do
     scan_can_run || return 2
     READY_PID='' READY_VERSION='' READY_EXTRA=''
@@ -39,8 +40,18 @@ scan_recovery_wait_native() {
            return 0
          fi;;
     esac
+    if [ "${SCAN_RECOVERY_CONTROL_POLL:-0}" = 1 ] &&
+        [ "$RECOVERY_CONTROL_TICKS" -ge 30 ]; then
+      RECOVERY_CONTROL_TICKS=0
+      RECOVERY_CONTROL="$(scan_control)"
+      case "$RECOVERY_CONTROL" in
+        pause) return 2;;
+        stop) [ -z "${SCAN_LEASE:-}" ] || return 2;;
+      esac
+    fi
     guarded_startup_wait 5 || return 2
     RECOVERY_LEFT=$((RECOVERY_LEFT - 5))
+    RECOVERY_CONTROL_TICKS=$((RECOVERY_CONTROL_TICKS + 5))
   done
   echo '[recovery] native startup timeout; no readiness claim'
   return 1
