@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
-import { Miniflare } from 'miniflare';
+import { Miniflare, convertV4MiniflareOptions } from 'miniflare';
 import { Script } from 'node:vm';
 import ts from 'typescript';
 const exports={};
@@ -9,8 +9,8 @@ new Script(ts.transpileModule(readFileSync(new URL('../lib/upload-receipts.ts',i
   {compilerOptions:{module:ts.ModuleKind.CommonJS}}).outputText).runInNewContext({exports,require(){return {};}});
 
 test('real local D1 applies migration and constraint range guard, rolling back late failures',async()=>{
-  const mf=new Miniflare({modules:true,script:'export default {fetch(){return new Response("fixture");}}',
-    compatibilityDate:'2026-06-01',d1Databases:{DB:'fixture-upload-receipts'}});
+  const mf=new Miniflare(convertV4MiniflareOptions({modules:true,script:'export default {fetch(){return new Response("fixture");}}',
+    compatibilityDate:'2026-06-01',d1Databases:{DB:'fixture-upload-receipts'}}));
   try {
     const db=await mf.getD1Database('DB');
     const migration=readFileSync(new URL('../drizzle/0023_puzzling_cyclops.sql',import.meta.url),'utf8');

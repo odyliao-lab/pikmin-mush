@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { Miniflare } from 'miniflare';
+import { Miniflare, convertV4MiniflareOptions } from 'miniflare';
 import { acquirePublicRead } from '../lib/public-read-guard.mjs';
 import { createPublicReader } from '../lib/public-read.mjs';
 
@@ -8,8 +8,8 @@ const secret='fixture-key-only-'.repeat(3);
 const request=(bbox='',ip='192.0.2.1')=>new Request('https://fixture.test/api/mushrooms'+
   (bbox?'?bbox='+bbox:''),{headers:{'CF-Connecting-IP':ip}});
 test('real D1 guards separate instances, rates, concurrency, spatial changes and expiring leases',async()=>{
- const mf=new Miniflare({modules:true,script:'export default {fetch(){return new Response("fixture")}}',
-  compatibilityDate:'2026-06-01',d1Databases:{DB:'fixture-public-guard'}});
+ const mf=new Miniflare(convertV4MiniflareOptions({modules:true,script:'export default {fetch(){return new Response("fixture")}}',
+  compatibilityDate:'2026-06-01',d1Databases:{DB:'fixture-public-guard'}}));
  try {
   const db=await mf.getD1Database('DB');
   await db.prepare(`CREATE TABLE public_read_budgets(source TEXT PRIMARY KEY,window INTEGER,
