@@ -39,6 +39,7 @@ jobs:
           bash phone_agent/tests/power-guard-integration-test.sh
           bash phone_agent/tests/upload-chunk-test.sh
           bash phone_agent/tests/auth-stdin-test.sh
+          bash phone_agent/tests/shell-context-test.sh
           bash phone_agent/tests/map-entry-test.sh
           bash phone_agent/tests/visual-recovery-test.sh
           bash phone_agent/tests/popup-recovery-test.sh

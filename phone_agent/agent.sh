@@ -112,6 +112,7 @@ SYSTEM_GPS_OVERRIDE="${SYSTEM_GPS_OVERRIDE:-0}"
 # AppOp and writes the GPS test provider for this Agent.
 GPS_BRIDGE_PACKAGE="${GPS_BRIDGE_PACKAGE:-}"
 MAGISK_SU="${MAGISK_SU:-/sbin/su}"
+SHELL_SU_MODE="${SHELL_SU_MODE:-magisk}"
 if [ ! -x "$MAGISK_SU" ]; then
   MAGISK_SU="$(command -v su 2>/dev/null)"
 fi
@@ -178,10 +179,30 @@ auth_curl() {
 # UI/location command must still execute as Android's shell UID, with the
 # platform command path restored.  Without this helper Android 9 accepts the
 # Agent loop but silently leaves Pikmin on its startup overlay.
+shell_su_command() {
+  SHELL_COMMAND="PATH=/system/bin:/system/xbin:/vendor/bin:/sbin; export PATH; $1"
+  case "$SHELL_SU_MODE" in
+    magisk) return 0 ;;
+    ksu-runcon)
+      # KernelSU su has no Magisk -Z option. Change UID first, then use
+      # Android runcon for the same shell SELinux domain. Never fall back
+      # to a root-domain UI/location command if that transition fails.
+      [ -x /system/bin/runcon ] || return 127
+      SHELL_COMMAND="exec /system/bin/runcon u:r:shell:s0 /system/bin/sh -c '$(printf '%s' "$SHELL_COMMAND" | sed "s/'/'\\\\''/g")'"
+      ;;
+    *) return 64 ;;
+  esac
+}
+
 run_as_shell() {
   [ -n "$MAGISK_SU" ] && [ -x "$MAGISK_SU" ] || return 127
+  shell_su_command "$1" || return $?
+  if [ "$SHELL_SU_MODE" = ksu-runcon ]; then
+    "$MAGISK_SU" 2000 -c "$SHELL_COMMAND"
+    return $?
+  fi
   "$MAGISK_SU" -Z u:r:shell:s0 2000 -c \
-    "PATH=/system/bin:/system/xbin:/vendor/bin:/sbin; export PATH; $1"
+    "$SHELL_COMMAND"
 }
 
 # `timeout <n> run_as_shell "..."` does not work: run_as_shell is a shell
@@ -193,8 +214,13 @@ run_as_shell_timeout() {
   RUN_TIMEOUT_SECONDS="$1"
   shift
   [ -n "$MAGISK_SU" ] && [ -x "$MAGISK_SU" ] || return 127
+  shell_su_command "$1" || return $?
+  if [ "$SHELL_SU_MODE" = ksu-runcon ]; then
+    timeout -k 2 "$RUN_TIMEOUT_SECONDS" "$MAGISK_SU" 2000 -c "$SHELL_COMMAND"
+    return $?
+  fi
   timeout -k 2 "$RUN_TIMEOUT_SECONDS" "$MAGISK_SU" -Z u:r:shell:s0 2000 -c \
-    "PATH=/system/bin:/system/xbin:/vendor/bin:/sbin; export PATH; $1"
+    "$SHELL_COMMAND"
 }
 
 ensure_system_gps_provider() {

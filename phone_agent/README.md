@@ -1,12 +1,17 @@
 # Pikmin Scanner Agent
 
-## 2.2.10 私人認證傳遞
+## 2.2.10 私人認證傳遞與 KernelSU shell
 
 一般 API 與短時 control 輪詢以 shell builtin `printf` 經 stdin 傳送 Bearer
 header，curl 使用 `-H @-`，避免 token 出現在程序參數。TSV body 仍由獨立檔案
 讀取，HTTP／TLS、逾時、DNS 選項、上傳 offset 與 ACK 行為不變。需支援從 stdin
 讀 header 的 curl（7.55+）；Gemini 的官方 Termux curl 8.23.0 已核對此能力。
 此程式更新僅部署 Gemini，不更動既有五台 Agent。
+
+`SHELL_SU_MODE=ksu-runcon` 支援沒有 `su -Z` 的 KernelSU：先切換 UID 2000，
+再由 Android `runcon` 進入 `u:r:shell:s0`，定位與畫面指令不沿用 root domain。
+轉換或 timeout 失敗時回傳失敗，不自動放寬權限。預設 `magisk` 保留原路徑。
+Gemini 已實測 `id`、`cmd location is-location-enabled` 與 activity 查詢。
 
 ## 2.2.9 新裝與模擬器保護
 
