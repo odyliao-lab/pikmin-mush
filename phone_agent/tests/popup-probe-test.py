@@ -14,6 +14,11 @@ groups = {}
 for name, body in re.findall(r'PopupSample (p\d+_\w+)\[\]=\{(.*?)\};', source):
     groups[name] = [tuple(map(int, p)) for p in re.findall(r'\{(\d+),(\d+),(\d+),(\d+),(\d+)\}', body)]
 templates = re.findall(r'\{"(\w+)",(\d+),(\d+),(\d+),(\d+),(p\d+)_frame,', source)
+recovery = (root / 'popup-recovery.sh').read_text(encoding='utf-8')
+allowed = re.search(r'case "\$1" in ([a-z|]+)\) ;; \*\) return 1', recovery)
+assert allowed, 'popup action contract not found'
+allowed_kinds = set(allowed[1].split('|'))
+assert all(t[0] in allowed_kinds for t in templates), 'classifier role is not actionable'
 remote = len(sys.argv) == 3
 adb = [os.environ.get('ADB', 'adb'), '-s', sys.argv[2]] if remote else []
 tmp = tempfile.TemporaryDirectory()
