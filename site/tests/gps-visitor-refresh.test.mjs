@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
-import { Miniflare } from 'miniflare';
+import { Miniflare, convertV4MiniflareOptions } from 'miniflare';
 import { createApi } from './helpers/mushroom-api.mjs';
 import { setPassword, unlock } from '../lib/gps-access.mjs';
 
@@ -72,10 +72,10 @@ test('real Workers Request proxy reproduces old clone failure; cache bypass keep
       const budgets=await env.DB.prepare('SELECT requests,leases FROM public_read_budgets').all();
       return Response.json({oldFailure,status:response.status,cache:response.headers.get('X-Map-Cache'),policy:response.headers.get('Cache-Control'),cacheCalls,budgets:budgets.results});
     }};`;
-  const mf = new Miniflare({modules:[
+  const mf = new Miniflare(convertV4MiniflareOptions({modules:[
     {type:'ESModule',path:'worker.mjs',contents:script},
     ...['public-read.mjs','public-read-guard.mjs'].map(name=>({type:'ESModule',path:name,contents:readFileSync(new URL('../lib/'+name,import.meta.url),'utf8')})),
-  ],compatibilityDate:'2026-06-01',d1Databases:{DB:'gps-visitor-regression'}});
+  ],compatibilityDate:'2026-06-01',d1Databases:{DB:'gps-visitor-regression'}}));
   try {
     const db=await mf.getD1Database('DB');
     await db.prepare('CREATE TABLE public_read_budgets(source TEXT PRIMARY KEY,window INTEGER,requests INTEGER,spatial INTEGER,last_bbox TEXT,leases TEXT,updated_at INTEGER)').run();
