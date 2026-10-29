@@ -28,7 +28,7 @@ test('Ocean Expo preserves all seven user spots, postcard distinctions and annua
 });
 
 test('ended IKEA campaign is removed without losing other event spots',()=>{
-  assert.equal(exported.EVENT_SPOT_SEED.filter(s=>!s.id.startsWith('au-melbourne-pax-2026-')).length,43);
+  assert.equal(exported.EVENT_SPOT_SEED.filter(s=>!s.id.startsWith('au-melbourne-pax-2026-')&&!s.id.startsWith('au-melbourne-mini-walk-2026-')).length,43);
   assert.equal(exported.EVENT_SPOT_SEED.filter(s=>s.id.startsWith('tw-ikea-')).length,0);
   assert.equal(exported.EVENT_SPOT_SEED.filter(s=>s.id.startsWith('jp-ocean-expo-mini-walk-')).length,7);
   assert.ok(exported.EVENT_SPOT_SEED.some(s=>s.id==='jp-nintendo-tokyo'));

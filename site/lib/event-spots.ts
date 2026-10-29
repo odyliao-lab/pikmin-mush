@@ -70,7 +70,27 @@ const paxAus = (id: string, venue: string, lat: number, lng: number, reward: str
   sourceUrl: "https://pikminbloom.com/news/oct26-paxaus", lastVerifiedAt: seconds("2026-10-10T00:00:00Z"),
 });
 
+// Official notice/map verify the window, six venues and rewards, but publish no
+// precise GPS. In particular, do not guess which indoor coordinate is spot 1/2.
+const melbourneMiniWalk = (id: string, venue: string, lat: number, lng: number, reward: string, indoor = false) => limited({
+  id: `au-melbourne-mini-walk-2026-${id}`, country: "澳洲", city: "墨爾本 Melbourne",
+  name: `墨爾本迷你散步 MINI WALK — ${venue}`, lat, lng, rewardKind: "gold_seedling",
+  rewardSummary: indoor ? "巧克力／宇宙飛船飾品金色花苗（兩點對應待確認）" : `${reward}飾品金色花苗`,
+  startAt: seconds("2026-10-29T10:00:00+11:00"), endAt: seconds("2026-11-01T22:00:00+11:00"),
+  cooldownNote: "整場活動每位玩家每個特殊地點限領 1 棵金色花苗，並非每日重置",
+  eligibilityNote: "免費、開放所有玩家，需到特殊地點附近互動。遊戲內活動：墨爾本 AEDT（UTC+11）2026/10/29 10:00–11/01 22:00；台灣時間 10/29 07:00–11/01 19:00。主攤位在 Melbourne Central 的 Shot Tower Square；攤位當地開放時間 10/29–30 10:00–21:00、10/31–11/01 10:00–19:00（台灣分別 07:00–18:00、07:00–16:00），與遊戲內活動時段不同。依各場地實際開放與遊戲顯示為準；皮克敏顏色可能隨機。活動可能變更或取消。",
+  coordinateNote: `精確座標由使用者提供，非官方 GPS，尚未實地或遊戲複核。${indoor ? "兩個 Melbourne Central 點位的獎勵對應尚未確認；官方地圖 #1：Level 1 Pikmin 攤位為宇宙飛船，#2：Level 2 Godiva 為巧克力；請以遊戲地圖辨識，並非同一點可領兩種。" : "場地與飾品依官方活動地圖核對；請以遊戲地圖確認實際互動位置。"}`,
+  verificationStatus: "community", sourceTitle: "Pikmin Bloom Melbourne 2026 MINI WALK 官方公告及活動地圖；精確座標由使用者提供",
+  sourceUrl: "https://pikminbloom.com/en/news/oct26-melbournecentral", lastVerifiedAt: seconds("2026-10-29T00:00:00Z"),
+});
+
 export const EVENT_SPOT_SEED: EventSpotSeed[] = [
+  melbourneMiniWalk("carlton-gardens", "Carlton Gardens（官方地圖 #6）", -37.8062290, 144.9703030, "四葉幸運草"),
+  melbourneMiniWalk("state-library", "State Library Victoria（官方地圖 #3）", -37.8100005, 144.9644355, "迷你書"),
+  melbourneMiniWalk("central-a", "Melbourne Central 點位 A（獎勵對應待確認）", -37.8106646, 144.9630521, "", true),
+  melbourneMiniWalk("bakemono-bakers", "Bakemono Bakers（官方地圖 #4）", -37.8108850, 144.9639360, "糕點"),
+  melbourneMiniWalk("central-b", "Melbourne Central 點位 B（獎勵對應待確認）", -37.8101367, 144.9631035, "", true),
+  melbourneMiniWalk("hardware-societe", "Hardware Société（官方地圖 #5）", -37.8119920, 144.9604610, "下午茶"),
   paxAus("chess", "桌遊大廳（棋子）", -37.826408, 144.952772, "棋子", true),
   paxAus("popcorn", "電影院（爆米花）", -37.82472, 144.95225, "爆米花", false),
   paxAus("blue-mario", "Pikmin Bloom 攤位（藍色超級瑪利歐鑰匙圈）", -37.825547, 144.953019, "藍色超級瑪利歐鑰匙圈", false),

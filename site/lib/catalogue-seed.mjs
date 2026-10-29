@@ -1,5 +1,5 @@
 // Increment when the canonical source catalogue changes (YYYYMMDD + sequence).
-export const CATALOGUE_REVISION = 2026101001;
+export const CATALOGUE_REVISION = 2026102901;
 export const CATALOGUE_STATE = "event-spots-catalogue";
 
 export function catalogueStatements(db, spots, revision, now) {
