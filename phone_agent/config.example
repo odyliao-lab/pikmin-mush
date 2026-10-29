@@ -22,6 +22,9 @@ MODULE_VERSION='156.0'
 # 150.0 reads map-query coordinates from Android location in addition to the
 # in-process display override. Enable only on dedicated scanner phones.
 SYSTEM_GPS_OVERRIDE='0'
+# Keep Magisk's existing -Z route by default. Only a verified KernelSU device
+# may opt into UID 2000 followed by Android runcon to u:r:shell:s0.
+SHELL_SU_MODE='magisk'
 # Optional emulator boot grace period, after boot_completed, before starting
 # Agent/network work. 0 preserves phone behavior; integer range 0..300 seconds.
 # Does not acknowledge any target or reset game/account/cache/upload state.
