@@ -13,8 +13,14 @@ printf 'retained-offset\n' >"$MODDIR/upload.offset"
 printf 'retained-ack\n' >"$MODDIR/scan.pending"
 printf 'retained-other-cache\n' >"$TMP/game/code_cache/other"
 ARCH=x86_64 BRIDGE=libnb.so RUNNING=0 FAIL_CHOWN=0
-uname() { echo "$ARCH"; }
-getprop() { echo "$BRIDGE"; }
+uname() { echo aarch64; }
+getprop() {
+  case "$1" in
+    ro.product.cpu.abi) echo "$ARCH";;
+    ro.dalvik.vm.native.bridge) echo "$BRIDGE";;
+    *) return 1;;
+  esac
+}
 pidof() { [ "$RUNNING" = 1 ]; }
 chown() { [ "$FAIL_CHOWN" = 0 ]; }
 MUMU_CODE_CACHE_REFRESH=0

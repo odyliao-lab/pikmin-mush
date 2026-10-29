@@ -315,7 +315,8 @@ write_game_teleport() {
 # Opt-in only: preserve the exact observed cache file, never app/account data.
 prepare_mumu_code_cache() {
   [ "${MUMU_CODE_CACHE_REFRESH:-0}" = 1 ] || return 0
-  [ "$(uname -m)" = x86_64 ] &&
+  # MuMu's uname is spoofed as aarch64; use Android's actual primary ABI.
+  [ "$(getprop ro.product.cpu.abi)" = x86_64 ] &&
     [ "$(getprop ro.dalvik.vm.native.bridge)" = libnb.so ] || return 1
   ! pidof "$PKG" >/dev/null 2>&1 || return 1
   MUMU_CACHE_DIR="${APP_FILES%/files}/code_cache"
