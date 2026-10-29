@@ -61,6 +61,7 @@ mv "$TMP/previous.saved" "$MODDIR/mumu-code-cache/cache.previous"
 FAIL_CHOWN=1
 if prepare_mumu_code_cache; then echo permission-failure-ignored; exit 1; fi
 [ "$(cat "$MODDIR/mumu-code-cache/cache.next")" = third ]
+if prepare_mumu_code_cache; then echo missing-source-partial-move-ignored; exit 1; fi
 [ "$(cat "$TMP/game/account")" = retained-account ]
 [ "$(cat "$APP_FILES/mushrooms.tsv")" = retained-tsv ]
 [ "$(cat "$MODDIR/upload.offset")" = retained-offset ]

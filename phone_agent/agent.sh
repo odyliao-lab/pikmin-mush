@@ -323,16 +323,17 @@ prepare_mumu_code_cache() {
   MUMU_CACHE_FILE="$MUMU_CACHE_DIR/.hptc_kache_nticlabs.pikmin"
   [ -d "$MUMU_CACHE_DIR" ] && [ ! -L "$MUMU_CACHE_DIR" ] || return 1
   [ ! -L "$MUMU_CACHE_FILE" ] || return 1
+  MUMU_BACKUP_DIR="$MODDIR/mumu-code-cache"
+  MUMU_NEXT="$MUMU_BACKUP_DIR/cache.next"
+  [ ! -L "$MUMU_BACKUP_DIR" ] &&
+    [ ! -e "$MUMU_NEXT" ] && [ ! -L "$MUMU_NEXT" ] || return 1
   if [ ! -e "$MUMU_CACHE_FILE" ]; then
     echo '[recovery] no existing MuMu translation cache before cold launch'
     return 0
   fi
   [ -f "$MUMU_CACHE_FILE" ] || return 1
-  MUMU_BACKUP_DIR="$MODDIR/mumu-code-cache"
-  [ ! -L "$MUMU_BACKUP_DIR" ] || return 1
   (umask 077; mkdir -p "$MUMU_BACKUP_DIR") || return 1
   chmod 700 "$MUMU_BACKUP_DIR" || return 1
-  MUMU_NEXT="$MUMU_BACKUP_DIR/cache.next"
   MUMU_PREVIOUS="$MUMU_BACKUP_DIR/cache.previous"
   # A partial prior move needs inspection, not an automatic overwrite/retry.
   [ ! -e "$MUMU_NEXT" ] && [ ! -L "$MUMU_NEXT" ] &&
