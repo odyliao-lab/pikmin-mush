@@ -51,6 +51,10 @@ for kind, sw, sh, sx, sy, prefix in templates:
         paint(data,w,groups[prefix+'_'+group])
     check(data, f'{kind} {x} {y}')
     check(data[:-1], 'unknown')
+    missing_frame = blank(w,h)
+    for group in ('text','button'):
+        paint(missing_frame,w,groups[prefix+'_'+group])
+    check(missing_frame, 'unknown')
     # A familiar button/frame alone cannot authorize a click on other text.
     missing_text = blank(w,h)
     for group in ('frame','button'):
@@ -77,6 +81,8 @@ for kind, sw, sh, sx, sy, prefix in templates:
             paint(far,w,groups[prefix+'_'+group],80)
         check(far,'unknown')
 check(blank(1080,2160), 'unknown')
+check(blank(1080,1920), 'unknown')
+check(struct.pack('<IIII',1080,1920,1,0)+b'\xff'*(1080*1920*4),'unknown')
 check(struct.pack('<IIII',1080,2160,1,0)+b'\xff'*(1080*2160*4),'unknown')
 check(blank(1080,2160)+b'x','unknown')
 print(f'popup probe: {count} positive/negative/translated fixtures passed')
