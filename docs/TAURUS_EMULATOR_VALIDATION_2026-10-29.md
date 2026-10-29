@@ -173,6 +173,40 @@ offset 19131 → 19852，與這三筆新目標的 721 bytes 相符；站台 ACK 
 與測試來源相符。native 與 popup-probe 保持前述已驗證 payload，沒有換 APK。
 本次只驗證短時與完整開機，跨區空點、冷恢復耗時及跨日仍須長時觀察。
 
+## 2.2.9 最終開機與冷恢復在線驗收
+
+Taurus 最終版本為 Agent 2.2.9，啟用 `SCAN_RECOVERY_CONTROL_POLL=1`、
+`SYSTEM_GPS_OVERRIDE=1`，冷重啟下限改為 900 秒。native 等待時每 30 秒檢查既有
+control，維持在線及有效 lease，並尊重 pause/stop；這些輪詢不算成功掃描。
+預設值仍為關閉，四台實體手機設定不變。遠端 pause、取消 lease、無 lease、
+輪詢次數上限與原有 power guard 整合測試通過。
+
+再次完整重開 instance 2，沒有人工啟動遊戲。新 boot
+`e9207651-05b9-4d2d-ace9-4e2464184425`、遊戲 PID 2329，自動處理 restricted
+提醒及 dashboard 羅盤，native.ready 為同一 PID / 156.0。經過阿加迪爾空點後，
+13:46 核對到以下七個同一新遊戲程序的非零正式目標（工作 #364）：
+
+| target | 新行數 | 新 bytes | direct 耗時 | refresh_source |
+| --- | ---: | ---: | ---: | --- |
+| 1650963 | 2 | 221 | 14 秒 | object |
+| 1650716 | 3 | 309 | 67 秒，含換城等待 | object |
+| 1650718 | 3 | 309 | 11 秒 | object |
+| 1650720 | 2 | 206 | 10 秒 | object |
+| 1650719 | 4 | 412 | 9 秒 | object |
+| 1650717 | 4 | 412 | 10 秒 | object |
+| 1650742 | 4 | 412 | 11 秒 | object |
+
+每筆完成紀錄均在 ACK 成功後產生，offset 21824 → 24840，期間持續成功上傳。
+同時受保護 metrics 最近一小時：完成目標 57、failed_targets=0、expired_leases=0、
+captured_rows=140、captured_bytes=14405、observed_challenges=193、
+upload_failures=0、healthy。這是含較早版本的滾動窗口，不全算成 2.2.9 產出；
+新 boot 驗收只計上表同 PID 的非零 object 目標，不計心跳、空點或舊程序成功。
+
+部署 Agent SHA-256 `20090616b59c4b97df1afc56366d5481ffd44761c67b106783ef681c441ebbd0`，
+scan-recovery.sh SHA-256 `4a1581fbefb120f9e6e6ef3a64aa62ed1d666b8460035f1bd7ae983e3a9f40f4`，
+均與最終測試來源相符。popup-probe 與兩種 ABI Hunter payload 仍為前述已驗證內容。
+沒有重排路線或另派複查以取得驗收數字；正常空點持續走既有路線。
+
 ## 備份與維運限制
 
 模擬器內 root-only 備份：`/data/adb/pikmin-taurus-backups/20261029-1042-before`。
