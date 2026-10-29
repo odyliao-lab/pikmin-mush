@@ -116,7 +116,7 @@ if [ ! -x "$MAGISK_SU" ]; then
   MAGISK_SU="$(command -v su 2>/dev/null)"
 fi
 AGENT_ID="${AGENT_ID:-primary}"
-AGENT_VERSION="${AGENT_VERSION:-2.2.6}"
+AGENT_VERSION="${AGENT_VERSION:-2.2.7}"
 [ -r "$MODDIR/runtime-version.sh" ] || { echo '[version] runtime probe missing'; exit 1; }
 . "$MODDIR/runtime-version.sh"
 refresh_game_version
@@ -311,6 +311,40 @@ write_game_teleport() {
   chmod 600 "$TELEPORT" || return 1
 }
 
+# MuMu's persistent ARM translation cache can break subsequent game logins.
+# Opt-in only: preserve the exact observed cache file, never app/account data.
+prepare_mumu_code_cache() {
+  [ "${MUMU_CODE_CACHE_REFRESH:-0}" = 1 ] || return 0
+  [ "$(uname -m)" = x86_64 ] &&
+    [ "$(getprop ro.dalvik.vm.native.bridge)" = libnb.so ] || return 1
+  ! pidof "$PKG" >/dev/null 2>&1 || return 1
+  MUMU_CACHE_DIR="${APP_FILES%/files}/code_cache"
+  MUMU_CACHE_FILE="$MUMU_CACHE_DIR/.hptc_kache_nticlabs.pikmin"
+  [ -d "$MUMU_CACHE_DIR" ] && [ ! -L "$MUMU_CACHE_DIR" ] || return 1
+  [ ! -L "$MUMU_CACHE_FILE" ] || return 1
+  [ -e "$MUMU_CACHE_FILE" ] || return 0
+  [ -f "$MUMU_CACHE_FILE" ] || return 1
+  MUMU_BACKUP_DIR="$MODDIR/mumu-code-cache"
+  [ ! -L "$MUMU_BACKUP_DIR" ] || return 1
+  (umask 077; mkdir -p "$MUMU_BACKUP_DIR") || return 1
+  chmod 700 "$MUMU_BACKUP_DIR" || return 1
+  MUMU_NEXT="$MUMU_BACKUP_DIR/cache.next"
+  MUMU_PREVIOUS="$MUMU_BACKUP_DIR/cache.previous"
+  # A partial prior move needs inspection, not an automatic overwrite/retry.
+  [ ! -e "$MUMU_NEXT" ] && [ ! -L "$MUMU_NEXT" ] &&
+    [ ! -L "$MUMU_PREVIOUS" ] || return 1
+  [ ! -e "$MUMU_PREVIOUS" ] || [ -f "$MUMU_PREVIOUS" ] || return 1
+  MUMU_CACHE_HASH="$(sha256sum "$MUMU_CACHE_FILE")" || return 1
+  MUMU_CACHE_HASH="${MUMU_CACHE_HASH%% *}"
+  mv "$MUMU_CACHE_FILE" "$MUMU_NEXT" || return 1
+  chmod 600 "$MUMU_NEXT" && chown 0:0 "$MUMU_NEXT" || return 1
+  MUMU_MOVED_HASH="$(sha256sum "$MUMU_NEXT")" || return 1
+  [ "$MUMU_CACHE_HASH" = "${MUMU_MOVED_HASH%% *}" ] || return 1
+  # Keep one latest compiled-cache backup; initial operator backups are separate.
+  mv "$MUMU_NEXT" "$MUMU_PREVIOUS" || return 1
+  echo '[recovery] refreshed MuMu translation cache before cold launch; backup retained'
+}
+
 ack() {
   seq="$1"
   ok="$2"
@@ -392,6 +426,12 @@ wait_for_game_display() {
 
 launch_game() {
   scan_can_run || return 2
+  if ! pidof "$PKG" >/dev/null 2>&1; then
+    prepare_mumu_code_cache || {
+      echo '[recovery] MuMu translation cache preparation failed; refusing cold launch'
+      return 1
+    }
+  fi
   if [ "$LOCAL_DISPLAY" = "1" ]; then
     DISPLAY_ID="$(wait_for_game_display)" || {
       echo "[display] virtual display unavailable; refusing physical launch"
