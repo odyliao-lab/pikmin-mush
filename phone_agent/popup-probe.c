@@ -34,7 +34,7 @@ int main(int argc, char **argv) {
     if (!file) { puts("unknown"); return 0; }
     uint32_t h[4];
     if (fread(h, sizeof(uint32_t), 4, file) != 4 || h[2] != 1 ||
-        !((h[0] == 1080 && (h[1] == 2160 || h[1] == 2400)) ||
+        !((h[0] == 1080 && (h[1] == 1920 || h[1] == 2160 || h[1] == 2400)) ||
           (h[0] == 1440 && h[1] == 3120))) {
         fclose(file); puts("unknown"); return 0;
     }

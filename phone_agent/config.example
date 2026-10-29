@@ -22,6 +22,14 @@ MODULE_VERSION='156.0'
 # 150.0 reads map-query coordinates from Android location in addition to the
 # in-process display override. Enable only on dedicated scanner phones.
 SYSTEM_GPS_OVERRIDE='0'
+# Optional emulator boot grace period, after boot_completed, before starting
+# Agent/network work. 0 preserves phone behavior; integer range 0..300 seconds.
+# Does not acknowledge any target or reset game/account/cache/upload state.
+AGENT_BOOT_DELAY_SECONDS='0'
+# MuMu x86_64/libnb only. Before a cold game launch, move the exact observed
+# .hptc translation cache into one private, checksum-verified previous backup.
+# Never touches account data, ordinary cache, TSV, token or upload/ACK state.
+MUMU_CODE_CACHE_REFRESH='0'
 # Android 9 only: leave SYSTEM_GPS_OVERRIDE='0' and set this after deploying
 # agent_gps_bridge. The bridge has no network access and receives explicit
 # local broadcasts from agent.sh to update Android's GPS test provider.

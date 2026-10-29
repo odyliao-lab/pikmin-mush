@@ -14,6 +14,11 @@ groups = {}
 for name, body in re.findall(r'PopupSample (p\d+_\w+)\[\]=\{(.*?)\};', source):
     groups[name] = [tuple(map(int, p)) for p in re.findall(r'\{(\d+),(\d+),(\d+),(\d+),(\d+)\}', body)]
 templates = re.findall(r'\{"(\w+)",(\d+),(\d+),(\d+),(\d+),(p\d+)_frame,', source)
+recovery = (root / 'popup-recovery.sh').read_text(encoding='utf-8')
+allowed = re.search(r'case "\$1" in ([a-z|]+)\) ;; \*\) return 1', recovery)
+assert allowed, 'popup action contract not found'
+allowed_kinds = set(allowed[1].split('|'))
+assert all(t[0] in allowed_kinds for t in templates), 'classifier role is not actionable'
 remote = len(sys.argv) == 3
 adb = [os.environ.get('ADB', 'adb'), '-s', sys.argv[2]] if remote else []
 tmp = tempfile.TemporaryDirectory()
@@ -51,6 +56,10 @@ for kind, sw, sh, sx, sy, prefix in templates:
         paint(data,w,groups[prefix+'_'+group])
     check(data, f'{kind} {x} {y}')
     check(data[:-1], 'unknown')
+    missing_frame = blank(w,h)
+    for group in ('text','button'):
+        paint(missing_frame,w,groups[prefix+'_'+group])
+    check(missing_frame, 'unknown')
     # A familiar button/frame alone cannot authorize a click on other text.
     missing_text = blank(w,h)
     for group in ('frame','button'):
@@ -77,6 +86,8 @@ for kind, sw, sh, sx, sy, prefix in templates:
             paint(far,w,groups[prefix+'_'+group],80)
         check(far,'unknown')
 check(blank(1080,2160), 'unknown')
+check(blank(1080,1920), 'unknown')
+check(struct.pack('<IIII',1080,1920,1,0)+b'\xff'*(1080*1920*4),'unknown')
 check(struct.pack('<IIII',1080,2160,1,0)+b'\xff'*(1080*2160*4),'unknown')
 check(blank(1080,2160)+b'x','unknown')
 print(f'popup probe: {count} positive/negative/translated fixtures passed')

@@ -33,6 +33,7 @@ SCAN_PENDING="$TMP/scan.pending"
 MAP_REFRESH_EXPERIMENT=1 MAP_REFRESH_TIMEOUT_SECONDS=18 QUERY_ONLY_RESTART_STREAK=12
 QUERY_ONLY_STREAK=0 SPEED_WARNING_TAP_X=0 SPEED_WARNING_TAP_Y=0 MAP_VIEW_TAP_X=0 MAP_VIEW_TAP_Y=0
 set_system_gps() { return 0; }
+write_game_teleport() { printf '%s\n' "$1" >"$TELEPORT"; }
 ensure_game_running() { return 0; }
 file_size() { echo 100; }
 useful_line_count() { echo 2; }

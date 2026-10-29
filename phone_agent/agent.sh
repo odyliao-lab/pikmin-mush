@@ -116,7 +116,7 @@ if [ ! -x "$MAGISK_SU" ]; then
   MAGISK_SU="$(command -v su 2>/dev/null)"
 fi
 AGENT_ID="${AGENT_ID:-primary}"
-AGENT_VERSION="${AGENT_VERSION:-2.2.5}"
+AGENT_VERSION="${AGENT_VERSION:-2.2.7}"
 [ -r "$MODDIR/runtime-version.sh" ] || { echo '[version] runtime probe missing'; exit 1; }
 . "$MODDIR/runtime-version.sh"
 refresh_game_version
@@ -197,6 +197,11 @@ run_as_shell_timeout() {
 
 ensure_system_gps_provider() {
   [ "$SYSTEM_GPS_OVERRIDE" = "1" ] || return 0
+  # MuMu may publish boot_completed before LocationManager has registered its
+  # real GPS manager. Creating a mock manager first can crash system_server
+  # when the framework later tries to register that same provider name.
+  timeout -k 1 5 dumpsys location 2>/dev/null |
+    grep -Eq '^ *gps provider([ :\[]|$)' || return 1
   appops set 2000 android:mock_location allow >/dev/null 2>&1 || return 1
   run_as_shell \
     "cmd location providers add-test-provider gps --requiresSatellite --supportsAltitude --supportsSpeed --supportsBearing --powerRequirement 3" \
@@ -293,6 +298,58 @@ save_seq() {
   echo "$LAST_SEQ" >"$SEQ_FILE"
 }
 
+# Newly provisioned Agents may inherit root's private umask. Native code runs
+# as the game UID and must be able to read its own control file after creation.
+write_game_teleport() {
+  [ -d "$APP_FILES" ] && [ ! -L "$TELEPORT" ] || return 1
+  TELEPORT_OWNER="$(stat -c %u "$APP_FILES" 2>/dev/null)" || return 1
+  TELEPORT_GROUP="$(stat -c %g "$APP_FILES" 2>/dev/null)" || return 1
+  case "$TELEPORT_OWNER:$TELEPORT_GROUP" in *[!0-9:]*|:*|*:) return 1;; esac
+  [ "$TELEPORT_OWNER" -ge 10000 ] || return 1
+  (umask 077; printf '%s\n' "$1" >"$TELEPORT") || return 1
+  chown "$TELEPORT_OWNER:$TELEPORT_GROUP" "$TELEPORT" || return 1
+  chmod 600 "$TELEPORT" || return 1
+}
+
+# MuMu's persistent ARM translation cache can break subsequent game logins.
+# Opt-in only: preserve the exact observed cache file, never app/account data.
+prepare_mumu_code_cache() {
+  [ "${MUMU_CODE_CACHE_REFRESH:-0}" = 1 ] || return 0
+  # MuMu's uname is spoofed as aarch64; use Android's actual primary ABI.
+  [ "$(getprop ro.product.cpu.abi)" = x86_64 ] &&
+    [ "$(getprop ro.dalvik.vm.native.bridge)" = libnb.so ] || return 1
+  ! pidof "$PKG" >/dev/null 2>&1 || return 1
+  MUMU_CACHE_DIR="${APP_FILES%/files}/code_cache"
+  MUMU_CACHE_FILE="$MUMU_CACHE_DIR/.hptc_kache_nticlabs.pikmin"
+  [ -d "$MUMU_CACHE_DIR" ] && [ ! -L "$MUMU_CACHE_DIR" ] || return 1
+  [ ! -L "$MUMU_CACHE_FILE" ] || return 1
+  MUMU_BACKUP_DIR="$MODDIR/mumu-code-cache"
+  MUMU_NEXT="$MUMU_BACKUP_DIR/cache.next"
+  [ ! -L "$MUMU_BACKUP_DIR" ] &&
+    [ ! -e "$MUMU_NEXT" ] && [ ! -L "$MUMU_NEXT" ] || return 1
+  if [ ! -e "$MUMU_CACHE_FILE" ]; then
+    echo '[recovery] no existing MuMu translation cache before cold launch'
+    return 0
+  fi
+  [ -f "$MUMU_CACHE_FILE" ] || return 1
+  (umask 077; mkdir -p "$MUMU_BACKUP_DIR") || return 1
+  chmod 700 "$MUMU_BACKUP_DIR" || return 1
+  MUMU_PREVIOUS="$MUMU_BACKUP_DIR/cache.previous"
+  # A partial prior move needs inspection, not an automatic overwrite/retry.
+  [ ! -e "$MUMU_NEXT" ] && [ ! -L "$MUMU_NEXT" ] &&
+    [ ! -L "$MUMU_PREVIOUS" ] || return 1
+  [ ! -e "$MUMU_PREVIOUS" ] || [ -f "$MUMU_PREVIOUS" ] || return 1
+  MUMU_CACHE_HASH="$(sha256sum "$MUMU_CACHE_FILE")" || return 1
+  MUMU_CACHE_HASH="${MUMU_CACHE_HASH%% *}"
+  mv "$MUMU_CACHE_FILE" "$MUMU_NEXT" || return 1
+  chmod 600 "$MUMU_NEXT" && chown 0:0 "$MUMU_NEXT" || return 1
+  MUMU_MOVED_HASH="$(sha256sum "$MUMU_NEXT")" || return 1
+  [ "$MUMU_CACHE_HASH" = "${MUMU_MOVED_HASH%% *}" ] || return 1
+  # Keep one latest compiled-cache backup; initial operator backups are separate.
+  mv "$MUMU_NEXT" "$MUMU_PREVIOUS" || return 1
+  echo '[recovery] refreshed MuMu translation cache before cold launch; backup retained'
+}
+
 ack() {
   seq="$1"
   ok="$2"
@@ -374,6 +431,12 @@ wait_for_game_display() {
 
 launch_game() {
   scan_can_run || return 2
+  if ! pidof "$PKG" >/dev/null 2>&1; then
+    prepare_mumu_code_cache || {
+      echo '[recovery] MuMu translation cache preparation failed; refusing cold launch'
+      return 1
+    }
+  fi
   if [ "$LOCAL_DISPLAY" = "1" ]; then
     DISPLAY_ID="$(wait_for_game_display)" || {
       echo "[display] virtual display unavailable; refusing physical launch"
@@ -638,7 +701,7 @@ EOF
   [ -n "$REAPPLY_LAT" ] && [ -n "$REAPPLY_LNG" ] || return 1
   REAPPLY_TOKEN="$(date +%s)"
   REAPPLY_VALUE="$REAPPLY_LAT,$REAPPLY_LNG,$REAPPLY_TOKEN"
-  printf '%s\n' "$REAPPLY_VALUE" >"$TELEPORT"
+  write_game_teleport "$REAPPLY_VALUE" || return 1
   [ "$(cat "$TELEPORT" 2>/dev/null)" = "$REAPPLY_VALUE" ] || return 1
   printf '%s\n' "$REAPPLY_TOKEN"
 }
@@ -776,6 +839,16 @@ restart_game_for_scan() {
   echo "[scan] no new rows, restarting game session at current GPS"
   run_as_shell "am force-stop $PKG" >/dev/null 2>&1
   sleep 2
+  COLD_STOP_LEFT=15
+  while pidof "$PKG" >/dev/null 2>&1 && [ "$COLD_STOP_LEFT" -gt 0 ]; do
+    sleep 1
+    COLD_STOP_LEFT=$((COLD_STOP_LEFT - 1))
+  done
+  if pidof "$PKG" >/dev/null 2>&1; then
+    echo '[recovery] game did not stop; refusing to reuse process for cold restart'
+    return 1
+  fi
+  prepare_mumu_code_cache || return 1
   if [ "$MAP_REFRESH_EXPERIMENT" = "1" ]; then
     rm -f "$SCAN_READY" "$QUERY_READY"
   fi
@@ -899,8 +972,8 @@ execute_scan_task() {
     rm -f "$SCAN_READY" "$QUERY_READY"
   fi
   scan_can_run || return
-  echo "$TELEPORT_VALUE" >"$TELEPORT"
-  if [ "$(cat "$TELEPORT" 2>/dev/null)" != "$TELEPORT_VALUE" ]; then
+  if ! write_game_teleport "$TELEPORT_VALUE" ||
+     [ "$(cat "$TELEPORT" 2>/dev/null)" != "$TELEPORT_VALUE" ]; then
     echo "[scan] GPS write failed job=$JOB_ID point=$TASK_INDEX"
     send_scan_ack "$JOB_ID" "$TASK_TARGET_ID" "$TASK_LEASE" 0 0 0
     return
@@ -1030,7 +1103,7 @@ execute_scan_task() {
     else
       TASK_MODE="legacy"
     fi
-    echo "[scan] completed point=$((TASK_INDEX + 1)) rows=+$NEW_ROWS bytes=+$NEW_BYTES mode=$TASK_MODE elapsed=${TASK_ELAPSED}s"
+    echo "[scan] completed point=$((TASK_INDEX + 1)) rows=+$NEW_ROWS bytes=+$NEW_BYTES mode=$TASK_MODE elapsed=${TASK_ELAPSED}s job=$JOB_ID target=$TASK_TARGET_ID source=$DIAG_SOURCE"
   else
     echo "[scan] ACK pending job=$JOB_ID point=$TASK_INDEX"
   fi
@@ -1051,8 +1124,7 @@ execute_command() {
       return 0
       ;;
     teleport)
-      echo "$a,$b" >"$TELEPORT"
-      if [ "$(cat "$TELEPORT" 2>/dev/null)" = "$a,$b" ]; then
+      if write_game_teleport "$a,$b" && [ "$(cat "$TELEPORT" 2>/dev/null)" = "$a,$b" ]; then
         if ensure_game_running; then
           ack "$seq" 1 "$a" "$b"
         else
@@ -1111,10 +1183,7 @@ execute_command() {
   save_seq "$seq"
 }
 
-if ! ensure_system_gps_provider; then
-  echo "[agent] system GPS provider setup failed"
-  exit 1
-fi
+SYSTEM_GPS_READY=0
 LOCAL_PAUSE_LOGGED=0
 echo "[agent] started id=$AGENT_ID agent=$AGENT_VERSION game=${GAME_VERSION:-unknown} module=$MODULE_VERSION server=$SERVER_URL"
 while true; do
@@ -1141,6 +1210,14 @@ while true; do
     [ "$POWER_GUARD_ENABLED" != "1" ] || power_guard_heartbeat
     sleep "$POLL_SECONDS"
     continue
+  fi
+  if [ "$SYSTEM_GPS_READY" != 1 ]; then
+    if ! ensure_system_gps_provider; then
+      echo '[gps] waiting for initialized GPS provider before claiming work'
+      sleep "$POLL_SECONDS"
+      continue
+    fi
+    SYSTEM_GPS_READY=1
   fi
   upload_new
   if [ "$AGENT_ID" = "primary" ] && [ "$LEGACY_COMMAND_ENABLED" = "1" ]; then

@@ -40,6 +40,27 @@ release_service_lock() {
   [ "$LOCK_PID" = "$$" ] && rm -rf "$SERVICE_LOCK"
 }
 
+# Opt-in for emulator images that publish boot_completed while their account /
+# network services are still initializing. Do not claim leases during this wait.
+wait_for_agent_boot_delay() {
+  BOOT_DELAY_LEFT="${AGENT_BOOT_DELAY_SECONDS:-0}"
+  case "$BOOT_DELAY_LEFT" in
+    0|[1-9]|[1-9][0-9]|[1-9][0-9][0-9]) ;;
+    *) log_service 'invalid AGENT_BOOT_DELAY_SECONDS'; return 1 ;;
+  esac
+  [ "$BOOT_DELAY_LEFT" -le 300 ] || {
+    log_service 'AGENT_BOOT_DELAY_SECONDS exceeds 300'; return 1;
+  }
+  [ "$BOOT_DELAY_LEFT" -gt 0 ] || return 0
+  log_service "waiting ${BOOT_DELAY_LEFT}s before Agent startup"
+  while [ "$BOOT_DELAY_LEFT" -gt 0 ]; do
+    BOOT_DELAY_STEP=5
+    [ "$BOOT_DELAY_LEFT" -ge 5 ] || BOOT_DELAY_STEP="$BOOT_DELAY_LEFT"
+    sleep "$BOOT_DELAY_STEP" || return 1
+    BOOT_DELAY_LEFT=$((BOOT_DELAY_LEFT - BOOT_DELAY_STEP))
+  done
+}
+
 start_agent() {
   OLD_PID="$(cat "$MODDIR/agent.pid" 2>/dev/null || true)"
   if owned_pid "$OLD_PID" "$MODDIR/agent.sh"; then
@@ -76,6 +97,8 @@ if [ -f "$MODDIR/config" ]; then
   # shellcheck disable=SC1090
   . "$MODDIR/config"
 fi
+
+wait_for_agent_boot_delay || exit 1
 
 case "${WIFI_ADB_PORT:-0}" in
   ''|0|*[!0-9]*) ;;

@@ -1,5 +1,34 @@
 # Pikmin Scanner Agent
 
+## 2.2.7 新裝與模擬器保護
+
+首次建立及重新套用 `teleport.txt` 會依遊戲 files 目錄的實際 UID/GID 設為
+0600，避免 root 私有 umask 讓 native 無法讀取目標；無效擁有者、symlink 或
+權限設定失敗時拒絕繼續。既有 token、offset、TSV 與未決 ACK 不受影響。
+
+系統 GPS 測試提供者延後至解除暫停、允許掃描且 Android 已存在 GPS provider
+時才初始化。MuMu Android15 的 boot_completed 可能早於 LocationManager 完成，
+不能在開機時先建立同名 mock provider。`SYSTEM_GPS_OVERRIDE=0` 不執行此步驟。
+
+Taurus 新增 1080×1920 繁體中文首頁／羅盤校準；不含帳戶、步數或頭像特徵。
+同解析度另校準已觀察到的「不要駕駛」、「不要前往禁止進入的地點」與
+「不要前往危險的地點」普通提醒；外框、完整文字區域與確定按鈕必須同時符合。
+未知提示保持不操作。模擬器需以 `build-popup-probe.ps1 -Abi x86_64 -OutputPath
+<獨立輸出路徑>` 建置，不能直接執行 ARM64 手機工具。正式掃描仍需獨立 Agent
+身分，以及新 target、object、非零 TSV、站台接受與 ACK 的逐點驗收。
+
+`AGENT_BOOT_DELAY_SECONDS=120` 可供已驗證需要開機緩衝的模擬器選用：在
+boot_completed 後最多等待 300 秒再啟動 Agent，不預先領取 lease。預設 0 保留
+實體手機行為；不清快取、帳戶資料、TSV 或上傳狀態，不把等待視為掃描成功。
+
+Taurus 的 MuMu ARM 轉譯快取曾導致下一次啟動出現登入錯誤 0。
+僅在已驗證的 MuMu x86_64/libnb 環境選用 `MUMU_CODE_CACHE_REFRESH=1`：遊戲沒有
+程序時，冷啟動前將固定的 `code_cache/.hptc_kache_nticlabs.pikmin` 移至模組內
+0700 目錄，校驗搬移前後 SHA-256，保留一份 0600 的最新快取備份。初始人工備份
+另行保留。不搬動其他 cache、帳戶、token、offset、TSV 或未決 ACK；symlink、
+錯誤架構／bridge、遊戲仍在運行、未完成的前次搬移或權限失敗都拒絕冷啟動。
+預設停用，四台手機沒有套用此選項。
+
 ## 156 版本回報
 
 Agent 2.2.5 使用 `runtime-version.sh` 在啟動及運行期間（每分鐘最多一次）讀取
