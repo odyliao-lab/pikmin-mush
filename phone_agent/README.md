@@ -13,6 +13,10 @@ header，curl 使用 `-H @-`，避免 token 出現在程序參數。TSV body 仍
 轉換或 timeout 失敗時回傳失敗，不自動放寬權限。預設 `magisk` 保留原路徑。
 Gemini 已實測 `id`、`cmd location is-location-enabled` 與 activity 查詢。
 
+Gemini 的 1080×1920 繁中首頁另有三張新鮮畫面校準的範本：通知紅點與羅盤
+半透明外緣不作為必要取樣，改用公開控制項內側。原 Taurus 範本保留，文字、
+外框與羅盤三組檢查及兩張畫面／前景安全閘門不放寬；不包含帳戶或步數樣本。
+
 ## 2.2.9 新裝與模擬器保護
 
 首次建立及重新套用 `teleport.txt` 會依遊戲 files 目錄的實際 UID/GID 設為
