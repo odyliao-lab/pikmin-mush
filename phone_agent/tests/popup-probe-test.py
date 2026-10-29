@@ -76,6 +76,16 @@ for kind, sw, sh, sx, sy, prefix in templates:
             other_control = bytearray(data)
             paint(other_control,w,[(x,y,*color) for x,y,*_ in groups[prefix+'_button']])
             check(other_control, 'unknown')
+        if prefix == 'p15':
+            # Gemini's translucent compass edge changes with the flower scene.
+            # Its opaque glyph/interior must still gate the action independently.
+            for color in ((0,0,0), (220,80,160)):
+                scenery = bytearray(data)
+                ring = [(px,py,*color) for px in range(x-65,x+66)
+                        for py in range(y-65,y+66)
+                        if 36**2 < (px-x)**2+(py-y)**2 <= 65**2]
+                paint(scenery,w,ring)
+                check(scenery, f'{kind} {x} {y}')
     if kind != 'dashboard':
         shifted = blank(w,h)
         for group in ('frame','text','button'):
