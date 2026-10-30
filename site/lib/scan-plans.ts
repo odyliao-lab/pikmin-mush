@@ -479,6 +479,16 @@ const CANADA: Center[] = [
   ["渥太華 Ottawa",45.4215,-75.6972],["艾德蒙頓 Edmonton",53.5461,-113.4938],
   ["魁北克市 Quebec City",46.8139,-71.2080],["溫尼伯 Winnipeg",49.8951,-97.1384],
 ];
+// Successful local feasibility samples, 2026-10-30. These are city centres,
+// not a claim of nationwide coverage or higher large-mushroom probability.
+const UKRAINE: Center[] = [
+  ["基輔 Kyiv",50.4501,30.5234],["利維夫 Lviv",49.8397,24.0297],
+];
+const KENYA: Center[] = [["奈洛比 Nairobi",-1.2921,36.8219]];
+const SOUTH_AFRICA: Center[] = [
+  ["開普敦 Cape Town",-33.9249,18.4241],["約翰尼斯堡 Johannesburg",-26.2041,28.0473],
+];
+
 // 國家目錄是擴充的唯一入口。新增歐美國家時只需要加入一個定義，
 // 排程器、後台選項與 Agent 區域偏好都會自動沿用。
 export const COUNTRY_PACK_CATALOG = [
@@ -539,6 +549,9 @@ export const COUNTRY_PACK_CATALOG = [
   { id: "ma", name: "摩洛哥", region: "北非", cities: MOROCCO },
   { id: "dz", name: "阿爾及利亞", region: "北非", cities: ALGERIA },
   { id: "tn", name: "突尼西亞", region: "北非", cities: TUNISIA },
+  { id: "ua", name: "烏克蘭", region: "東歐", cities: UKRAINE },
+  { id: "ke", name: "肯亞", region: "東非", cities: KENYA },
+  { id: "za", name: "南非", region: "南部非洲", cities: SOUTH_AFRICA },
   { id: "gt", name: "瓜地馬拉", region: "中美洲", cities: GUATEMALA },
   { id: "hn", name: "宏都拉斯", region: "中美洲", cities: HONDURAS },
   { id: "sv", name: "薩爾瓦多", region: "中美洲", cities: EL_SALVADOR },

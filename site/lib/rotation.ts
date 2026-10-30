@@ -4,7 +4,7 @@ import {
 } from "./scan-plans";
 import { appendScanLog } from "./scans";
 import { materializeTargets } from "./targets";
-import { planDailyRotation, planManualRedeploy, rotationWindow } from "./rotation-plan.mjs";
+import { planDailyRotation, planManualRedeploy, rotationWindow, holdCurrentRegionAssignments } from "./rotation-plan.mjs";
 import { rotationEligibleAgents } from "./fleet-policy.mjs";
 
 const LOCK_STALE_MS = 5 * 60_000;
@@ -112,6 +112,10 @@ export async function ensureDailyRotation(now = Date.now()) {
   ).bind(planned.scheduleDate).first<RotationRunRow>();
   let lockAcquired = false;
   if (existing?.status === "completed") {
+    // Preserve the in-flight window while Virgo rejoins. Apply the new packs
+    // and roster at the operator-requested next scheduled switch, not on poll.
+    if (holdCurrentRegionAssignments(now)) return existing;
+
     // A manual scan job deliberately replaces the automatic route for the
     // current time window.  Agent polls call this function before every task
     // claim; without this guard, a changed active-agent set can reacquire the
