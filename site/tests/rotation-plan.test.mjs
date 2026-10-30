@@ -7,7 +7,7 @@ import {
 const agents = ["agent-4", "agent-3", "agent-2", "agent-1"];
 const atTaipei = (day, time) => Date.parse(`${day}T${time}:00+08:00`);
 
-for (const count of [4, 5, 6, 7]) test(`${count} Agents share all eligible packs without overlaps or empty routes`, () => {
+for (const count of [4, 5, 6, 7, 8]) test(`${count} Agents share all eligible packs without overlaps or empty routes`, () => {
   const fleet = Array.from({length: count}, (_, i) => `agent-${i + 1}`);
   for (const day of ["2026-10-14", "2027-01-15"]) {
     for (const [index, time] of ["04:00", "12:00", "20:00"].entries()) {
@@ -27,7 +27,7 @@ for (const count of [4, 5, 6, 7]) test(`${count} Agents share all eligible packs
     }
   }
   for (const planner of [planDailyRotation, planManualRedeploy])
-    assert.throws(() => planner(Array.from({length: 8}, (_, i) => `agent-${i}`), atTaipei("2026-10-14","04:00")), /最多支援 7/);
+    assert.throws(() => planner(Array.from({length: 9}, (_, i) => `agent-${i}`), atTaipei("2026-10-14","04:00")), /最多支援 8/);
 });
 
 test("switches every eight hours at 04:00, 12:00 and 20:00 Taipei", () => {

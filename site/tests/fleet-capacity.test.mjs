@@ -65,8 +65,8 @@ function fixture(t, count=5) {
   return {sql,db,now,rotation,fleet,enroll,action,post};
 }
 
-test('enrollment stages unique disabled nodes; qualification and atomic seven-node activation gates',async t=>{
-  const f=fixture(t,6);
+test('enrollment stages unique disabled nodes; qualification and atomic eight-node activation gates',async t=>{
+  const f=fixture(t,7);
   assert.equal((await f.post(f.enroll,{name:'Gemini'},false)).status,403);
   const a=await (await f.post(f.enroll,{name:'Gemini'})).json();
   const b=await (await f.post(f.enroll,{name:'Reserve'})).json();
@@ -76,7 +76,7 @@ test('enrollment stages unique disabled nodes; qualification and atomic seven-no
   for(const id of [a.agent.id,b.agent.id]) assert.equal((await f.post(f.action,{agentId:id,action:'update-qualification',rotationSlots:['emea']})).status,200);
   const results=await Promise.all([a,b].map(x=>f.post(f.action,{agentId:x.agent.id,action:'enable'})));
   assert.deepEqual(results.map(x=>x.status).sort(),[200,409]);
-  assert.equal(f.sql.prepare('SELECT COUNT(*) n FROM scan_agents WHERE enabled=1').get().n,7);
+  assert.equal(f.sql.prepare('SELECT COUNT(*) n FROM scan_agents WHERE enabled=1').get().n,8);
   assert.equal(f.sql.prepare("SELECT enabled FROM scan_agents WHERE id='scorpio'").get().enabled,0);
   const enabled=f.sql.prepare("SELECT id FROM scan_agents WHERE id LIKE 'new%' AND enabled=1").get().id;
   assert.equal((await f.post(f.action,{agentId:enabled,action:'update-qualification',rotationSlots:['asia']})).status,409);
@@ -84,7 +84,7 @@ test('enrollment stages unique disabled nodes; qualification and atomic seven-no
   assert.equal((await f.post(f.action,{agentId:enabled,action:'update-qualification',rotationSlots:['world']})).status,400);
 });
 
-for(const count of [4,5,6,7]) test(`${count} eligible devices materialize automatic and manual routes without loss`,async t=>{
+for(const count of [4,5,6,7,8]) test(`${count} eligible devices materialize automatic and manual routes without loss`,async t=>{
   const f=fixture(t,count);
   for(const [index,time] of ['04:00','12:00','20:00'].entries()) {
     const now=Date.parse(`2026-10-29T${time}:00+08:00`);
