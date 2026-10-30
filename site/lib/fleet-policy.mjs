@@ -1,4 +1,4 @@
-export const MAX_ENABLED_AGENTS = 6;
+export const MAX_ENABLED_AGENTS = 7;
 export const ROTATION_SLOTS = ["asia", "emea", "americas"];
 export const ROTATION_SLOT_LABELS = {
   asia: "04:00 亞洲／大洋洲", emea: "12:00 歐洲／中東／北非", americas: "20:00 美洲",
