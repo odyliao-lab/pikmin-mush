@@ -39,4 +39,10 @@ Game/native 156 loading alone is insufficient. The initial game launch returned
 connection error 0 despite successful public HTTPS connectivity; an existing
 translation-cache refresh procedure is being evaluated. No integrity bypass,
 authentication relaxation, game-data clearing, or account-secret automation is
-part of this change.
+part of the capacity change.
+
+After the cache refresh also returned error 0, the operator explicitly authorized
+resetting only Virgo's game data. Complete root-only game and Agent archives were
+verified before the reset. Agent configuration and token were compared before and
+after and remained unchanged; Virgo's new-game upload cursor starts at zero.
+Clean game onboarding and sign-in require the operator; no other node was reset.
