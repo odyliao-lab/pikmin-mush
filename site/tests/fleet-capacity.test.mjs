@@ -26,6 +26,7 @@ function fixture(t, count=5) {
     if(file.startsWith('0003')) sql.exec(readFileSync(new URL('../drizzle/'+file,import.meta.url),'utf8'));
   }
   sql.exec(`ALTER TABLE scan_agents ADD paused INTEGER DEFAULT 0;
+    CREATE TABLE controller_dispatches(batch TEXT PRIMARY KEY,state TEXT);
     ALTER TABLE scan_targets ADD verification_kind TEXT DEFAULT '';
     ALTER TABLE scan_targets ADD required_agent_id TEXT DEFAULT '';
     ALTER TABLE scan_targets ADD priority INTEGER DEFAULT 0;
@@ -82,6 +83,16 @@ test('enrollment stages unique disabled nodes; qualification and atomic eight-no
   assert.equal((await f.post(f.action,{agentId:enabled,action:'update-qualification',rotationSlots:['asia']})).status,409);
   assert.equal((await f.post(f.action,{agentId:enabled,action:'disable'})).status,200);
   assert.equal((await f.post(f.action,{agentId:enabled,action:'update-qualification',rotationSlots:['world']})).status,400);
+});
+
+test('automatic and manual rotation retain coordinated work until return and resumed-data close',async t=>{
+ const f=fixture(t,6);
+ f.sql.exec("INSERT INTO controller_dispatches VALUES('return-awaiting-ack','active')");
+ assert.equal(await f.rotation.ensureDailyRotation(f.now),null);
+ assert.equal(f.sql.prepare('SELECT COUNT(*) n FROM scan_jobs').get().n,0);
+ await assert.rejects(f.rotation.redeployDailyRotation(f.now),/回程/);
+ f.sql.exec("UPDATE controller_dispatches SET state='closed'");
+ const run=await f.rotation.ensureDailyRotation(f.now);assert.ok(run.job_id);
 });
 
 for(const count of [4,5,6,7,8]) test(`${count} eligible devices materialize automatic and manual routes without loss`,async t=>{

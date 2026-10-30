@@ -72,18 +72,21 @@ function scanConfig(base: unknown, packs: string[], agentCount: number, slot: st
 
 async function stopActiveJobs(now: number, slotLabel: string) {
   const db = runtime().DB;
+  const guard="NOT EXISTS(SELECT 1 FROM controller_dispatches WHERE state='active')";
   await db.batch([
     db.prepare(`UPDATE scan_targets SET status='cancelled', lease_agent_id='',
       lease_token='', lease_expires_at=0, updated_at=?
-      WHERE status IN ('queued','leased') AND job_id IN (
+      WHERE ${guard} AND status IN ('queued','leased') AND job_id IN (
         SELECT id FROM scan_jobs WHERE status IN ('queued','running','paused')
       )`).bind(now),
     db.prepare(`UPDATE scan_jobs SET status='cancelled', finished_at=?, updated_at=?,
-      message=? WHERE status IN ('queued','running','paused')`)
+      message=? WHERE ${guard} AND status IN ('queued','running','paused')`)
       .bind(now, now, `${slotLabel} 自動換區，舊工作已結束`),
     db.prepare(`UPDATE scan_agents SET current_job_id=NULL, current_target_id=NULL,
-      updated_at=? WHERE current_job_id IS NOT NULL`).bind(now),
+      updated_at=? WHERE ${guard} AND current_job_id IS NOT NULL`).bind(now),
   ]);
+  const active=await db.prepare("SELECT COUNT(*) AS count FROM controller_dispatches WHERE state='active'").first<{count:number}>();
+  if(Number(active?.count??0)>0)throw new Error('正式複查回程驗收尚未完成，保留原工作並延後換區');
 }
 
 export async function ensureDailyRotation(now = Date.now()) {
@@ -98,10 +101,14 @@ export async function ensureDailyRotation(now = Date.now()) {
 
   // Notification verification is time-sensitive and must finish before the
   // daily route rebuild cancels the scan job that owns those targets.
-  // Once all candidate checks finish, the next agent poll performs rotation.
+  // A return and post-return observation belong to the same durable dispatch.
+  // Do not cancel them at the scheduled switch after the last candidate ACK.
+  const activeDispatch = await db.prepare("SELECT COUNT(*) AS count FROM controller_dispatches WHERE state='active'")
+    .first<{count:number}>();
+  if(Number(activeDispatch?.count??0)>0)return null;
   const pendingVerification = await db.prepare(`SELECT COUNT(*) AS count
     FROM scan_targets
-    WHERE (verification_kind='candidate' OR verification_kind='candidate-giant' OR verification_kind='giant-recheck')
+    WHERE verification_kind<>''
       AND status IN ('queued','leased')`)
     .first<{ count: number }>();
   if (Number(pendingVerification?.count ?? 0) > 0) return null;
@@ -263,6 +270,9 @@ export async function rotationStatus(now = Date.now()) {
 export async function redeployDailyRotation(now = Date.now()) {
   await ensureSchema();
   const db = runtime().DB;
+  const activeDispatch=await db.prepare("SELECT COUNT(*) AS count FROM controller_dispatches WHERE state='active'")
+    .first<{count:number}>();
+  if(Number(activeDispatch?.count??0)>0)throw new Error('正式複查尚未完成回程驗收，請先對帳結案');
   const setting = await db.prepare("SELECT * FROM scan_rotation_settings WHERE id=1")
     .first<RotationSettingRow>();
   if (!setting?.enabled) throw new Error("每日自動換區未啟用");

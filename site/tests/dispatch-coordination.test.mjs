@@ -4,7 +4,7 @@ import {DatabaseSync} from 'node:sqlite';
 import {readFileSync} from 'node:fs';
 import {Script} from 'node:vm';
 import ts from 'typescript';
-import {ensureDispatchSchema,admitDispatch,dispatchProof,dispatchInventory,closeDispatch} from '../lib/dispatch-coordination.mjs';
+import {ensureDispatchSchema,admitDispatch,dispatchProof,dispatchInventory,closeDispatch,recoverCancelledReturn} from '../lib/dispatch-coordination.mjs';
 
 function fixture(){
  const sql=new DatabaseSync(':memory:');
@@ -121,7 +121,7 @@ function route(path,bindings){
    if(name.endsWith('/cloud'))return bindings;
    if(name.endsWith('/scans'))return {activeJob:async()=>bindings.job};
    if(name.endsWith('/report-evidence.mjs'))return {};
-   if(name.endsWith('/dispatch-coordination.mjs'))return {admitDispatch,dispatchProof,dispatchInventory,closeDispatch};
+   if(name.endsWith('/dispatch-coordination.mjs'))return {admitDispatch,dispatchProof,dispatchInventory,closeDispatch,recoverCancelledReturn};
    throw new Error('unexpected import');
   },Request,Response,URL,Date:class extends Date{static now(){return 100000;}}});
  return exports;
@@ -151,4 +151,54 @@ test('authenticated route opt-in, old-client refusal, exact owner and inventory 
  assert.doesNotMatch(JSON.stringify(data),/"lat"|"lng"|"admission"|"payload_sha"/);
  assert.equal((await d.POST(new Request('https://test',{method:'POST',body:'null'}))).status,409);
  auth=false;assert.equal((await d.GET(new Request('https://test'))).status,401);f.sql.close();
+});
+
+async function cancelledFixture(){
+ const f=fixture();await ensureDispatchSchema(f.db);await admitDispatch(f.db,f.input,f.agent,f.job,100000);
+ f.sql.exec("UPDATE scan_targets SET status='completed',leased_at=101000,completed_at=110000,completed_agent_id='leo' WHERE verification_kind='candidate';UPDATE scan_targets SET status='cancelled' WHERE verification_kind='return';UPDATE scan_jobs SET status='cancelled';INSERT INTO scan_jobs VALUES(2,0,'running');UPDATE scan_agents SET last_seen=130000");
+ f.agent.last_seen=130000;f.job={id:2,cycle:0,status:'running'};return f;
+}
+
+test('cancelled return recovery preserves the original and still requires fresh return ACK plus ordinary accepted data',async()=>{
+ const f=await cancelledFixture();
+ assert.equal((await recoverCancelledReturn(f.db,f.input.batch,f.input.owner,'recovery-one',f.agent,f.job,130000)).http,200);
+ assert.equal(f.sql.prepare("SELECT COUNT(*) n FROM scan_targets WHERE verification_kind='return' AND status='cancelled'").get().n,1);
+ assert.equal(f.sql.prepare("SELECT COUNT(*) n FROM scan_targets WHERE verification_kind='return-recovery'").get().n,1);
+ assert.equal((await dispatchProof(f.db,f.input.batch)).can_close,false);
+ assert.equal((await recoverCancelledReturn(f.db,f.input.batch,f.input.owner,'recovery-one',f.agent,f.job,140000)).existing,true);
+ assert.equal((await recoverCancelledReturn(f.db,f.input.batch,f.input.owner,'different-id',f.agent,f.job,130000)).http,409);
+ assert.equal(f.sql.prepare('SELECT job_id FROM controller_dispatches').get().job_id,1,'immutable original claim');
+ f.sql.exec("UPDATE scan_targets SET status='completed',leased_at=131000,completed_at=140000,completed_agent_id='leo' WHERE verification_kind='return-recovery'");
+ assert.equal((await dispatchProof(f.db,f.input.batch)).return_ack,true);
+ assert.equal((await dispatchProof(f.db,f.input.batch)).can_close,false);
+ f.sql.exec("INSERT INTO scan_targets(id,job_id,verification_kind,status,leased_at,completed_at,completed_agent_id) VALUES(4,2,'','completed',141000,150000,'leo');INSERT INTO mushroom_observations VALUES('after-return',4,'other',145)");
+ assert.equal((await dispatchProof(f.db,f.input.batch)).can_close,false);
+ f.sql.exec("UPDATE mushroom_observations SET agent_id='leo'");
+ const p=await dispatchProof(f.db,f.input.batch);assert.equal(p.can_close,true);
+ assert.equal(p.return_recovery.original_job_id,1);assert.equal(p.return_recovery.job_id,2);
+ assert.equal((await closeDispatch(f.db,f.input.batch,f.input.owner,151000)).http,200);
+ assert.equal((await dispatchInventory(f.db)).batches.length,0);f.sql.close();
+});
+
+test('recovery rejects unproven cancellation, active original job, unknown agent and other live work',async()=>{
+ for(const change of ["UPDATE scan_targets SET status='queued' WHERE verification_kind='candidate'",
+  "UPDATE scan_jobs SET status='running' WHERE id=1", "UPDATE scan_targets SET status='failed' WHERE verification_kind='return'",
+  "INSERT INTO scan_targets(verification_batch,verification_kind,status) VALUES('unmanaged','return','queued')",
+  "UPDATE scan_agents SET paused=1", "UPDATE scan_agents SET last_seen=1"]){
+  const f=await cancelledFixture();f.sql.exec(change);
+  assert.equal((await recoverCancelledReturn(f.db,f.input.batch,f.input.owner,'recovery-one',f.agent,f.job,130000)).http,409,change);
+  assert.equal(f.sql.prepare('SELECT COUNT(*) n FROM controller_return_recoveries').get().n,0);
+  assert.equal(f.sql.prepare("SELECT COUNT(*) n FROM scan_targets WHERE verification_kind='return-recovery'").get().n,0);f.sql.close();
+ }
+});
+
+test('recovery target insertion failure rolls back the audit reservation; ambiguous retry never duplicates',async()=>{
+ const f=await cancelledFixture();
+ f.sql.exec("CREATE TRIGGER reject_recovery BEFORE INSERT ON scan_targets WHEN NEW.verification_kind='return-recovery' BEGIN SELECT RAISE(ABORT,'injected'); END;");
+ await assert.rejects(recoverCancelledReturn(f.db,f.input.batch,f.input.owner,'recovery-one',f.agent,f.job,130000));
+ assert.equal(f.sql.prepare('SELECT COUNT(*) n FROM controller_return_recoveries').get().n,0);
+ f.sql.exec('DROP TRIGGER reject_recovery');
+ await recoverCancelledReturn(f.db,f.input.batch,f.input.owner,'recovery-one',f.agent,f.job,130000);
+ await recoverCancelledReturn(f.db,f.input.batch,f.input.owner,'recovery-one',f.agent,f.job,130000);
+ assert.equal(f.sql.prepare("SELECT COUNT(*) n FROM scan_targets WHERE verification_kind='return-recovery'").get().n,1);f.sql.close();
 });
