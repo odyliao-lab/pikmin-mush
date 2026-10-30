@@ -132,3 +132,41 @@ test('qualification excludes untested slots, paused/offline/disabled nodes; fall
   assert.equal(await f.fleet.candidateTarget(job,gemini,true),null);
   assert.ok(await f.fleet.candidateTarget(job,rows[0],true),'legacy fallback preserved');
 });
+
+
+test('region expansion keeps the current job and lease when Virgo rejoins; next switch redistributes',async t=>{
+  const f=fixture(t,6);
+  const at=iso=>Date.parse(iso+'+08:00');
+  const before=at('2026-10-30T13:00:00');
+  f.sql.prepare('UPDATE scan_agents SET last_seen=?').run(before);
+  const first=await f.rotation.ensureDailyRotation(before);
+  // Model the deployed six-agent route before the new city packs existed.
+  const added=new Set(['ua','ke','za']);
+  const addedCountries=catalog.COUNTRY_PACK_CATALOG.filter(p=>added.has(p.id)).map(p=>p.name);
+  for(const country of addedCountries)f.sql.prepare('DELETE FROM scan_targets WHERE country=?').run(country);
+  const oldAssignments=JSON.parse(first.assignments_json).map(a=>({...a,
+    packs:a.packs.filter(p=>!added.has(p)),countries:a.countries.filter(c=>!addedCountries.includes(c))}));
+  const frozen=JSON.stringify(oldAssignments);
+  f.sql.prepare('UPDATE scan_rotation_runs SET assignments_json=? WHERE schedule_date=?').run(frozen,first.schedule_date);
+  const leased=f.sql.prepare('SELECT id FROM scan_targets WHERE job_id=? LIMIT 1').get(first.job_id).id;
+  f.sql.prepare("UPDATE scan_targets SET status='leased',lease_agent_id='a0',lease_token='fixture-lease' WHERE id=?").run(leased);
+  f.sql.prepare(`INSERT INTO scan_agents(id,display_name,last_seen,created_at,updated_at)
+    VALUES('virgo','Virgo',?,0,0)`).run(before);
+  const resumed=await f.rotation.ensureDailyRotation(at('2026-10-30T13:01:00'));
+  assert.equal(resumed.job_id,first.job_id);
+  assert.equal(resumed.assignments_json,frozen);
+  assert.equal(f.sql.prepare('SELECT status FROM scan_targets WHERE id=?').get(leased).status,'leased');
+  for(const country of addedCountries)assert.equal(f.sql.prepare('SELECT COUNT(*) n FROM scan_targets WHERE country=?').get(country).n,0);
+  const switchAt=at('2026-10-30T20:00:00');
+  f.sql.prepare('UPDATE scan_agents SET last_seen=?').run(switchAt);
+  const next=await f.rotation.ensureDailyRotation(switchAt);
+  assert.notEqual(next.job_id,first.job_id);
+  assert.equal(JSON.parse(next.assignments_json).length,7);
+  assert.equal(f.sql.prepare('SELECT status FROM scan_targets WHERE id=?').get(leased).status,'cancelled');
+  const noon=at('2026-10-31T12:00:00');
+  f.sql.prepare('UPDATE scan_agents SET last_seen=?').run(noon);
+  const expanded=await f.rotation.ensureDailyRotation(noon);
+  const packs=JSON.parse(expanded.assignments_json).flatMap(a=>a.packs);
+  for(const id of added)assert.equal(packs.filter(p=>p===id).length,1);
+  for(const country of addedCountries)assert.ok(f.sql.prepare('SELECT COUNT(*) n FROM scan_targets WHERE job_id=? AND country=?').get(expanded.job_id,country).n>0);
+});

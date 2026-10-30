@@ -15,9 +15,9 @@ const ROUTES = {
     { id: "asia-04", label: "亞洲／大洋洲 04", packs: ["kr", "id", "nz"], cityCount: 24 },
   ],
   emea: [
-    { id: "emea-01", label: "歐洲／中東／非洲 01", packs: ["gb", "pl", "ro", "at", "pt", "tn", "il", "rs", "qa"], cityCount: 48 },
-    { id: "emea-02", label: "歐洲／中東／非洲 02", packs: ["fr", "de", "eg", "sa", "gr", "dz", "jo", "bg"], cityCount: 45 },
-    { id: "emea-03", label: "歐洲／中東／非洲 03", packs: ["se", "no", "es", "ma", "hu", "hr", "ae", "cz", "si"], cityCount: 46 },
+    { id: "emea-01", label: "歐洲／中東／非洲 01", packs: ["gb", "pl", "ro", "at", "pt", "tn", "il", "rs", "qa", "za"], cityCount: 50 },
+    { id: "emea-02", label: "歐洲／中東／非洲 02", packs: ["fr", "de", "eg", "sa", "gr", "dz", "jo", "bg", "ke"], cityCount: 46 },
+    { id: "emea-03", label: "歐洲／中東／非洲 03", packs: ["se", "no", "es", "ma", "hu", "hr", "ae", "cz", "si", "ua"], cityCount: 48 },
     { id: "emea-04", label: "歐洲／中東／非洲 04", packs: ["it", "fi", "nl", "dk", "ch", "be", "is", "ie", "sk"], cityCount: 46 },
   ],
   americas: [
@@ -32,6 +32,7 @@ export const ROTATION_DAYS = Object.values(ROUTES);
 // Used when the fleet size differs from four, so no country pack is
 // silently dropped just because a phone is paused or temporarily offline.
 const PACK_CITY_COUNTS = {
+  ua: 2, ke: 1, za: 2,
   in: 12, kr: 8, th: 8, my: 8, sg: 1, id: 8, ph: 8, vn: 8, au: 10, nz: 8,
   br: 12, ec: 6, ar: 10, co: 8, pe: 8, cl: 8, uy: 4, py: 4, bo: 5, ve: 6,
   se: 6, no: 6, dk: 5, fi: 6, is: 4, ae: 4, sa: 5, il: 4, jo: 4, qa: 3,
@@ -45,6 +46,7 @@ const PACK_CITY_COUNTS = {
 // Multi-zone packs use their westernmost/least advanced representative. The
 // slot boundaries are conservative even across the catalogue's other cities.
 const PACK_TIME_ZONES = {
+  ua: "Europe/Kyiv", ke: "Africa/Nairobi", za: "Africa/Johannesburg",
   in: "Asia/Kolkata", kr: "Asia/Seoul", th: "Asia/Bangkok", my: "Asia/Kuala_Lumpur",
   sg: "Asia/Singapore", id: "Asia/Jakarta", ph: "Asia/Manila", vn: "Asia/Ho_Chi_Minh",
   au: "Australia/Perth", nz: "Pacific/Auckland", ae: "Asia/Dubai", sa: "Asia/Riyadh",
@@ -193,4 +195,14 @@ export function planManualRedeploy(agentIds, now = Date.now()) {
     assignments: assignmentsFor(agents, window, window.dayOffset + 1, now)
       .map((route) => ({ ...route, id: `${route.id}-manual` })),
   };
+}
+
+// The operator requested deployment now, but a fleet-wide redistribution only
+// at the next regular switch. This date-bound hold expires at 20:00 Taipei;
+// ordinary roster balancing and explicit manual redeploy remain unchanged later.
+export const REGION_PLAN_REVISION = "20261030-validated-five-cities";
+export const REGION_EXPANSION_EFFECTIVE_AT = Date.parse("2026-10-30T20:00:00+08:00");
+export function holdCurrentRegionAssignments(now = Date.now()) {
+  return now < REGION_EXPANSION_EFFECTIVE_AT &&
+    rotationWindow(now).scheduleDate === "2026-10-30-emea";
 }

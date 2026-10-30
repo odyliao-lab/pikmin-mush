@@ -71,11 +71,11 @@ test("covers every selected regional pack exactly once without Taiwan or Japan",
       }
     }
   }
-  assert.equal(all.size, 67);
+  assert.equal(all.size, 70);
   assert.equal(all.has("tw"), false);
   assert.equal(all.has("jp"), false);
   for (const pack of ["in", "au", "nz", "ae", "gb", "de", "it", "es", "fr",
-    "se", "is", "eg", "ma", "us-east", "us-central", "us-west", "mx", "br", "ca"])
+    "ua", "ke", "za", "se", "is", "eg", "ma", "us-east", "us-central", "us-west", "mx", "br", "ca"])
     assert.equal(all.has(pack), true, `${pack} is missing`);
 });
 
@@ -119,4 +119,25 @@ test("the next day reverses route ownership between Agents", () => {
   const second = planDailyRotation(agents, atTaipei("2026-09-26", "12:00"));
   assert.equal(first.assignments[0].id, second.assignments[3].id);
   assert.equal(first.assignments[3].id, second.assignments[0].id);
+});
+
+
+test('validated expansion hold expires exactly at the requested next switch',async()=>{
+  const {holdCurrentRegionAssignments,REGION_EXPANSION_EFFECTIVE_AT}=await import('../lib/rotation-plan.mjs');
+  assert.equal(REGION_EXPANSION_EFFECTIVE_AT,atTaipei('2026-10-30','20:00'));
+  for(const [day,time,expected] of [
+    ['2026-10-29','13:00',false],['2026-10-30','11:59',false],
+    ['2026-10-30','12:00',true],['2026-10-30','19:59',true],
+    ['2026-10-30','20:00',false],['2026-10-31','13:00',false]])
+    assert.equal(holdCurrentRegionAssignments(atTaipei(day,time)),expected);
+});
+
+test('new noon packs are time-safe at DST boundaries and never enter Asia or Americas',()=>{
+  for(const day of ['2026-10-30','2026-10-31','2027-03-28','2027-10-31']){
+    const ids=['ua','ke','za'];
+    for(const [time,slot] of [['04:00','asia'],['12:00','emea'],['20:00','americas']]){
+      const packs=planDailyRotation(agents,atTaipei(day,time)).assignments.flatMap(a=>a.packs);
+      for(const id of ids)assert.equal(packs.includes(id),slot==='emea');
+    }
+  }
 });
