@@ -7,6 +7,12 @@ export const controllerDispatches=sqliteTable('controller_dispatches',{
   candidateCount:integer('candidate_count').notNull(),state:text('state').notNull().default('active'),
   createdAt:integer('created_at').notNull(),closedAt:integer('closed_at').notNull().default(0),
 },t=>[uniqueIndex('controller_one_active_dispatch').on(t.state).where(sql`${t.state}='active'`)]);
+export const controllerReturnRecoveries=sqliteTable('controller_return_recoveries',{
+  batch:text('batch').primaryKey(),recoveryId:text('recovery_id').notNull().unique(),
+  agentId:text('agent_id').notNull(),originalJobId:integer('original_job_id').notNull(),
+  jobId:integer('job_id').notNull(),originalReturnTargetId:integer('original_return_target_id').notNull(),
+  createdAt:integer('created_at').notNull(),
+});
 
 export const agentUploadReceipts = sqliteTable("agent_upload_receipts", {
   agentId: text("agent_id").notNull(), streamId: text("stream_id").notNull(),

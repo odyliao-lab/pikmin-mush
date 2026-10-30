@@ -213,7 +213,7 @@ test("includes durable multi-agent leases, v2 protocol routes, and migrations", 
   assert.match(rotation, /rotationEligibleAgents/);
   assert.match(rotation, /existingPlan/);
   assert.match(rotation, /expectedPlan/);
-  assert.match(rotation, /verification_kind='candidate'.*status IN \('queued','leased'\)/s);
+  assert.match(rotation, /verification_kind<>''.*status IN \('queued','leased'\)/s);
   await access(new URL("dist/server/index.js", root));
 });
 
