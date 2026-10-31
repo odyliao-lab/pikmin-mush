@@ -2,6 +2,7 @@ import test from 'node:test';import assert from 'node:assert/strict';
 import {readFileSync} from 'node:fs';import {Script} from 'node:vm';import {DatabaseSync} from 'node:sqlite';import ts from 'typescript';
 import * as query from '../lib/query-contract.mjs';import * as list from '../lib/list-query.mjs';
 import * as publicRead from '../lib/public-read.mjs';
+import * as mapAgents from '../lib/map-agents.mjs';
 test('real API SQL preserves global counts, Chinese search and sorted cursor continuity',async()=>{
  const db=new DatabaseSync(':memory:');
  db.exec(`CREATE TABLE mushrooms(id TEXT,lat REAL,lng REAL,level INTEGER,type INTEGER,cluster TEXT,cooldown INTEGER,finish_ms INTEGER,first_seen INTEGER,last_seen INTEGER,challenger_count INTEGER,challenger_capacity INTEGER,total_power REAL,start_ms INTEGER,giant_recheck_status TEXT,giant_rechecked_at INTEGER,participants_verified_at INTEGER,discovered_by_agent_id TEXT,mushroom_status TEXT)`);
@@ -14,6 +15,7 @@ test('real API SQL preserves global counts, Chinese search and sorted cursor con
   if(p.endsWith('/cloud'))return {controllerAuthorized:()=>true,ensureSchema:async()=>{},readMushroomRetentionStatus:async()=>({}),scheduleMushroomRetention:()=>{},runtime:()=>({DB:adapter}),noStoreJson:(data,status=200)=>Response.json(data,{status})};
   if(p.endsWith('/gps-access.mjs'))return {privateJson:(data,status=200)=>Response.json(data,{status})};
   if(p.endsWith('/fleet'))return {publicAgent:()=>({})};
+  if(p.endsWith('/map-agents.mjs'))return mapAgents;
   if(p.endsWith('/mushroom-policy.mjs'))return {MIN_MUSHROOM_LEVEL:2};
   if(p.endsWith('/scan-plans'))return {COUNTRY_PACK_CATALOG:[{name:'台灣',cities:[['台北',25,121]]}]};
   if(p.endsWith('/public-read.mjs'))return {...publicRead,createPublicReader:()=>publicRead.createPublicReader()};
