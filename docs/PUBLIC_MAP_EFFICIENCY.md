@@ -96,3 +96,19 @@ References: [issue #95](https://github.com/odyliao-lab/pikmin-mush/issues/95),
 [Cache API](https://developers.cloudflare.com/workers/runtime-apis/cache/).
 
 Platform constraint: [Workers-for-Platforms cache isolation](https://developers.cloudflare.com/cloudflare-for-platforms/workers-for-platforms/reference/worker-isolation/).
+# Agent map presence (2026-10-31)
+
+The map roster is dynamic and includes every enabled Agent, without a name or
+device-count allowlist. Map presence is separate from the fleet scheduler's
+15-second online predicate: recent reports retain pins for up to five minutes,
+with reports older than 90 seconds labelled delayed. Paused or older Agents
+remain listed without a pin. A pin is a formal assigned target, or a target
+claimed/completed within five minutes during an ACK/next-lease gap; it is never
+the device-reported GPS location and does not prove successful scanning.
+
+The current-target and indexed per-agent recent-event lookups share one UNION
+query inside the existing 15-second fleet metadata memo. Recent locations can
+resolve archived targets across queue resets. This preserves the five-query
+initial-page budget and the existing continuation-page metadata reuse. Both
+`live_agents` and `map_agents` remain empty for GPS-locked readers; neither
+changes controller permissions, task assignment, leases, or Agent health.

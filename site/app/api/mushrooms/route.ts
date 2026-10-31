@@ -9,6 +9,7 @@ import { listOrder, cursorPredicate, searchPredicate } from "../../../lib/list-q
 import { createMemo, createPublicReader, createQueryTrace } from "../../../lib/public-read.mjs";
 import { acquirePublicRead } from "../../../lib/public-read-guard.mjs";
 import {access as gpsAccess, privateJson} from '../../../lib/gps-access.mjs';
+import {mapAgents, MAP_RECENT_MS, MAP_TARGETS_SQL} from '../../../lib/map-agents.mjs';
 
 const MAX_PAGE_SIZE = 1_000;
 const readPublic = createPublicReader({
@@ -28,7 +29,7 @@ const SCAN_LOCATION_CATALOG = COUNTRY_PACK_CATALOG.flatMap((pack) => pack.cities
 type PublicTarget = { id: number; lat: number; lng: number; country: string; city: string };
 type PublicMetadata = {
   agentsResult: { results: ScanAgentRow[] };
-  targetsResult: { results: PublicTarget[] };
+  targetsResult: { results: (PublicTarget & {agent_id?:string|null;position_at?:number|null})[] };
   scanner: Record<string, unknown> | undefined;
   updatedAt: number;
 };
@@ -250,10 +251,7 @@ async function readMushrooms(request: Request, trace: ReturnType<typeof createQu
     metadataMemo('public-fleet', async () => {
       const [agentsResult, targetsResult, scannerResult] = await Promise.all([
         trace.query('agents', () => db.prepare("SELECT * FROM scan_agents ORDER BY enabled DESC, last_seen DESC").all<ScanAgentRow>()),
-        trace.query('targets', () => db.prepare(`SELECT id, lat, lng, country, city FROM scan_targets WHERE id IN (
-      SELECT current_target_id FROM scan_agents
-      WHERE enabled=1 AND paused=0 AND current_target_id IS NOT NULL
-    )`).all<{ id: number; lat: number; lng: number; country: string; city: string }>()),
+        trace.query('targets', () => db.prepare(MAP_TARGETS_SQL).bind(now-MAP_RECENT_MS).all()),
         trace.query('scanner', () => db.prepare("SELECT status_json, updated_at FROM scanner_status WHERE id = 1").all()),
       ]);
       return { agentsResult, targetsResult, scanner: scannerResult.results[0], updatedAt: now };
@@ -282,24 +280,9 @@ async function readMushrooms(request: Request, trace: ReturnType<typeof createQu
   const agents = agentsResult.results.map((agent) => publicAgent(agent, now));
   // Public map markers expose the assigned scan target, never the device's
   // reported location or any network/device metadata.
-  const targetsById = new Map(targetsResult.results.map((target) => [
-    Number(target.id), target,
-  ]));
-  const liveAgents = agents.flatMap((agent) => {
-    const target = targetsById.get(Number(agent.current_target_id));
-    const lat = Number(target?.lat);
-    const lng = Number(target?.lng);
-    if (!agent.online || agent.paused || !target ||
-      !Number.isFinite(lat) || !Number.isFinite(lng)) return [];
-    return [{
-      id: String(agent.id).slice(0, 64),
-      name: String(agent.name).slice(0, 96),
-      current_location: [lat, lng],
-      country: String(target.country ?? "").slice(0, 96),
-      city: String(target.city ?? "").slice(0, 96),
-      last_seen: Number(agent.last_seen),
-    }];
-  });
+  const mapRoster = mapAgents(agents, targetsResult.results.filter(t=>t.agent_id==null),
+    targetsResult.results.filter(t=>t.agent_id!=null), Date.now());
+  const liveAgents = mapRoster.filter(agent=>agent.current_location!==null);
   const agentNames = new Map(agentsResult.results.map((agent) => [
     String(agent.id), String(agent.display_name),
   ]));
@@ -356,6 +339,7 @@ async function readMushrooms(request: Request, trace: ReturnType<typeof createQu
       total_count: agents.length,
     },
     live_agents: permission.authorized ? liveAgents : [],
+    map_agents: permission.authorized ? mapRoster : [],
     retention: {
       policy_days: 7,
       level_2_3_inactive_after_days: 2,

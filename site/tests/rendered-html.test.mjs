@@ -82,7 +82,10 @@ test("hardens uploads, public telemetry, controller credentials, and browser pol
   assert.doesNotMatch(publicApi, /\bagents,\s*\n/);
   assert.match(publicApi, /live_agents: permission.authorized \? liveAgents : \[\]/);
   assert.match(publicApi, /Public map markers expose the assigned scan target/);
-  assert.match(publicApi, /SELECT id, lat, lng, country, city FROM scan_targets/);
+  assert.match(publicApi, /db.prepare\(MAP_TARGETS_SQL\)/);
+  const mapAgentSource=await readFile(new URL('lib/map-agents.mjs',root),'utf8');
+  assert.match(mapAgentSource,/lat, lng, country, city\s+FROM scan_targets/);
+  assert.doesNotMatch(mapAgentSource,/a\.current_lat|a\.current_lng|token_hash|partial_text/);
   assert.match(map, /renderLiveAgents/);
   assert.match(map, /agent-marker/);
   assert.match(publicApi, /const publicStatus =/);

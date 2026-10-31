@@ -7,8 +7,9 @@ import * as list from '../../lib/list-query.mjs';
 import * as publicRead from '../../lib/public-read.mjs';
 import * as gps from '../../lib/gps-access.mjs';
 import * as guard from '../../lib/public-read-guard.mjs';
+import * as mapAgents from '../../lib/map-agents.mjs';
 
-export function createApi({ size = 2305, gpsAuthorized = true, realAccess = false, realGuard = false, requestConstructor = Request } = {}) {
+export function createApi({ size = 2305, gpsAuthorized = true, realAccess = false, realGuard = false, requestConstructor = Request, fleetFixture = null } = {}) {
   let clock = Date.now();
   class Clock extends Date { static now() { return clock; } }
   const db = new DatabaseSync(':memory:'), statements = [];
@@ -38,6 +39,8 @@ export function createApi({ size = 2305, gpsAuthorized = true, realAccess = fals
     async run(){return execute('run');},
     async all(){
       statements.push(sql);
+      if(fleetFixture&&sql===mapAgents.MAP_TARGETS_SQL)return {results:[...(fleetFixture.targets||[]),...(fleetFixture.recent||[])]};
+      if(fleetFixture&&sql.includes('SELECT * FROM scan_agents'))return {results:fleetFixture.agents||[]};
       if(sql.includes('FROM scan_targets')||sql.includes('FROM scanner_status'))return {results:[]};
       if(sql.includes('FROM scan_agents'))return {results:[{id:'fixture-agent',display_name:'Fixture Agent'}]};
       return {results:execute('all')};
@@ -49,7 +52,8 @@ export function createApi({ size = 2305, gpsAuthorized = true, realAccess = fals
     .runInNewContext({exports,Request:requestConstructor,Headers,URL,URLSearchParams,TextEncoder,TextDecoder,btoa,atob,Date:Clock,require(p){
       if(p.endsWith('/cloud'))return {controllerAuthorized:r=>r.headers.get('authorization')==='Bearer fixture-controller',ensureSchema:async()=>{},readMushroomRetentionStatus:async()=>({}),scheduleMushroomRetention:()=>{},runtime:()=>({DB:adapter,COPY_AUDIT_HASH_KEY:'test-only-key'.repeat(4)}),noStoreJson:(data,status=200)=>Response.json(data,{status})};
       if(p.endsWith('/gps-access.mjs'))return realAccess?gps:{access:async()=>({owner:false,authorized:gpsAuthorized,expires_at:null}),privateJson:(data,status=200)=>Response.json(data,{status})};
-      if(p.endsWith('/fleet'))return {publicAgent:row=>({id:row.id,name:row.display_name,online:false})};
+      if(p.endsWith('/fleet'))return {publicAgent:row=>({...row,id:row.id,name:row.display_name,online:false})};
+      if(p.endsWith('/map-agents.mjs'))return mapAgents;
       if(p.endsWith('/mushroom-policy.mjs'))return {MIN_MUSHROOM_LEVEL:2};
       if(p.endsWith('/scan-plans'))return {COUNTRY_PACK_CATALOG:[{name:'fixture-east',cities:[['east',25,121]]},{name:'fixture-west',cities:[['west',-33,-70]]}]};
       if(p.endsWith('/query-contract.mjs'))return query;
