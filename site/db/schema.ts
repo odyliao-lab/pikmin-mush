@@ -6,7 +6,8 @@ export const controllerDispatches=sqliteTable('controller_dispatches',{
   admission:text('admission').notNull().unique(),agentId:text('agent_id').notNull(),jobId:integer('job_id').notNull(),
   candidateCount:integer('candidate_count').notNull(),state:text('state').notNull().default('active'),
   createdAt:integer('created_at').notNull(),closedAt:integer('closed_at').notNull().default(0),
-},t=>[uniqueIndex('controller_one_active_dispatch').on(t.state).where(sql`${t.state}='active'`)]);
+  parallelMode:integer('parallel_mode').notNull().default(0),
+},t=>[uniqueIndex('controller_agent_active_dispatch').on(t.agentId).where(sql`${t.state}='active'`)]);
 export const controllerReturnRecoveries=sqliteTable('controller_return_recoveries',{
   batch:text('batch').primaryKey(),recoveryId:text('recovery_id').notNull().unique(),
   agentId:text('agent_id').notNull(),originalJobId:integer('original_job_id').notNull(),
