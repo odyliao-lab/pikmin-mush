@@ -1,5 +1,24 @@
 # Pikmin Scanner Agent
 
+## MuMu Android15：ADB 權限切換與服務生命週期
+
+Sagittarius／Capricorn 已重現：ADB 啟動的 `nohup setsid service.sh` 仍繼承
+adbd 的 cgroup，`adb root`／`adb unroot` 重啟 adbd 時會清除該群組。
+PPID=1、殘留 `agent.pid` 或遊戲仍在，都不能證明 Agent 存活。
+
+這兩台配置 `SERVICE_DETACH_ADB_CGROUP=1`，服務先將自身移入與開機服務相同的
+cgroup-v2 根群組，再取得服務鎖、等待與啟動 Agent；讀回驗證失敗即拒絕啟動。
+只移動自身，沒有移動 adbd 或其他節點。預設0保留其他機型行為，不能在未驗證
+機型直接開啟。既有 Agent、服務鎖、TSV、cursor、pending ACK、憑證與派工不變。
+
+竹北既有巡檢使用工作區 `scanner-lifecycle.py <node> ensure --keep-root`：
+驗證 VM/Agent 身分與真實程序；人工暫停／disable 不自動恢復。Agent 缺少時才先
+備份再啟動原 service，服務已在啟動則不重複建立。每節點3小時內最多2次啟動
+嘗試、相隔至少180秒；主機程序互斥，沒有常駐重啟迴圈。接著核對本輪新
+native object→TSV→上傳→有效 ACK 與站端增量，最後執行
+`scanner-lifecycle.py <node> restore-adb`，核對 cgroup、切換後的真實主程序
+及新的站端資料。沒有 RAM／commit／換頁控制門檻。
+
 ## 2.2.10 私人認證傳遞與 KernelSU shell
 
 一般 API 與短時 control 輪詢以 shell builtin `printf` 經 stdin 傳送 Bearer
