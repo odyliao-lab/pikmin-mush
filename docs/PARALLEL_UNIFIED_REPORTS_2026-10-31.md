@@ -20,6 +20,9 @@ qualification and power protection. Discovery does not enroll a worker: the
 notifier requires independently verified device identity and root-only backup
 approval. Test/unknown nodes are never automatically borrowed from API presence.
 New qualified workers can be enrolled through the same verified procedure.
+Normal ACK clears current_job_id between points. This idle state is eligible
+only with a nonempty assigned route, fresh accepted data and the same health,
+qualification and power gates; an explicit different job remains blocked.
 
 The notifier uses bounded 20-candidate waves, two workers normally, a third when
 estimated clearance plus buffer exceeds available time. Candidate membership,
