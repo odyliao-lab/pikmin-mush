@@ -40,6 +40,46 @@ release_service_lock() {
   [ "$LOCK_PID" = "$$" ] && rm -rf "$SERVICE_LOCK"
 }
 
+# setsid/nohup detach a session, not Android init's service cgroup. A service
+# started through adb otherwise inherits adbd's uid_0/pid_<adbd> cgroup and is
+# SIGKILLed when root/unroot restarts adbd, even after it is reparented to PID 1.
+# Opt in only on verified cgroup-v2 emulator images. Move this service itself
+# before waiting/forking, so all of its Agent children inherit the boot context.
+service_cgroup() {
+  awk -F: '$1 == "0" && $2 == "" { print $3 }' "/proc/$$/cgroup"
+}
+
+move_service_to_boot_cgroup() {
+  printf '%s\n' "$$" > /sys/fs/cgroup/cgroup.procs
+}
+
+detach_adb_service_cgroup() {
+  case "${SERVICE_DETACH_ADB_CGROUP:-0}" in
+    0|'') return 0 ;;
+    1) ;;
+    *) log_service 'invalid SERVICE_DETACH_ADB_CGROUP'; return 1 ;;
+  esac
+  SERVICE_CGROUP_BEFORE="$(service_cgroup)" || return 1
+  case "$SERVICE_CGROUP_BEFORE" in
+    /) return 0 ;;
+    /uid_0/pid_*)
+      SERVICE_CGROUP_PID="${SERVICE_CGROUP_BEFORE#/uid_0/pid_}"
+      case "$SERVICE_CGROUP_PID" in
+        ''|*[!0-9]*) log_service 'unexpected service cgroup'; return 1 ;;
+      esac
+      ;;
+    *) log_service 'unsupported service cgroup; refusing unsafe startup'; return 1 ;;
+  esac
+  if [ "$(id -u)" != 0 ] || ! move_service_to_boot_cgroup; then
+    log_service 'cannot detach service from adbd cgroup; refusing startup'
+    return 1
+  fi
+  [ "$(service_cgroup)" = / ] || {
+    log_service 'service cgroup detach verification failed'; return 1;
+  }
+  log_service "detached service from adbd cgroup $SERVICE_CGROUP_BEFORE"
+}
+
 # Opt-in for emulator images that publish boot_completed while their account /
 # network services are still initializing. Do not claim leases during this wait.
 wait_for_agent_boot_delay() {
@@ -80,6 +120,12 @@ start_agent() {
   log_service "Agent started pid=$NEW_PID"
 }
 
+if [ -f "$MODDIR/config" ]; then
+  # shellcheck disable=SC1090
+  . "$MODDIR/config"
+fi
+
+detach_adb_service_cgroup || exit 1
 acquire_service_lock || exit 0
 trap release_service_lock EXIT
 
@@ -92,11 +138,6 @@ done
 # devices without a secure credential and keeps unattended reboot recovery
 # from becoming a false-online, zero-output scanner.
 wm dismiss-keyguard >/dev/null 2>&1 || true
-
-if [ -f "$MODDIR/config" ]; then
-  # shellcheck disable=SC1090
-  . "$MODDIR/config"
-fi
 
 wait_for_agent_boot_delay || exit 1
 
