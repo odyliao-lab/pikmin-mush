@@ -26,6 +26,57 @@ function fixture(){
  const input={batch:'manual-one',owner:'taichung-one',agentId:'leo',kind:'candidate',candidates:[{id:'p',lat:3,lng:4}]};
  return {sql,db,agent,job,input};
 }
+
+function second(f,id,batch){
+ f.sql.prepare('INSERT INTO scan_agents VALUES(?,1,0,100000,1,2)').run(id);
+ return {agent:{...f.agent,id},input:{...f.input,batch,agentId:id,parallel:true,candidates:[{id:batch,lat:3,lng:4}]}};
+}
+test('parallel mode permits three distinct agents under one owner; legacy remains exclusive',async()=>{
+ const f=fixture();await ensureDispatchSchema(f.db);const first={...f.input,parallel:true};
+ assert.equal((await admitDispatch(f.db,first,f.agent,f.job,100000)).http,200);
+ const two=second(f,'aries','parallel-two'),three=second(f,'libra','parallel-three'),four=second(f,'gemini','parallel-four');
+ assert.equal((await admitDispatch(f.db,{...two.input,owner:'foreign'},two.agent,f.job,100000)).http,409);
+ assert.equal((await admitDispatch(f.db,{...first,batch:'same-agent'},f.agent,f.job,100000)).http,409);
+ assert.equal((await admitDispatch(f.db,{...two.input,parallel:false},two.agent,f.job,100000)).http,409);
+ assert.equal((await admitDispatch(f.db,two.input,two.agent,f.job,100000)).http,200);
+ assert.equal((await admitDispatch(f.db,three.input,three.agent,f.job,100000)).http,200);
+ assert.equal((await admitDispatch(f.db,four.input,four.agent,f.job,100000)).http,409);
+ assert.equal(f.sql.prepare("SELECT COUNT(*) n FROM controller_dispatches WHERE state='active'").get().n,3);
+ assert.equal((await dispatchProof(f.db,first.batch)).parallel,true);f.sql.close();
+});
+test('parallel admission retains old admission, unknown queue and duplicate-location barriers',async()=>{
+ for(const mode of ['legacy-admission','legacy-queue','duplicate']){
+  const f=fixture();await ensureDispatchSchema(f.db);const two=second(f,'aries','parallel-two');
+  if(mode==='legacy-admission')await admitDispatch(f.db,f.input,f.agent,f.job,100000);
+  if(mode==='legacy-queue')f.sql.exec("INSERT INTO scan_targets(verification_batch,verification_kind,status,required_agent_id) VALUES('unknown','return','queued','other')");
+  if(mode==='duplicate'){
+   await admitDispatch(f.db,{...f.input,parallel:true},f.agent,f.job,100000);
+   two.input.candidates=f.input.candidates;
+  }
+  assert.equal((await admitDispatch(f.db,two.input,two.agent,f.job,100000)).http,409,mode);f.sql.close();
+ }
+});
+test('additive parallel migration retains unresolved legacy claim and blocks takeover',async()=>{
+ const f=fixture();f.sql.exec(readFileSync(new URL('../drizzle/0028_fresh_black_tom.sql',import.meta.url),'utf8'));
+ f.sql.exec("INSERT INTO controller_dispatches(batch,owner,payload_sha,admission,agent_id,job_id,candidate_count,state,created_at) VALUES('old-one','owner','hash','cap','leo',1,1,'active',1)");
+ f.sql.exec(readFileSync(new URL('../drizzle/0034_robust_clint_barton.sql',import.meta.url),'utf8'));
+ const old=f.sql.prepare('SELECT parallel_mode,state FROM controller_dispatches').get();assert.equal(old.parallel_mode,0);assert.equal(old.state,'active');
+ await ensureDispatchSchema(f.db);const two=second(f,'aries','parallel-two');
+ assert.equal((await admitDispatch(f.db,two.input,two.agent,f.job,100000)).http,409);f.sql.close();
+});
+
+test('closing one parallel Agent requires its own proof and preserves the other Agent queue',async()=>{
+ const f=fixture();await ensureDispatchSchema(f.db);
+ await admitDispatch(f.db,{...f.input,parallel:true},f.agent,f.job,100000);
+ const two=second(f,'aries','parallel-two');await admitDispatch(f.db,two.input,two.agent,f.job,100000);
+ f.sql.exec("UPDATE scan_targets SET status='completed',leased_at=101000,completed_at=110000,completed_agent_id='leo' WHERE required_agent_id='leo'");
+ f.sql.exec("INSERT INTO scan_targets(id,job_id,verification_kind,status,leased_at,completed_at,completed_agent_id) VALUES(9,1,'','completed',111000,120000,'leo');INSERT INTO mushroom_observations VALUES('resume',9,'leo',115)");
+ assert.equal((await closeDispatch(f.db,f.input.batch,f.input.owner,121000)).http,200);
+ assert.equal((await dispatchProof(f.db,two.input.batch)).state,'active');
+ assert.equal((await dispatchProof(f.db,two.input.batch)).can_close,false);
+ assert.equal(f.sql.prepare("SELECT COUNT(*) n FROM scan_targets WHERE required_agent_id='aries' AND status='queued'").get().n,2);
+ f.sql.close();
+});
 test('atomic sticky admission, immutable replay, no expiry stealing or second owner',async()=>{
  const f=fixture();await ensureDispatchSchema(f.db);
  assert.equal((await admitDispatch(f.db,f.input,f.agent,f.job,100000)).http,200);

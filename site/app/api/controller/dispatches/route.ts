@@ -7,7 +7,7 @@ export async function GET(request: Request) {
  const cursor=new URL(request.url).searchParams.get('cursor')??'';
  if(cursor.length>100)return noStoreJson({error:'invalid cursor'},400);
  await ensureSchema();
- return noStoreJson({...await dispatchInventory(runtime().DB,cursor),
+ return noStoreJson({...await dispatchInventory(runtime().DB,cursor),parallel_contract:1,max_parallel:3,
   coordinated_admission_required:!!runtime().VERIFICATION_DISPATCHER_ID,checked_at:Date.now()});
 }
 // Completion is a separate durable transition, not an expiry-based unlock.

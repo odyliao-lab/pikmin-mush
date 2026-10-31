@@ -4,9 +4,8 @@ export const DISPATCH_SCHEMA = [
  batch TEXT PRIMARY KEY, owner TEXT NOT NULL, payload_sha TEXT NOT NULL,
  admission TEXT NOT NULL UNIQUE, agent_id TEXT NOT NULL, job_id INTEGER NOT NULL,
  candidate_count INTEGER NOT NULL, state TEXT NOT NULL DEFAULT 'active',
- created_at INTEGER NOT NULL, closed_at INTEGER NOT NULL DEFAULT 0)`,
- `CREATE UNIQUE INDEX IF NOT EXISTS controller_one_active_dispatch
- ON controller_dispatches(state) WHERE state='active'`,
+ created_at INTEGER NOT NULL, closed_at INTEGER NOT NULL DEFAULT 0,
+ parallel_mode INTEGER NOT NULL DEFAULT 0)`,
  `CREATE TABLE IF NOT EXISTS controller_return_recoveries (
  batch TEXT PRIMARY KEY, recovery_id TEXT NOT NULL UNIQUE, agent_id TEXT NOT NULL,
  original_job_id INTEGER NOT NULL, job_id INTEGER NOT NULL,
@@ -14,6 +13,12 @@ export const DISPATCH_SCHEMA = [
 ];
 export async function ensureDispatchSchema(db) {
  await db.batch(DISPATCH_SCHEMA.map(sql=>db.prepare(sql)));
+ try { await db.prepare('ALTER TABLE controller_dispatches ADD COLUMN parallel_mode INTEGER NOT NULL DEFAULT 0').run(); }
+ catch { await db.prepare('SELECT parallel_mode FROM controller_dispatches LIMIT 1').first(); }
+ await db.batch([
+  db.prepare('DROP INDEX IF EXISTS controller_one_active_dispatch'),
+  db.prepare("CREATE UNIQUE INDEX IF NOT EXISTS controller_agent_active_dispatch ON controller_dispatches(agent_id) WHERE state='active'"),
+ ]);
 }
 const TARGETS = `WITH targets AS (
  SELECT id,job_id,verification_batch,verification_kind,status,leased_at,completed_at,
@@ -46,7 +51,7 @@ export async function dispatchProof(db,batch) {
  .bind(returnJob,claim.agent_id,claim.agent_id,r.completed_at).first();
  const candidatesTerminal=candidates.length===claim.candidate_count&&candidates.length>0&&
   candidates.every(t=>['completed','failed','cancelled'].includes(t.status));
- return {batch,owner:claim.owner,state:claim.state,agent_id:claim.agent_id,original_job_id:claim.job_id,
+ return {batch,owner:claim.owner,state:claim.state,parallel:claim.parallel_mode===1,agent_id:claim.agent_id,original_job_id:claim.job_id,
   return_scheduled:effectiveReturns.length===1,
   return_recovery:recovery?{id:recovery.recovery_id,original_job_id:recovery.original_job_id,
    job_id:recovery.job_id,created_at:recovery.created_at,original_return_cancelled:true}:null,
@@ -83,7 +88,8 @@ export async function recoverCancelledReturn(db,batch,owner,recoveryId,agent,job
  (batch,recovery_id,agent_id,original_job_id,job_id,original_return_target_id,created_at)
  SELECT ?,?,?,?,?,?,? WHERE EXISTS(SELECT 1 FROM controller_dispatches WHERE batch=? AND owner=? AND state='active')
  AND NOT EXISTS(SELECT 1 FROM controller_return_recoveries WHERE batch=?)
- AND NOT EXISTS(SELECT 1 FROM scan_targets WHERE verification_batch<>'' AND status IN ('queued','leased'))
+ AND NOT EXISTS(SELECT 1 FROM scan_targets WHERE verification_batch<>'' AND status IN ('queued','leased')
+ AND (?=0 OR required_agent_id=?))
  AND NOT EXISTS(SELECT 1 FROM scan_jobs WHERE id=? AND status IN ('queued','running','paused'))
  AND EXISTS(SELECT 1 FROM scan_jobs WHERE id=? AND cycle=? AND status IN ('queued','running'))
  AND EXISTS(SELECT 1 FROM scan_agents WHERE id=? AND enabled=1 AND paused=0
@@ -93,7 +99,7 @@ export async function recoverCancelledReturn(db,batch,owner,recoveryId,agent,job
  AND NOT EXISTS(SELECT 1 FROM targets WHERE verification_batch=? AND verification_kind NOT IN ('return','return-recovery')
   AND status NOT IN ('completed','failed','cancelled'))`)
  .bind(batch,recoveryId,claim.agent_id,claim.job_id,job.id,originalReturn,now,batch,owner,batch,
-  claim.job_id,job.id,job.cycle,agent.id,now-15000,now+1000,agent.current_lat,agent.current_lng,
+  claim.parallel_mode,claim.agent_id,claim.job_id,job.id,job.cycle,agent.id,now-15000,now+1000,agent.current_lat,agent.current_lng,
   originalReturn,batch,batch,claim.candidate_count,batch);
  const target=db.prepare(`INSERT INTO scan_targets
  (job_id,sequence,cycle,country,city,lat,lng,region_index,point_index,base_cooldown_s,
@@ -132,7 +138,7 @@ export async function dispatchInventory(db,cursor='',limit=100) {
 }
 
 export async function canonicalPayload(input) {
- const encoded=JSON.stringify({agentId:input.agentId,kind:input.kind,
+ const encoded=JSON.stringify({agentId:input.agentId,kind:input.kind,...(input.parallel===true?{parallel:true}:{}),
   candidates:input.candidates.map(c=>({id:c.id,lat:c.lat,lng:c.lng}))});
  const digest=await crypto.subtle.digest('SHA-256',new TextEncoder().encode(encoded));
  return Array.from(new Uint8Array(digest),x=>x.toString(16).padStart(2,'0')).join('');
@@ -154,16 +160,26 @@ export async function admitDispatch(db,input,agent,job,now,admission=crypto.rand
  const minimum=await db.prepare('SELECT MIN(sequence) AS n FROM scan_targets WHERE job_id=?').bind(job.id).first();
  let seq=Math.min(-1,Number(minimum?.n??0)-input.candidates.length-2);
  const guard=`EXISTS(SELECT 1 FROM controller_dispatches WHERE batch=? AND admission=? AND state='active')`;
+ const parallel=input.parallel===true;
+ const scope=parallel?`(SELECT COUNT(*) FROM controller_dispatches WHERE state='active')<3
+ AND NOT EXISTS(SELECT 1 FROM controller_dispatches WHERE state='active' AND (owner<>? OR parallel_mode=0 OR agent_id=?))
+ AND NOT EXISTS(SELECT 1 FROM scan_targets t WHERE verification_batch<>'' AND status IN ('queued','leased')
+  AND (required_agent_id=? OR NOT EXISTS(SELECT 1 FROM controller_dispatches d
+    WHERE d.batch=t.verification_batch AND d.state='active' AND d.parallel_mode=1 AND d.owner=?)))
+ AND NOT EXISTS(SELECT 1 FROM scan_targets t JOIN controller_dispatches d ON d.batch=t.verification_batch
+  WHERE d.state='active' AND t.verification_mushroom_id IN (SELECT value FROM json_each(?)))`
+ :`NOT EXISTS(SELECT 1 FROM controller_dispatches WHERE state='active')
+ AND NOT EXISTS(SELECT 1 FROM scan_targets WHERE verification_batch<>'' AND status IN ('queued','leased'))`;
+ const scopeArgs=parallel?[input.owner,input.agentId,input.agentId,input.owner,JSON.stringify(input.candidates.map(c=>c.id))]:[];
  const statements=[db.prepare(`INSERT INTO controller_dispatches
- (batch,owner,payload_sha,admission,agent_id,job_id,candidate_count,created_at)
- SELECT ?,?,?,?,?,?,?,? WHERE NOT EXISTS(SELECT 1 FROM controller_dispatches WHERE state='active')
- AND NOT EXISTS(SELECT 1 FROM scan_targets WHERE verification_batch<>'' AND status IN ('queued','leased'))
+ (batch,owner,payload_sha,admission,agent_id,job_id,candidate_count,created_at,parallel_mode)
+ SELECT ?,?,?,?,?,?,?,?,? WHERE ${scope}
  AND NOT EXISTS(SELECT 1 FROM scan_targets WHERE verification_batch=?)
  AND NOT EXISTS(SELECT 1 FROM scan_target_history WHERE verification_batch=?)
  AND EXISTS(SELECT 1 FROM scan_jobs WHERE id=? AND cycle=? AND status IN ('queued','running'))
  AND EXISTS(SELECT 1 FROM scan_agents WHERE id=? AND enabled=1 AND paused=0
  AND last_seen>=? AND last_seen<=? AND current_lat=? AND current_lng=?)`)
- .bind(input.batch,input.owner,payloadSha,admission,input.agentId,job.id,input.candidates.length,now,input.batch,input.batch,
+ .bind(input.batch,input.owner,payloadSha,admission,input.agentId,job.id,input.candidates.length,now,parallel?1:0,...scopeArgs,input.batch,input.batch,
   job.id,job.cycle,input.agentId,now-15000,now+1000,agent.current_lat,agent.current_lng)];
  const add=(c,index,kind,priority)=>db.prepare(`INSERT INTO scan_targets
  (job_id,sequence,cycle,country,city,lat,lng,region_index,point_index,base_cooldown_s,

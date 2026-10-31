@@ -83,7 +83,7 @@ export async function POST(request: Request) {
     let tags;
     try{tags=JSON.parse(agent.region_tags_json);}catch{tags=[];}
     if(!Array.isArray(tags)||!tags[0])return noStoreJson({error:'agent region unavailable'},409);
-    const result=await admitDispatch(db,{batch,owner:coordinatedOwner,agentId,kind,candidates},
+    const result=await admitDispatch(db,{batch,owner:coordinatedOwner,agentId,kind,candidates,parallel:input.parallel===true},
       {...agent,country:String(tags[0])},job,Date.now());
     return noStoreJson(result,result.http);
   }
