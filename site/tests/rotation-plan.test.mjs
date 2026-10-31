@@ -7,7 +7,7 @@ import {
 const agents = ["agent-4", "agent-3", "agent-2", "agent-1"];
 const atTaipei = (day, time) => Date.parse(`${day}T${time}:00+08:00`);
 
-for (const count of [4, 5, 6, 7, 8]) test(`${count} Agents share all eligible packs without overlaps or empty routes`, () => {
+for (const count of [4, 5, 6, 7, 8, 9, 10, 11, 12]) test(`${count} Agents cover every eligible pack without empty routes`, () => {
   const fleet = Array.from({length: count}, (_, i) => `agent-${i + 1}`);
   for (const day of ["2026-10-14", "2027-01-15"]) {
     for (const [index, time] of ["04:00", "12:00", "20:00"].entries()) {
@@ -17,8 +17,8 @@ for (const count of [4, 5, 6, 7, 8]) test(`${count} Agents share all eligible pa
         const actual = plan.assignments.flatMap(route => route.packs);
         assert.equal(plan.assignments.length, count);
         assert.equal(new Set(plan.assignments.map(route => route.agentId)).size, count);
-        assert.equal(new Set(actual).size, actual.length);
-        assert.deepEqual([...actual].sort(), [...expected].sort());
+        assert.equal(actual.length-new Set(actual).size, index===0 ? Math.max(0,count-10) : 0);
+        assert.deepEqual([...new Set(actual)].sort(), [...expected].sort());
         assert.ok(plan.assignments.every(route => route.packs.length && route.cityCount > 0));
         const counts = plan.assignments.map(route => route.cityCount);
         assert.ok(Math.max(...counts)-Math.min(...counts) <= 12);
@@ -27,7 +27,7 @@ for (const count of [4, 5, 6, 7, 8]) test(`${count} Agents share all eligible pa
     }
   }
   for (const planner of [planDailyRotation, planManualRedeploy])
-    assert.throws(() => planner(Array.from({length: 9}, (_, i) => `agent-${i}`), atTaipei("2026-10-14","04:00")), /最多支援 8/);
+    assert.throws(() => planner(Array.from({length: 13}, (_, i) => `agent-${i}`), atTaipei("2026-10-14","04:00")), /最多支援 12/);
 });
 
 test("switches every eight hours at 04:00, 12:00 and 20:00 Taipei", () => {

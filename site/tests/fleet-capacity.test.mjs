@@ -66,8 +66,9 @@ function fixture(t, count=5) {
   return {sql,db,now,rotation,fleet,enroll,action,post};
 }
 
-test('enrollment stages unique disabled nodes; qualification and atomic eight-node activation gates',async t=>{
-  const f=fixture(t,7);
+test('enrollment stages unique disabled nodes; qualification and atomic twelve-node activation gates',async t=>{
+  assert.equal(policy.MAX_ENABLED_AGENTS,12);
+  const f=fixture(t,11);
   assert.equal((await f.post(f.enroll,{name:'Gemini'},false)).status,403);
   const a=await (await f.post(f.enroll,{name:'Gemini'})).json();
   const b=await (await f.post(f.enroll,{name:'Reserve'})).json();
@@ -77,7 +78,7 @@ test('enrollment stages unique disabled nodes; qualification and atomic eight-no
   for(const id of [a.agent.id,b.agent.id]) assert.equal((await f.post(f.action,{agentId:id,action:'update-qualification',rotationSlots:['emea']})).status,200);
   const results=await Promise.all([a,b].map(x=>f.post(f.action,{agentId:x.agent.id,action:'enable'})));
   assert.deepEqual(results.map(x=>x.status).sort(),[200,409]);
-  assert.equal(f.sql.prepare('SELECT COUNT(*) n FROM scan_agents WHERE enabled=1').get().n,8);
+  assert.equal(f.sql.prepare('SELECT COUNT(*) n FROM scan_agents WHERE enabled=1').get().n,12);
   assert.equal(f.sql.prepare("SELECT enabled FROM scan_agents WHERE id='scorpio'").get().enabled,0);
   const enabled=f.sql.prepare("SELECT id FROM scan_agents WHERE id LIKE 'new%' AND enabled=1").get().id;
   assert.equal((await f.post(f.action,{agentId:enabled,action:'update-qualification',rotationSlots:['asia']})).status,409);
@@ -95,7 +96,7 @@ test('automatic and manual rotation retain coordinated work until return and res
  const run=await f.rotation.ensureDailyRotation(f.now);assert.ok(run.job_id);
 });
 
-for(const count of [4,5,6,7,8]) test(`${count} eligible devices materialize automatic and manual routes without loss`,async t=>{
+for(const count of [4,5,6,7,8,9,10,11,12]) test(`${count} eligible devices materialize automatic and manual routes without loss`,async t=>{
   const f=fixture(t,count);
   for(const [index,time] of ['04:00','12:00','20:00'].entries()) {
     const now=Date.parse(`2026-10-29T${time}:00+08:00`);
@@ -105,8 +106,9 @@ for(const count of [4,5,6,7,8]) test(`${count} eligible devices materialize auto
       const assignments=manual?run.assignments:JSON.parse(run.assignments_json);
       assert.equal(assignments.length,count);
       assert.ok(assignments.every(a=>a.agentId!=='scorpio'&&a.packs.length));
-      const packs=assignments.flatMap(a=>a.packs);
-      assert.equal(packs.length,new Set(packs).size);
+      const assignedPacks=assignments.flatMap(a=>a.packs);
+      assert.equal(assignedPacks.length-new Set(assignedPacks).size,index===0?Math.max(0,count-10):0);
+      const packs=[...new Set(assignedPacks)];
       assert.deepEqual([...packs].sort(),plans.ROTATION_DAYS[index].flatMap(r=>r.packs).sort());
       const job=f.sql.prepare('SELECT * FROM scan_jobs WHERE id=?').get(run.job_id);
       const rows=f.sql.prepare('SELECT * FROM scan_targets WHERE job_id=?').all(job.id);
