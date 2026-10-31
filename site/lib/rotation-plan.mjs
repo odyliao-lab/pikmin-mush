@@ -6,7 +6,7 @@ export const ROTATION_EPOCH_DATE = "2026-07-22";
 
 // Each eight-hour slot uses packs whose *least advanced* city has reached the
 // selected Taipei calendar date and at least 01:00 local time. Taiwan and Japan
-// remain intentionally excluded. Distinct packs in a slot prevent Agent overlap.
+// remain intentionally excluded. Target leases prevent duplicate point ownership.
 const ROUTES = {
   asia: [
     { id: "asia-01", label: "亞洲／大洋洲 01", packs: ["th", "my", "sg"], cityCount: 17 },
@@ -127,6 +127,21 @@ function assignmentsFor(agentIds, window, cycle, now) {
         candidate.cityCount < smallest.cityCount ? candidate : smallest);
       route.packs.push(pack);
       route.cityCount += count;
+    }
+    // Asia has ten country packs. For larger fleets, share the largest packs
+    // instead of leaving extra devices without a route. Existing country tags
+    // and atomic target leases already allow two devices to consume different
+    // points from one pack; keep all allocations up to ten devices unchanged.
+    for (const empty of selected.filter(route => !route.packs.length)) {
+      const donor = selected.filter(route => route.packs.length)
+        .reduce((largest, route) => route.cityCount > largest.cityCount ? route : largest);
+      const pack = donor.packs[0];
+      const participants = selected.filter(route => route.packs.includes(pack));
+      empty.packs.push(pack);
+      for (const route of [...participants, empty]) {
+        route.cityCount = PACK_CITY_COUNTS[pack] / (participants.length + 1);
+        route.label += "（共享國家包，獨立掃描點）";
+      }
     }
     if (mod(cycle, 2)) selected.reverse();
   }
