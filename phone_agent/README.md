@@ -1,5 +1,10 @@
 # Pikmin Scanner Agent
 
+Cancer 1080×2160 首頁羅盤的半透明外緣會受花草背景影響，可能使首頁判為
+unknown 而反覆冷啟仍無掃描資料。2026-11-01 僅校準該機不透明圖案／內部取樣，
+保留完整外框、文字、雙畫面、前景與保護檢查；實機判斷與部署界線見
+[Cancer 首頁復原紀錄](../docs/CANCER_DASHBOARD_RECOVERY_2026-11-01.md)。
+
 ## MuMu Android15：ADB 權限切換與服務生命週期
 
 Sagittarius／Capricorn 已重現：ADB 啟動的 `nohup setsid service.sh` 仍繼承

@@ -76,8 +76,8 @@ for kind, sw, sh, sx, sy, prefix in templates:
             other_control = bytearray(data)
             paint(other_control,w,[(x,y,*color) for x,y,*_ in groups[prefix+'_button']])
             check(other_control, 'unknown')
-        if prefix == 'p15':
-            # Gemini's translucent compass edge changes with the flower scene.
+        if prefix in ('p8', 'p15'):
+            # Cancer/Gemini translucent edges change with the flower scene.
             # Its opaque glyph/interior must still gate the action independently.
             for color in ((0,0,0), (220,80,160)):
                 scenery = bytearray(data)
@@ -86,6 +86,16 @@ for kind, sw, sh, sx, sy, prefix in templates:
                         if 36**2 < (px-x)**2+(py-y)**2 <= 65**2]
                 paint(scenery,w,ring)
                 check(scenery, f'{kind} {x} {y}')
+        if prefix == 'p8':
+            # Cancer's old x580/y1967 scenery sample blocked the complete
+            # dashboard despite all frame/text samples agreeing. The compass
+            # glyph and green negative space must remain inside radius31.
+            assert all((px-x)**2+(py-y)**2 <= 31**2
+                       for px,py,*_ in groups[prefix+'_button'])
+            for color in ((33,162,82), (255,0,255), (0,0,0)):
+                edge = bytearray(data)
+                paint(edge,w,[(580,1967,*color)])
+                check(edge, f'{kind} {x} {y}')
     if kind != 'dashboard':
         shifted = blank(w,h)
         for group in ('frame','text','button'):
