@@ -71,7 +71,7 @@ test("covers every selected regional pack exactly once without Taiwan or Japan",
       }
     }
   }
-  assert.equal(all.size, 70);
+  assert.equal(all.size, 77);
   assert.equal(all.has("tw"), false);
   assert.equal(all.has("jp"), false);
   for (const pack of ["in", "au", "nz", "ae", "gb", "de", "it", "es", "fr",
@@ -134,7 +134,7 @@ test('validated expansion hold expires exactly at the requested next switch',asy
 
 test('new noon packs are time-safe at DST boundaries and never enter Asia or Americas',()=>{
   for(const day of ['2026-10-30','2026-10-31','2027-03-28','2027-10-31']){
-    const ids=['ua','ke','za'];
+    const ids=['ua','ke','za','na','bw','ls','sz','zw','zm','mz'];
     for(const [time,slot] of [['04:00','asia'],['12:00','emea'],['20:00','americas']]){
       const packs=planDailyRotation(agents,atTaipei(day,time)).assignments.flatMap(a=>a.packs);
       for(const id of ids)assert.equal(packs.includes(id),slot==='emea');

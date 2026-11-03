@@ -3,13 +3,14 @@ import { readFileSync } from "node:fs";
 import test from "node:test";
 import { Script } from "node:vm";
 import ts from "typescript";
+import * as landMask from "../lib/land-mask.mjs";
 import { planDailyRotation, ROTATION_DAYS } from "../lib/rotation-plan.mjs";
 
 const source = readFileSync(new URL("../lib/scan-plans.ts", import.meta.url), "utf8");
 const exports = {};
 new Script(ts.transpileModule(source, { compilerOptions: {
   module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022,
-} }).outputText).runInNewContext({ exports });
+} }).outputText).runInNewContext({ exports, require: name => { assert.equal(name,"./land-mask.mjs"); return landMask; } });
 const { buildScanPlan, normalizeScanConfig, COUNTRY_PACK_CATALOG } = exports;
 
 test("curated route city counts match the catalogue", () => {
@@ -90,5 +91,21 @@ test('noon Berlin is exactly 3x within its original route budget; other slots cl
       }
       if(hour==='12:00' && cfg.rotationSamplesPerCity>1)assert.ok(seenDonors.size>2*cfg.rotationSamplesPerCity);
     }
+  }
+});
+
+test('scheduled tiny saved radius cannot disable Berlin weighting or expand the sparse point budget',()=>{
+  const rotation=readFileSync(new URL('../lib/rotation.ts',import.meta.url),'utf8');
+  const section=rotation.slice(rotation.indexOf('function scanConfig('),rotation.indexOf('async function stopActiveJobs'));
+  const context={COUNTRY_PACK_CATALOG,normalizeScanConfig,packNames:ids=>ids.map(id=>COUNTRY_PACK_CATALOG.find(p=>p.id===id).name)};
+  new Script(ts.transpileModule(section,{compilerOptions:{target:ts.ScriptTarget.ES2022}}).outputText).runInNewContext(context);
+  const plan=planDailyRotation(Array.from({length:9},(_,i)=>`a${i}`),Date.parse('2026-11-03T14:00:00+08:00'));
+  const packs=[...new Set(plan.assignments.flatMap(r=>r.packs))];
+  const cfg=context.scanConfig({radiusKm:1.5},packs,9,'emea',plan.assignments);
+  assert.equal(cfg.radiusKm,3);
+  for(let cycle=0;cycle<4;cycle++){
+    const result=buildScanPlan(cfg,null,{cycle});
+    assert.equal(result.targets.filter(t=>t.city==='柏林 Berlin').length,3*cfg.rotationSamplesPerCity);
+    assert.equal(result.targets.length,buildScanPlan({...cfg,rotationCitySampling:undefined},null,{cycle}).targets.length);
   }
 });

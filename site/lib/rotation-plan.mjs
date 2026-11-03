@@ -15,10 +15,10 @@ const ROUTES = {
     { id: "asia-04", label: "亞洲／大洋洲 04", packs: ["kr", "id", "nz"], cityCount: 24 },
   ],
   emea: [
-    { id: "emea-01", label: "歐洲／中東／非洲 01", packs: ["gb", "pl", "ro", "at", "pt", "tn", "il", "rs", "qa", "za"], cityCount: 50 },
-    { id: "emea-02", label: "歐洲／中東／非洲 02", packs: ["fr", "de", "eg", "sa", "gr", "dz", "jo", "bg", "ke"], cityCount: 46 },
-    { id: "emea-03", label: "歐洲／中東／非洲 03", packs: ["se", "no", "es", "ma", "hu", "hr", "ae", "cz", "si", "ua"], cityCount: 48 },
-    { id: "emea-04", label: "歐洲／中東／非洲 04", packs: ["it", "fi", "nl", "dk", "ch", "be", "is", "ie", "sk"], cityCount: 46 },
+    { id: "emea-01", label: "歐洲／中東／非洲 01", packs: ["gb", "pl", "ro", "at", "pt", "tn", "il", "rs", "qa", "za", "na", "bw"], cityCount: 59 },
+    { id: "emea-02", label: "歐洲／中東／非洲 02", packs: ["fr", "de", "eg", "sa", "gr", "dz", "jo", "bg", "ke", "ls", "sz"], cityCount: 49 },
+    { id: "emea-03", label: "歐洲／中東／非洲 03", packs: ["se", "no", "es", "ma", "hu", "hr", "ae", "cz", "si", "ua", "zw", "zm"], cityCount: 54 },
+    { id: "emea-04", label: "歐洲／中東／非洲 04", packs: ["it", "fi", "nl", "dk", "ch", "be", "is", "ie", "sk", "mz"], cityCount: 49 },
   ],
   americas: [
     { id: "americas-01", label: "美洲 01", packs: ["us-west", "ar", "ve", "bo", "sv", "bz"], cityCount: 39 },
@@ -29,10 +29,10 @@ const ROUTES = {
 };
 export const ROTATION_DAYS = Object.values(ROUTES);
 
-// Used when the fleet size differs from four, so no country pack is
+// Used for every fleet size, so no country pack is
 // silently dropped just because a phone is paused or temporarily offline.
 const PACK_CITY_COUNTS = {
-  ua: 2, ke: 1, za: 2,
+  ua: 2, ke: 1, za: 6, na: 3, bw: 2, ls: 1, sz: 2, zw: 2, zm: 4, mz: 3,
   in: 12, kr: 8, th: 8, my: 8, sg: 1, id: 8, ph: 8, vn: 8, au: 10, nz: 8,
   br: 12, ec: 6, ar: 10, co: 8, pe: 8, cl: 8, uy: 4, py: 4, bo: 5, ve: 6,
   se: 6, no: 6, dk: 5, fi: 6, is: 4, ae: 4, sa: 5, il: 4, jo: 4, qa: 3,
@@ -47,6 +47,8 @@ const PACK_CITY_COUNTS = {
 // slot boundaries are conservative even across the catalogue's other cities.
 const PACK_TIME_ZONES = {
   ua: "Europe/Kyiv", ke: "Africa/Nairobi", za: "Africa/Johannesburg",
+  na: "Africa/Windhoek", bw: "Africa/Gaborone", ls: "Africa/Maseru", sz: "Africa/Mbabane",
+  zw: "Africa/Harare", zm: "Africa/Lusaka", mz: "Africa/Maputo",
   in: "Asia/Kolkata", kr: "Asia/Seoul", th: "Asia/Bangkok", my: "Asia/Kuala_Lumpur",
   sg: "Asia/Singapore", id: "Asia/Jakarta", ph: "Asia/Manila", vn: "Asia/Ho_Chi_Minh",
   au: "Australia/Perth", nz: "Pacific/Auckland", ae: "Asia/Dubai", sa: "Asia/Riyadh",
@@ -106,27 +108,29 @@ function assertPacksHaveCrossedMidnight(packs, window, now) {
   if (notReady.length) throw new Error(`尚未安全跨日，拒絕派送：${notReady.join("、")}`);
 }
 
-function assignmentsFor(agentIds, window, cycle, now) {
+function assignmentsFor(agentIds, window, cycle, now, workloads = {}) {
   const routes = ROUTES[window.slot];
+  const weight = pack => workloads[pack] ?? PACK_CITY_COUNTS[pack];
+  for (const pack of routes.flatMap(route => route.packs))
+    if (!Number.isFinite(weight(pack)) || weight(pack) <= 0) throw new Error(`無效區域工作量：${pack}`);
   let selected;
-  if (agentIds.length === routes.length) {
-    selected = mod(cycle, 2) ? [...routes].reverse() : routes;
-  } else {
+  {
     const packs = routes.flatMap((route) => route.packs).sort((left, right) =>
-      (PACK_CITY_COUNTS[right] ?? 0) - (PACK_CITY_COUNTS[left] ?? 0) ||
+      weight(right) - weight(left) ||
       left.localeCompare(right));
     selected = agentIds.map((_, index) => ({
-      id: `${window.slot}-balanced-${index + 1}`,
+      id: `${window.slot}-balanced-${index + 1}-${REGION_PLAN_REVISION}`,
       label: `${window.slot} 均衡路線 ${index + 1}`,
-      packs: [], cityCount: 0,
+      packs: [], cityCount: 0, workload: 0,
     }));
     for (const pack of packs) {
       const count = PACK_CITY_COUNTS[pack];
       if (!count) throw new Error(`輪替城市數未設定：${pack}`);
       const route = selected.reduce((smallest, candidate) =>
-        candidate.cityCount < smallest.cityCount ? candidate : smallest);
+        candidate.workload < smallest.workload ? candidate : smallest);
       route.packs.push(pack);
       route.cityCount += count;
+      route.workload += weight(pack);
     }
     // Asia has ten country packs. For larger fleets, share the largest packs
     // instead of leaving extra devices without a route. Existing country tags
@@ -140,6 +144,7 @@ function assignmentsFor(agentIds, window, cycle, now) {
       empty.packs.push(pack);
       for (const route of [...participants, empty]) {
         route.cityCount = PACK_CITY_COUNTS[pack] / (participants.length + 1);
+        route.workload = weight(pack) / (participants.length + 1);
         route.label += "（共享國家包，獨立掃描點）";
       }
     }
@@ -189,25 +194,25 @@ export function rotationWindow(now = Date.now()) {
   };
 }
 
-export function planDailyRotation(agentIds, now = Date.now()) {
+export function planDailyRotation(agentIds, now = Date.now(), workloads = {}) {
   const agents = [...new Set(agentIds.map(String).filter(Boolean))].sort();
   const window = rotationWindow(now);
   if (!agents.length) return { ...window, assignments: [] };
   if (agents.length > MAX_ENABLED_AGENTS) throw new Error(`自動輪替最多支援 ${MAX_ENABLED_AGENTS} 個啟用 Agent`);
   return {
     ...window, cycle: window.dayOffset, dayIndex: 0,
-    assignments: assignmentsFor(agents, window, window.dayOffset, now),
+    assignments: assignmentsFor(agents, window, window.dayOffset, now, workloads),
   };
 }
 
-export function planManualRedeploy(agentIds, now = Date.now()) {
+export function planManualRedeploy(agentIds, now = Date.now(), workloads = {}) {
   const agents = [...new Set(agentIds.map(String).filter(Boolean))].sort();
   const window = rotationWindow(now);
   if (!agents.length) return { ...window, assignments: [] };
   if (agents.length > MAX_ENABLED_AGENTS) throw new Error(`手動重新分配最多支援 ${MAX_ENABLED_AGENTS} 個啟用 Agent`);
   return {
     ...window, cycle: window.dayOffset + 1, dayIndex: 0,
-    assignments: assignmentsFor(agents, window, window.dayOffset + 1, now)
+    assignments: assignmentsFor(agents, window, window.dayOffset + 1, now, workloads)
       .map((route) => ({ ...route, id: `${route.id}-manual` })),
   };
 }
@@ -215,7 +220,7 @@ export function planManualRedeploy(agentIds, now = Date.now()) {
 // The operator requested deployment now, but a fleet-wide redistribution only
 // at the next regular switch. This date-bound hold expires at 20:00 Taipei;
 // ordinary roster balancing and explicit manual redeploy remain unchanged later.
-export const REGION_PLAN_REVISION = "20261030-validated-five-cities";
+export const REGION_PLAN_REVISION = "20261103-land-balanced-southern-africa";
 export const REGION_EXPANSION_EFFECTIVE_AT = Date.parse("2026-10-30T20:00:00+08:00");
 export function holdCurrentRegionAssignments(now = Date.now()) {
   return now < REGION_EXPANSION_EFFECTIVE_AT &&
