@@ -259,9 +259,18 @@ set_system_gps() {
     *[!0-9+.,-]*) return 1 ;;
   esac
   if [ "$SYSTEM_GPS_OVERRIDE" = "1" ]; then
-    run_as_shell \
+    if ! run_as_shell \
       "cmd location providers set-test-provider-location gps --location $SYSTEM_LAT,$SYSTEM_LNG --accuracy 3" \
-      >/dev/null 2>&1 || return 1
+      >/dev/null 2>&1; then
+      # MuMu can remove its GPS manager when the last location client exits.
+      # Reuse the guarded bootstrap before retrying this same target once;
+      # otherwise every claim fails before ensure_game_running can run.
+      [ "${MUMU_CODE_CACHE_REFRESH:-0}" = 1 ] || return 1
+      ensure_system_gps_provider || return 1
+      run_as_shell \
+        "cmd location providers set-test-provider-location gps --location $SYSTEM_LAT,$SYSTEM_LNG --accuracy 3" \
+        >/dev/null 2>&1 || return 1
+    fi
   fi
   [ -n "$GPS_BRIDGE_PACKAGE" ] || return 0
   BRIDGE_TOKEN="$(date +%s)$$"
