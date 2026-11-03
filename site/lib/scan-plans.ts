@@ -1,3 +1,5 @@
+import { cityLandAllows, LAND_MASK_REVISION } from "./land-mask.mjs";
+
 export type ScanRegion = {
   name: string;
   country: string;
@@ -28,6 +30,7 @@ export type ScanConfig = {
   hopDelayS: number;
   cooldownS: number;
   loop: boolean;
+  landMaskRevision?: string;
   /** Scheduled fleet only: evenly sample this many grid points per city each cycle. */
   rotationSamplesPerCity?: number;
   rotationCitySampling?: { policy: 'berlin-3x-v1'; donorCountries: string[] };
@@ -485,9 +488,22 @@ const UKRAINE: Center[] = [
   ["基輔 Kyiv",50.4501,30.5234],["利維夫 Lviv",49.8397,24.0297],
 ];
 const KENYA: Center[] = [["奈洛比 Nairobi",-1.2921,36.8219]];
+// GeoNames cities15000, WGS84, CC BY 4.0; see docs/GLOBAL_LAND_REGIONS.md.
 const SOUTH_AFRICA: Center[] = [
   ["開普敦 Cape Town",-33.9249,18.4241],["約翰尼斯堡 Johannesburg",-26.2041,28.0473],
+  ["普勒托利亞 Pretoria",-25.74486,28.18783],["德班 Durban",-29.8579,31.0292],
+  ["吉貝哈 Gqeberha",-33.96109,25.61494],["布隆方丹 Bloemfontein",-29.12107,26.214],
 ];
+const NAMIBIA: Center[] = [["溫荷克 Windhoek",-22.55941,17.08323],
+  ["鯨灣港 Walvis Bay",-22.9575,14.50528],["斯瓦科普蒙德 Swakopmund",-22.67842,14.52663]];
+const BOTSWANA: Center[] = [["嘉柏隆里 Gaborone",-24.65451,25.90859],["法蘭西斯敦 Francistown",-21.17,27.50778]];
+const LESOTHO: Center[] = [["馬塞魯 Maseru",-29.31667,27.48333]];
+const ESWATINI: Center[] = [["墨巴本 Mbabane",-26.31667,31.13333],["曼齊尼 Manzini",-26.49884,31.38004]];
+const ZIMBABWE: Center[] = [["哈拉雷 Harare",-17.82772,31.05337],["布拉瓦約 Bulawayo",-20.15,28.58333]];
+const ZAMBIA: Center[] = [["路沙卡 Lusaka",-15.40669,28.28713],["恩多拉 Ndola",-12.95867,28.63659],
+  ["基特韋 Kitwe",-12.80243,28.21323],["李文斯頓 Livingstone",-17.84194,25.85425]];
+const MOZAMBIQUE: Center[] = [["馬布多 Maputo",-25.96553,32.58322],["貝拉 Beira",-19.84361,34.83889],
+  ["楠普拉 Nampula",-15.11646,39.2666]];
 
 // 國家目錄是擴充的唯一入口。新增歐美國家時只需要加入一個定義，
 // 排程器、後台選項與 Agent 區域偏好都會自動沿用。
@@ -552,6 +568,13 @@ export const COUNTRY_PACK_CATALOG = [
   { id: "ua", name: "烏克蘭", region: "東歐", cities: UKRAINE },
   { id: "ke", name: "肯亞", region: "東非", cities: KENYA },
   { id: "za", name: "南非", region: "南部非洲", cities: SOUTH_AFRICA },
+  { id: "na", name: "納米比亞", region: "南部非洲", cities: NAMIBIA },
+  { id: "bw", name: "波札那", region: "南部非洲", cities: BOTSWANA },
+  { id: "ls", name: "賴索托", region: "南部非洲", cities: LESOTHO },
+  { id: "sz", name: "史瓦帝尼", region: "南部非洲", cities: ESWATINI },
+  { id: "zw", name: "辛巴威", region: "南部非洲擴展", cities: ZIMBABWE },
+  { id: "zm", name: "尚比亞", region: "南部非洲擴展", cities: ZAMBIA },
+  { id: "mz", name: "莫三比克", region: "南部非洲擴展", cities: MOZAMBIQUE },
   { id: "gt", name: "瓜地馬拉", region: "中美洲", cities: GUATEMALA },
   { id: "hn", name: "宏都拉斯", region: "中美洲", cities: HONDURAS },
   { id: "sv", name: "薩爾瓦多", region: "中美洲", cities: EL_SALVADOR },
@@ -618,6 +641,7 @@ export function normalizeScanConfig(input: unknown): ScanConfig {
     // 的說明），跨城市現在真的固定等這麼多秒，不會因為距離遠而被拉長。
     cooldownS: bounded(body.cooldownS ?? 10, 0, 300, "跨城市冷卻"),
     loop: body.loop !== false,
+    ...(mode === "auto" ? { landMaskRevision: LAND_MASK_REVISION } : {}),
     ...(body.rotationSamplesPerCity == null ? {} : {
       rotationSamplesPerCity: bounded(body.rotationSamplesPerCity, 1, 32, "每城輪替取樣點數"),
     }),
@@ -739,7 +763,21 @@ export function buildScanPlan(
   const cycle = Math.max(0, Math.floor(options.cycle ?? 0));
   const phase = config.scanProfile === "global" ? gridPhaseForCycle(cycle) : [0, 0] as const;
   let previous = currentLocation ?? null;
-  const grids=regions.map(region=>grid(region,config.gridStepM,phase));
+  // Filter BEFORE sparse sampling and Berlin weighting. A zero-land city is
+  // explicit failure, never a fallback to an unverified city centre or sea.
+  const grids=regions.map(region=> {
+    const raw = grid(region,config.gridStepM,phase);
+    if (config.mode === "custom") return raw;
+    const allows = (p: {lat:number;lng:number}) => cityLandAllows(region.country,region.name,
+      Number(p.lat.toFixed(7)),Number(p.lng.toFixed(7)));
+    let land = raw.filter(allows);
+    // A coarse phase can miss a narrow peninsula completely. Search the same
+    // bounds at mask resolution only when empty; still admit verified land
+    // cells only, keep the sparse budget, and never expand offshore/bounds.
+    if (!land.length && config.gridStepM > 100) land = grid(region,100,phase).filter(allows);
+    if (!land.length) throw new Error(`城市無可用陸地掃描點：${region.country}/${region.name}`);
+    return land;
+  });
   const limits=grids.map(points=>Math.min(points.length,config.rotationSamplesPerCity??points.length));
   const policy=config.rotationCitySampling;
   if(policy?.policy==='berlin-3x-v1' && config.rotationSamplesPerCity) {

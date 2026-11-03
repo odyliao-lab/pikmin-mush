@@ -36,6 +36,38 @@ type RotationRunRow = {
   updated_at: number;
 };
 
+// Cache pure geometry work, not fleet membership/qualification or database
+// state. Every claim still checks the live roster and verification guards.
+const workloadCache = new Map<string, Record<string, number>>();
+type BalancedRotation = {
+  slot: string; localDate: string; scheduleDate: string; nextSwitchAt: number;
+  assignments: Array<{agentId:string;id:string;label:string;packs:string[];cityCount:number;workload:number}>;
+};
+async function balancedPlan(agentIds: string[], now: number, manual = false): Promise<BalancedRotation> {
+  const planner = manual ? planManualRedeploy : planDailyRotation;
+  const provisional = planner(agentIds, now) as BalancedRotation;
+  const latest = await runtime().DB.prepare("SELECT config_json FROM scan_jobs ORDER BY id DESC LIMIT 1")
+    .first<{config_json: string}>();
+  let base: unknown = {};
+  try { base = JSON.parse(latest?.config_json ?? "{}"); } catch { /* defaults */ }
+  const packs = [...new Set(provisional.assignments.flatMap(a=>a.packs))] as string[];
+  const config = scanConfig(base, packs, agentIds.length, provisional.slot, provisional.assignments);
+  // Berlin redistributes its owner's fixed budget, so base per-pack valid
+  // point counts are the balancing cost, before that intra-route transfer.
+  const baseline = {...config, rotationCitySampling: undefined};
+  const key = JSON.stringify(baseline);
+  let workloads = workloadCache.get(key);
+  if (!workloads) {
+    const counts = new Map<string, number>();
+    for (const target of buildScanPlan(baseline).targets)
+      counts.set(target.country, (counts.get(target.country) ?? 0) + 1);
+    workloads = Object.fromEntries(packs.map(id=>[id, counts.get(packNames([id])[0]) ?? 0]));
+    if (workloadCache.size >= 8) workloadCache.clear();
+    workloadCache.set(key, workloads);
+  }
+  return planner(agentIds, now, workloads) as BalancedRotation;
+}
+
 function packNames(packIds: string[]) {
   return packIds.map((id) => {
     const pack = COUNTRY_PACK_CATALOG.find((item) => item.id === id);
@@ -62,6 +94,9 @@ function scanConfig(base: unknown, packs: string[], agentCount: number, slot: st
     // Do not inherit a one-off 500m precision run into a scheduled rotation
     // rotation, otherwise the queue can unexpectedly grow fourfold.
     scanProfile: "global",
+    // A saved tiny one-off radius must not silently make 24 Berlin points
+    // impossible. Keep larger footprints; the sparse queue budget is unchanged.
+    radiusKm: Math.max(3, Number(previous.radiusKm ?? 8)),
     rotationSamplesPerCity: samplesPerCity,
     // Explicitly clear inherited weighting outside noon's EMEA window.
     rotationCitySampling: slot==='emea' ? {policy:'berlin-3x-v1',
@@ -72,7 +107,8 @@ function scanConfig(base: unknown, packs: string[], agentCount: number, slot: st
 
 async function stopActiveJobs(now: number, slotLabel: string) {
   const db = runtime().DB;
-  const guard="NOT EXISTS(SELECT 1 FROM controller_dispatches WHERE state='active')";
+  const guard="NOT EXISTS(SELECT 1 FROM controller_dispatches WHERE state='active') AND " +
+    "NOT EXISTS(SELECT 1 FROM scan_targets WHERE verification_kind<>'' AND status IN ('queued','leased'))";
   await db.batch([
     db.prepare(`UPDATE scan_targets SET status='cancelled', lease_agent_id='',
       lease_token='', lease_expires_at=0, updated_at=?
@@ -87,6 +123,9 @@ async function stopActiveJobs(now: number, slotLabel: string) {
   ]);
   const active=await db.prepare("SELECT COUNT(*) AS count FROM controller_dispatches WHERE state='active'").first<{count:number}>();
   if(Number(active?.count??0)>0)throw new Error('正式複查回程驗收尚未完成，保留原工作並延後換區');
+  const pending=await db.prepare("SELECT COUNT(*) AS count FROM scan_targets WHERE verification_kind<>'' AND status IN ('queued','leased')")
+    .first<{count:number}>();
+  if(Number(pending?.count??0)>0)throw new Error('正式複查目標尚未完成，保留原工作並延後換區');
 }
 
 export async function ensureDailyRotation(now = Date.now()) {
@@ -113,7 +152,7 @@ export async function ensureDailyRotation(now = Date.now()) {
     .first<{ count: number }>();
   if (Number(pendingVerification?.count ?? 0) > 0) return null;
 
-  const planned = planDailyRotation(agents.map((agent) => agent.id), now);
+  const planned = await balancedPlan(agents.map((agent) => agent.id), now);
   const existing = await db.prepare(
     "SELECT * FROM scan_rotation_runs WHERE schedule_date=?",
   ).bind(planned.scheduleDate).first<RotationRunRow>();
@@ -282,20 +321,14 @@ export async function redeployDailyRotation(now = Date.now()) {
 
   const pendingVerification = await db.prepare(`SELECT COUNT(*) AS count
     FROM scan_targets
-    WHERE (verification_kind='candidate' OR verification_kind='candidate-giant' OR verification_kind='giant-recheck')
+    WHERE verification_kind<>''
       AND status IN ('queued','leased')`)
     .first<{ count: number }>();
   if (Number(pendingVerification?.count ?? 0) > 0) {
-    // A deliberate manual redeploy means the operator chose scanning coverage
-    // over an in-flight notification check.  Cancel only verification targets;
-    // ordinary scan targets are replaced below by the new route plan.
-    await db.prepare(`UPDATE scan_targets SET status='cancelled', lease_agent_id='',
-      lease_token='', lease_expires_at=0, updated_at=?
-      WHERE (verification_kind='candidate' OR verification_kind='candidate-giant') AND status IN ('queued','leased')`)
-      .bind(now).run();
+    throw new Error('正式複查目標仍在排隊或租用，保留原工作並延後重新分配');
   }
 
-  const planned = planManualRedeploy(agents.map((agent) => agent.id), now);
+  const planned = await balancedPlan(agents.map((agent) => agent.id), now, true);
   const latest = await db.prepare("SELECT config_json FROM scan_jobs ORDER BY id DESC LIMIT 1")
     .first<{ config_json: string }>();
   let previousConfig: unknown = {};

@@ -7,6 +7,7 @@ import {webcrypto} from 'node:crypto';
 import ts from 'typescript';
 import * as policy from '../lib/fleet-policy.mjs';
 import * as plans from '../lib/rotation-plan.mjs';
+import * as landMask from '../lib/land-mask.mjs';
 
 function load(path, dependencies = {}, extra = '') {
   const exports = {};
@@ -16,7 +17,7 @@ function load(path, dependencies = {}, extra = '') {
       require(name) { assert.ok(Object.hasOwn(dependencies,name),name); return dependencies[name]; }});
   return exports;
 }
-const catalog = load('lib/scan-plans.ts');
+const catalog = load('lib/scan-plans.ts',{'./land-mask.mjs':landMask});
 
 function fixture(t, count=5) {
   const sql = new DatabaseSync(':memory:'); t.after(()=>sql.close());
@@ -182,4 +183,34 @@ test('region expansion keeps the current job and lease when Virgo rejoins; next 
   const packs=JSON.parse(expanded.assignments_json).flatMap(a=>a.packs);
   for(const id of added)assert.equal(packs.filter(p=>p===id).length,1);
   for(const country of addedCountries)assert.ok(f.sql.prepare('SELECT COUNT(*) n FROM scan_targets WHERE job_id=? AND country=?').get(expanded.job_id,country).n>0);
+});
+
+test('legacy queued verification kinds block manual redeploy without cancellation or agent changes',async t=>{
+  const f=fixture(t,9);
+  const first=await f.rotation.ensureDailyRotation(f.now);
+  const target=f.sql.prepare('SELECT id FROM scan_targets WHERE job_id=? LIMIT 1').get(first.job_id).id;
+  f.sql.prepare("UPDATE scan_targets SET verification_kind='return',status='leased',lease_agent_id='a0',lease_token='fixture' WHERE id=?").run(target);
+  const before=f.sql.prepare('SELECT id,status,lease_agent_id,lease_token FROM scan_targets WHERE id=?').get(target);
+  const tags=f.sql.prepare('SELECT id,region_tags_json FROM scan_agents ORDER BY id').all();
+  await assert.rejects(()=>f.rotation.redeployDailyRotation(f.now+1000),/正式複查/);
+  assert.equal(await f.rotation.ensureDailyRotation(f.now+1000),null);
+  assert.deepEqual(f.sql.prepare('SELECT id,status,lease_agent_id,lease_token FROM scan_targets WHERE id=?').get(target),before);
+  assert.deepEqual(f.sql.prepare('SELECT id,region_tags_json FROM scan_agents ORDER BY id').all(),tags);
+  assert.equal(f.sql.prepare('SELECT COUNT(*) n FROM scan_jobs').get().n,1);
+});
+
+test('changed automatic route revision reconciles once, preserving the original next switch',async t=>{
+  const f=fixture(t,9);
+  const first=await f.rotation.ensureDailyRotation(f.now);
+  const old=JSON.parse(first.assignments_json).map(a=>({...a,id:a.id+'-legacy'}));
+  f.sql.prepare('UPDATE scan_rotation_runs SET assignments_json=? WHERE schedule_date=?').run(JSON.stringify(old),first.schedule_date);
+  const next=await f.rotation.ensureDailyRotation(f.now+1000);
+  assert.notEqual(next.job_id,first.job_id);
+  assert.equal(f.sql.prepare('SELECT status FROM scan_jobs WHERE id=?').get(first.job_id).status,'cancelled');
+  const again=await f.rotation.ensureDailyRotation(f.now+2000);
+  assert.equal(again.job_id,next.job_id);
+  assert.equal(f.sql.prepare('SELECT COUNT(*) n FROM scan_jobs').get().n,2);
+  const config=JSON.parse(f.sql.prepare('SELECT config_json FROM scan_jobs WHERE id=?').get(next.job_id).config_json);
+  assert.equal(config.landMaskRevision,landMask.LAND_MASK_REVISION);
+  assert.equal(plans.rotationWindow(f.now).nextSwitchAt,plans.rotationWindow(f.now+2000).nextSwitchAt);
 });
