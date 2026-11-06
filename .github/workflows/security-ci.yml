@@ -44,6 +44,7 @@ jobs:
           bash phone_agent/tests/map-entry-test.sh
           bash phone_agent/tests/visual-recovery-test.sh
           bash phone_agent/tests/popup-recovery-test.sh
+          bash phone_agent/tests/daily-recap-test.sh
           bash phone_agent/tests/scan-recovery-test.sh
           bash phone_agent/tests/teleport-file-test.sh
           bash phone_agent/tests/gps-provider-test.sh

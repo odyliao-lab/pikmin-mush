@@ -96,7 +96,19 @@ for kind, sw, sh, sx, sy, prefix in templates:
                 edge = bytearray(data)
                 paint(edge,w,[(580,1967,*color)])
                 check(edge, f'{kind} {x} {y}')
-    if kind != 'dashboard':
+    if kind in ('recap', 'recapmood'):
+        # Full-screen daily controls have independent top/bottom anchors.
+        # Do not translate them as if they were centered warning dialogs.
+        for dy in (16, 80):
+            shifted = blank(w,h)
+            for group in ('frame','text','button'):
+                paint(shifted,w,groups[prefix+'_'+group],dy)
+            check(shifted, 'unknown')
+        for color in ((255,255,255), (0,0,0), (30,160,100)):
+            bad_text = bytearray(data)
+            paint(bad_text,w,[(px,py,*color) for px,py,*_ in groups[prefix+'_text']])
+            check(bad_text, 'unknown')
+    if kind not in ('dashboard', 'recap', 'recapmood'):
         shifted = blank(w,h)
         for group in ('frame','text','button'):
             paint(shifted,w,groups[prefix+'_'+group],16)

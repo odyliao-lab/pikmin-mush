@@ -110,3 +110,18 @@ game_tap() { :; }
 if popup_recover >"$TMP/outcome"; then exit 1; else [ "$?" = 2 ]; fi
 if grep -q 'screen state changed\|verified recovery' "$TMP/outcome"; then exit 1; fi
 echo 'popup post-input outcome/final-focus/protection tests passed'
+
+# Daily recap controls never authorize a tap or a personal mood choice.
+scan_can_run() { :; }
+popup_daily_restart() { printf '%s\n' "$1" >>"$TMP/daily"; }
+for STATE in 'recap 540 2155' 'recapmood 540 1650'; do
+  POPUP_DAILY_RECAP_ENABLED=0
+  popup_recover >"$TMP/outcome"
+  [ ! -e "$TMP/daily" ]
+  POPUP_DAILY_RECAP_ENABLED=1
+  popup_recover >"$TMP/outcome"
+  [ "$(tail -n 1 "$TMP/daily")" = "$STATE" ]
+  rm "$TMP/daily"
+done
+[ "$(wc -l <"$TMP/outcome-input")" -eq 1 ]
+echo 'daily recap opt-in/no-personal-input tests passed'

@@ -18,9 +18,102 @@ popup_state() {
 }
 
 popup_actionable() {
-  case "$1" in driving|restricted|danger|speed|dashboard) ;; *) return 1;; esac
+  case "$1" in driving|restricted|danger|speed|dashboard|recap|recapmood) ;; *) return 1;; esac
+  case "$1" in recap|recapmood) [ "${POPUP_DAILY_RECAP_ENABLED:-0}" = 1 ] || return 1;; esac
   case "$2,$3" in *[!0-9,]*|,*|*,) return 1;; esac
   [ "$2" -gt 0 ] && [ "$2" -lt 1440 ] && [ "$3" -gt 0 ] && [ "$3" -lt 3120 ]
+}
+
+# This runs in a subshell: strict failures cannot terminate the owning Agent.
+# Keep the complete uploader/auth/pending state on the device, never in logs.
+popup_daily_backup() {
+  # A separate shell keeps -e effective even when our caller tests this
+  # function's exit status (POSIX functions otherwise inherit ignored errexit).
+  MODDIR="$MODDIR" APP_FILES="$APP_FILES" OFFSET_FILE="$OFFSET_FILE" TSV="$TSV" sh -eu <<'DAILY_BACKUP'
+  umask 077
+  [ "$(id -u)" = 0 ]
+  [ -d "$MODDIR" ] && [ ! -L "$MODDIR" ]
+  [ -s "$MODDIR/config" ] && [ ! -L "$MODDIR/config" ]
+  [ -s "$OFFSET_FILE" ] && [ -f "$TSV" ] && [ ! -L "$TSV" ]
+  POPUP_ROOT=/data/adb/pikmin-ops
+  [ ! -L "$POPUP_ROOT" ]
+  POPUP_FREE=$(df -Pk /data | awk 'NR==2 {print $4}')
+  POPUP_NEED=$((4 * ($(du -sk "$MODDIR" | awk '{print $1}') + $(stat -c %s "$TSV") / 1024 + 1) + 262144))
+  [ "$POPUP_FREE" -ge "$POPUP_NEED" ]
+  POPUP_B="$POPUP_ROOT/$(date +%s)-daily-recap-$$"
+  [ ! -e "$POPUP_B" ]
+  mkdir -p "$POPUP_B/payload/game" "$POPUP_B/verified"
+  chmod 700 "$POPUP_ROOT" "$POPUP_B" "$POPUP_B/payload" "$POPUP_B/payload/game" "$POPUP_B/verified"
+  cp -a "$MODDIR" "$POPUP_B/payload/module"
+  # Read offset before copying the append-only TSV. This is a live snapshot,
+  # not an atomic database snapshot; its copied offset must fit its copied TSV.
+  cp -p "$OFFSET_FILE" "$POPUP_B/payload/module/upload.offset"
+  for POPUP_FILE in "$APP_FILES"/*; do
+    [ -f "$POPUP_FILE" ] || continue
+    case "${POPUP_FILE##*/}" in
+      mushrooms.tsv|teleport.txt|native.ready|scan.ready|map_query.ready|*.pending*|*.ack*)
+        [ ! -L "$POPUP_FILE" ]; cp -p "$POPUP_FILE" "$POPUP_B/payload/game/" ;;
+    esac
+  done
+  POPUP_OFFSET=$(cat "$POPUP_B/payload/module/upload.offset")
+  case "$POPUP_OFFSET" in ''|*[!0-9]*) exit 1;; esac
+  [ "$POPUP_OFFSET" -le "$(stat -c %s "$POPUP_B/payload/game/mushrooms.tsv")" ]
+  chown -R 0:0 "$POPUP_B"
+  chmod -R go-rwx "$POPUP_B"
+  (cd "$POPUP_B/payload"; find . -type f -exec sha256sum {} \;) >"$POPUP_B/manifest.sha256"
+  tar -cf "$POPUP_B/snapshot.tar" -C "$POPUP_B" payload manifest.sha256
+  chmod 600 "$POPUP_B/snapshot.tar"
+  tar -xf "$POPUP_B/snapshot.tar" -C "$POPUP_B/verified"
+  (cd "$POPUP_B/verified/payload"; sha256sum -c ../manifest.sha256 >/dev/null)
+  [ "$(stat -c %u:%a "$POPUP_B")" = 0:700 ]
+  [ "$(stat -c %u:%a "$POPUP_B/snapshot.tar")" = 0:600 ]
+  printf '%s\n' "$POPUP_B"
+DAILY_BACKUP
+}
+
+popup_daily_restart() {
+  [ "${POPUP_DAILY_RECAP_ENABLED:-0}" = 1 ] &&
+    [ "${SCAN_RECOVERY_ENABLED:-0}" = 1 ] || return 1
+  scan_can_run || return 2
+  scan_recovery_restart_allowed || return 1
+  POPUP_BOOT=$(cat /proc/sys/kernel/random/boot_id) || return 1
+  read -r POPUP_CLOCK POPUP_UNUSED </proc/uptime || return 1
+  POPUP_CLOCK=${POPUP_CLOCK%%.*}
+  if [ -e "$MODDIR/popup.recap.last-restart" ]; then
+    read -r POPUP_OLD_BOOT POPUP_OLD_TIME <"$MODDIR/popup.recap.last-restart" || return 1
+    case "$POPUP_OLD_TIME" in ''|*[!0-9]*) return 1;; esac
+    if [ "$POPUP_BOOT" = "$POPUP_OLD_BOOT" ] && [ $((POPUP_CLOCK - POPUP_OLD_TIME)) -lt 21600 ]; then
+      echo '[popup] daily recap restart deferred reason=six-hour-limit'
+      return 1
+    fi
+  fi
+  if ! POPUP_BACKUP=$(popup_daily_backup); then
+    echo '[popup] daily recap restart blocked reason=backup-failed'
+    return 1
+  fi
+  scan_can_run || return 2
+  # Backup may take time. Reconfirm the exact classified screen and focus.
+  [ "$(popup_state)" = "$1" ] && popup_foreground || return 1
+  POPUP_CONTROL=$(scan_control)
+  case "$POPUP_CONTROL" in pause|stop) return 2;; esac
+  scan_can_run && popup_foreground || return 2
+  # Persist the attempt BEFORE changing the game, including failed launches.
+  (umask 077; printf '%s %s\n' "$POPUP_BOOT" "$POPUP_CLOCK" >"$MODDIR/popup.recap.last-restart") || return 1
+  scan_recovery_started || return 1
+  echo "[popup] daily recap cold launch backup=$POPUP_BACKUP"
+  run_as_shell "am force-stop $PKG" >/dev/null 2>&1 || return 1
+  POPUP_STOP_LEFT=15
+  while pidof "$PKG" >/dev/null 2>&1 && [ "$POPUP_STOP_LEFT" -gt 0 ]; do
+    sleep 1; POPUP_STOP_LEFT=$((POPUP_STOP_LEFT - 1))
+  done
+  if pidof "$PKG" >/dev/null 2>&1; then
+    echo '[popup] daily recap cold launch blocked reason=process-still-alive'
+    return 1
+  fi
+  scan_can_run || return 2
+  launch_game || return $?
+  scan_recovery_wait_native || return $?
+  echo '[popup] daily recap new native session ready; scan acceptance pending'
 }
 
 popup_recover() {
@@ -40,6 +133,13 @@ popup_recover() {
     # The guard can take time or change the foreground (for example stopping
     # the game for charging protection). Recheck focus after that final guard.
     popup_foreground || return 0
+    case "$1" in recap|recapmood)
+      # The final recap leads to a personal mood choice, with no observed skip.
+      # Never choose a mood or share. Use one backed-up, throttled cold launch.
+      popup_daily_restart "$POPUP_B" || return $?
+      return 0
+      ;;
+    esac
     POPUP_INPUT_ALLOWED=1
     POPUP_TAP_RESULT=0
     game_tap "$2" "$3" || POPUP_TAP_RESULT=$?
