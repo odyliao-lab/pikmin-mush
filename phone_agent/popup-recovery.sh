@@ -96,8 +96,13 @@ popup_daily_restart() {
   scan_can_run || return 2
   # Backup may take time. Reconfirm the exact classified screen and focus.
   [ "$(popup_state)" = "$1" ] && popup_foreground || return 1
-  POPUP_CONTROL=$(scan_control)
-  case "$POPUP_CONTROL" in pause|stop) return 2;; esac
+  if ! POPUP_CONTROL=$(scan_control); then
+    echo '[popup] daily recap restart blocked reason=control-unavailable'
+    return 1
+  fi
+  # Ordinary dwell polling is advisory, but this new destructive action needs
+  # positive permission for the current formal target. Empty/errors fail closed.
+  [ "$POPUP_CONTROL" = run ] || return 2
   scan_can_run && popup_foreground || return 2
   # Persist the attempt BEFORE changing the game, including failed launches.
   (umask 077; printf '%s %s\n' "$POPUP_BOOT" "$POPUP_CLOCK" >"$MODDIR/popup.recap.last-restart") || return 1

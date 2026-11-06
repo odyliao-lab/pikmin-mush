@@ -5,13 +5,13 @@ ROOT=$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)
 TMP=$(mktemp -d)
 trap 'rm -rf "$TMP"' EXIT
 MODDIR=$TMP PKG=test POPUP_DAILY_RECAP_ENABLED=1 SCAN_RECOVERY_ENABLED=1
-STATE='recap 540 2155' BLOCK=0 FOCUS=1 CONTROL=scan BACKUP_FAIL=0 START_FAIL=0
+STATE='recap 540 2155' BLOCK=0 FOCUS=1 CONTROL=run BACKUP_FAIL=0 START_FAIL=0
 scan_can_run() { [ "$BLOCK" = 0 ]; }
 scan_recovery_restart_allowed() { [ "${THROTTLE:-0}" = 0 ]; }
 popup_daily_backup() { [ "$BACKUP_FAIL" = 0 ] && echo /private/verified; }
 popup_state() { echo "$STATE"; }
 popup_foreground() { [ "$FOCUS" = 1 ]; }
-scan_control() { echo "$CONTROL"; }
+scan_control() { echo "$CONTROL"; [ "$CONTROL" != error ]; }
 cat() { if [ "$1" = /proc/sys/kernel/random/boot_id ]; then echo test-boot; else command cat "$@"; fi; }
 read() {
   if [ "$2" = POPUP_CLOCK ]; then POPUP_CLOCK=${NOW:-1000}; POPUP_UNUSED=0
@@ -28,18 +28,19 @@ scan_recovery_wait_native() {
   echo native >>"$TMP/actions"
   [ "${NATIVE_FAIL:-0}" = 0 ]
 }
-for scenario in optout disabled pause throttle backup focus changed control; do
-  POPUP_DAILY_RECAP_ENABLED=1 SCAN_RECOVERY_ENABLED=1 BLOCK=0 THROTTLE=0 BACKUP_FAIL=0 FOCUS=1 CONTROL=scan
+for scenario in optout disabled pause throttle backup focus changed control empty error unknown; do
+  POPUP_DAILY_RECAP_ENABLED=1 SCAN_RECOVERY_ENABLED=1 BLOCK=0 THROTTLE=0 BACKUP_FAIL=0 FOCUS=1 CONTROL=run
   EXPECT=$STATE
   case "$scenario" in
     optout) POPUP_DAILY_RECAP_ENABLED=0;; disabled) SCAN_RECOVERY_ENABLED=0;;
     pause) BLOCK=1;; throttle) THROTTLE=1;; backup) BACKUP_FAIL=1;; focus) FOCUS=0;;
     changed) EXPECT='recapmood 540 1650';; control) CONTROL=pause;;
+    empty) CONTROL='';; error) CONTROL=error;; unknown) CONTROL=unknown;;
   esac
   if popup_daily_restart "$EXPECT"; then echo "unsafe acceptance: $scenario"; exit 1; fi
   [ ! -e "$TMP/actions" ] && [ ! -e "$TMP/popup.recap.last-restart" ]
 done
-CONTROL=scan
+CONTROL=run
 popup_daily_restart "$STATE"
 [ "$POPUP_RECOVERY_ACTIVE" = 1 ] && [ "$POPUP_DAILY_RESTART_ACTIVE" = 0 ]
 grep -q 'am force-stop test' "$TMP/actions"
