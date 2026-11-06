@@ -444,6 +444,8 @@ void il2cpp_dump(const char *outDir) {
 #define TARGET_PIKMIN_155_VERSION_CODE 1791279164
 #define TARGET_PIKMIN_156_VERSION "156.0"
 #define TARGET_PIKMIN_156_VERSION_CODE 1792142832
+#define TARGET_PIKMIN_1561_VERSION "156.1"
+#define TARGET_PIKMIN_1561_VERSION_CODE 1793076318
 // 152.0 retains the MapManager registration callback that receives the
 // MapPoiBlocker instances used by the scanner.  MapObjectManager has a distinct
 // two-argument UI registration method, but it is not the callback that
@@ -474,6 +476,10 @@ void il2cpp_dump(const char *outDir) {
 #define RVA156_MapObjectManager_RegisterMapObject 0x5B32FF4
 #define RVA156_LocationController_Update 0x72B6564
 #define RVA156_SetOverride 0x72B70C4
+// 156.1 exact ARM64 ELF; mapped RVAs verified against installed APK.
+#define RVA1561_MapObjectManager_RegisterMapObject 0x5B42820
+#define RVA1561_LocationController_Update 0x72CEF78
+#define RVA1561_SetOverride 0x72CFAD8
 
 static const uint8_t SIG_RegisterMapObject[] = {
     0xFE, 0x67, 0xBC, 0xA9, 0xF8, 0x5F, 0x01, 0xA9,
@@ -496,6 +502,26 @@ static const uint8_t SIG153_MapObjectManager_RegisterMapObject[] = {
     0xF4, 0x4F, 0x02, 0xA9, 0x01, 0x03, 0x00, 0xB4,
     0xF3, 0x03, 0x01, 0xAA, 0xF4, 0x03, 0x00, 0xAA,
     0xE0, 0x03, 0x01, 0xAA, 0xE1, 0x03, 0x1F, 0xAA,
+};
+
+// Exact 156.1 entrypoint bytes independently checked against the installed ELF.
+static const uint8_t SIG1561_Register[] = {
+    0xFE, 0x0F, 0x1D, 0xF8, 0xF6, 0x57, 0x01, 0xA9,
+    0xF4, 0x4F, 0x02, 0xA9, 0x01, 0x03, 0x00, 0xB4,
+    0xF3, 0x03, 0x01, 0xAA, 0xF4, 0x03, 0x00, 0xAA,
+    0xE0, 0x03, 0x01, 0xAA, 0xE1, 0x03, 0x1F, 0xAA
+};
+static const uint8_t SIG1561_Update[] = {
+    0xFF, 0x43, 0x03, 0xD1, 0xE8, 0x4B, 0x00, 0xFD,
+    0xFE, 0x5F, 0x0A, 0xA9, 0xF6, 0x57, 0x0B, 0xA9,
+    0xF4, 0x4F, 0x0C, 0xA9, 0x55, 0xD0, 0x3B, 0xD5,
+    0x94, 0x0E, 0x04, 0xB0, 0xF3, 0x03, 0x00, 0xAA
+};
+static const uint8_t SIG1561_Override[] = {
+    0xFF, 0xC3, 0x01, 0xD1, 0xFE, 0x23, 0x00, 0xF9,
+    0xF6, 0x57, 0x05, 0xA9, 0xF4, 0x4F, 0x06, 0xA9,
+    0x95, 0x0E, 0x04, 0x90, 0xF4, 0x03, 0x01, 0xAA,
+    0xF3, 0x03, 0x00, 0xAA, 0xA8, 0xBA, 0x60, 0x39
 };
 
 static bool target_signature_matches(const void *target, const uint8_t *expected,
@@ -1007,6 +1033,9 @@ void install_hooks(const char *game_data_dir) {
     void *target156 = (void *) (il2cpp_base + RVA156_MapObjectManager_RegisterMapObject);
     void *update156 = (void *) (il2cpp_base + RVA156_LocationController_Update);
     void *override156 = (void *) (il2cpp_base + RVA156_SetOverride);
+    void *target1561 = (void *) (il2cpp_base + RVA1561_MapObjectManager_RegisterMapObject);
+    void *update1561 = (void *) (il2cpp_base + RVA1561_LocationController_Update);
+    void *override1561 = (void *) (il2cpp_base + RVA1561_SetOverride);
     const bool is152 =
         target_signature_matches(target152, SIG_RegisterMapObject,
                                  sizeof(SIG_RegisterMapObject)) &&
@@ -1042,19 +1071,26 @@ void install_hooks(const char *game_data_dir) {
                                  sizeof(SIG_LocationController_Update)) &&
         target_signature_matches(override156, SIG_SetOverride,
                                  sizeof(SIG_SetOverride));
-    if (!is152 && !is153 && !is154 && !is155 && !is156) {
+    const bool is1561 = !is152 && !is153 && !is154 && !is155 && !is156 &&
+        target_signature_matches(target1561, SIG1561_Register,
+                                 sizeof(SIG1561_Register)) &&
+        target_signature_matches(update1561, SIG1561_Update,
+                                 sizeof(SIG1561_Update)) &&
+        target_signature_matches(override1561, SIG1561_Override,
+                                 sizeof(SIG1561_Override));
+    if (!is152 && !is153 && !is154 && !is155 && !is156 && !is1561) {
         LOGE("[HOOK] no supported Pikmin profile matched; refusing hooks");
         return;
     }
-    void *target = is156 ? target156 : (is155 ? target155 : (is152 ? target152 : (is153 ? target153 : target154)));
-    void *upd = is156 ? update156 : (is155 ? update155 : (is152 ? update152 : (is153 ? update153 : update154)));
-    void *set_override = is156 ? override156 : (is155 ? override155 : (is152 ? override152 : (is153 ? override153 : override154)));
-    const char *profile_version = is156 ? TARGET_PIKMIN_156_VERSION :
+    void *target = is1561 ? target1561 : (is156 ? target156 : (is155 ? target155 : (is152 ? target152 : (is153 ? target153 : target154))));
+    void *upd = is1561 ? update1561 : (is156 ? update156 : (is155 ? update155 : (is152 ? update152 : (is153 ? update153 : update154))));
+    void *set_override = is1561 ? override1561 : (is156 ? override156 : (is155 ? override155 : (is152 ? override152 : (is153 ? override153 : override154))));
+    const char *profile_version = is1561 ? TARGET_PIKMIN_1561_VERSION : (is156 ? TARGET_PIKMIN_156_VERSION :
         (is155 ? TARGET_PIKMIN_155_VERSION : (is152 ? TARGET_PIKMIN_152_VERSION :
-        (is153 ? TARGET_PIKMIN_153_VERSION : TARGET_PIKMIN_154_VERSION)));
-    const int profile_version_code = is156 ? TARGET_PIKMIN_156_VERSION_CODE :
+        (is153 ? TARGET_PIKMIN_153_VERSION : TARGET_PIKMIN_154_VERSION))));
+    const int profile_version_code = is1561 ? TARGET_PIKMIN_1561_VERSION_CODE : (is156 ? TARGET_PIKMIN_156_VERSION_CODE :
         (is155 ? TARGET_PIKMIN_155_VERSION_CODE : (is152 ? TARGET_PIKMIN_152_VERSION_CODE :
-        (is153 ? TARGET_PIKMIN_153_VERSION_CODE : TARGET_PIKMIN_154_VERSION_CODE)));
+        (is153 ? TARGET_PIKMIN_153_VERSION_CODE : TARGET_PIKMIN_154_VERSION_CODE))));
     LOGI("[HOOK] verified Pikmin %s (%d) libil2cpp signatures",
          profile_version, profile_version_code);
     snprintf(g_mush_path, sizeof(g_mush_path), "%s/files/mushrooms.tsv", game_data_dir);
@@ -1063,7 +1099,7 @@ void install_hooks(const char *game_data_dir) {
     snprintf(g_native_ready_path, sizeof(g_native_ready_path), "%s/files/native.ready", game_data_dir);
     unlink(g_native_ready_path);
     g_native_version=profile_version;
-    if (is155 || is156) {
+    if (is155 || is156 || is1561) {
         char path[512];
         snprintf(path,sizeof(path),"%s/files/scanner-render-fps.txt",game_data_dir);
         FILE *f=fopen(path,"r");
