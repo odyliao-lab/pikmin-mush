@@ -131,6 +131,11 @@ VISUAL_RECOVERY_ENABLED=0
 # manual pause, foreground checks and stock power/thermal guard decisions.
 POPUP_RECOVERY_ENABLED=0
 POPUP_RECOVERY_INTERVAL_SECONDS=30
+# Calibrated 156.1 Traditional Chinese daily recap/mood screens on 1080x2400
+# and 1080x2160 only. Preserve data, never fill a mood/share; verify a root-only
+# on-device snapshot before a cold launch. Requires SCAN_RECOVERY_ENABLED=1.
+# Existing cold-start throttle + one recap attempt per six hours per boot.
+POPUP_DAILY_RECAP_ENABLED=0
 # Requires Hunter with PID-bound native.ready support; preserve opt-out on older modules.
 SCAN_RECOVERY_ENABLED=0
 SCAN_RESTART_MIN_SECONDS=300

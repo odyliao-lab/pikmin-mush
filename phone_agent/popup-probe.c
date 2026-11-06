@@ -49,12 +49,13 @@ int main(int argc, char **argv) {
     for (size_t i = 0; i < sizeof(popup_templates)/sizeof(popup_templates[0]); ++i) {
         const PopupTemplate *t = &popup_templates[i];
         if (t->width != (int)h[0]) continue;
-        int dashboard = !strcmp(t->kind, "dashboard");
-        if (dashboard && t->height != (int)h[1]) continue;
+        int fixed = !strcmp(t->kind, "dashboard") ||
+                    !strcmp(t->kind, "recap") || !strcmp(t->kind, "recapmood");
+        if (fixed && t->height != (int)h[1]) continue;
         /* Notices may move with navigation-bar insets; all three independent
          * control/text groups must agree at the SAME translation. */
-        int center = dashboard ? 0 : ((int)h[1] - t->height)/2;
-        int range = dashboard ? 0 : 24;
+        int center = fixed ? 0 : ((int)h[1] - t->height)/2;
+        int range = fixed ? 0 : 24;
         for (int dy = center-range; dy <= center+range; ++dy) {
             if (!matches(pixels,h[0],h[1],t->frame,t->frame_count,dy) ||
                 !matches(pixels,h[0],h[1],t->text,t->text_count,dy) ||

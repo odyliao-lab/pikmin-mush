@@ -98,6 +98,22 @@ object、TSV、上傳、ACK 驗收；版本相符或 native.ready 都不能代�
 
 ## 155 已知彈窗自動恢復
 
+156.1 的每日步數結算與「今天過得怎麼樣呢？」另以
+`POPUP_DAILY_RECAP_ENABLED=1` 選擇啟用；目前只校準 Aries 的 1080×2400
+與 Cancer 的 1080×2160 繁體中文畫面。辨識固定卡片／文字／按鈕三組特徵，
+排除日期、步數、地圖、帳戶與頭像；兩張新畫面一致才處理，不依 21–23 點盲按。
+結算後的心情畫面實測無法用返回略過，因此不代填心情、不分享，改用受控遊戲冷啟。
+每次先驗證裝置內 root-only 完整 Agent／待送／ACK／offset／原 TSV 備份，
+檢查暫停、溫控、正式控制狀態與遊戲焦點；當前正式 target 的 control 必須明確回覆 run，
+拒絕／空回應／錯誤均停止，再沿用冷啟節流和 PID／版本 native 就緒等待。
+同一次開機六小時最多嘗試一次，失敗也占用額度；備份失敗或畫面改變時不重啟。
+備份是已驗證複本的 live snapshot（copied offset ≤ copied TSV），不是跨檔原子快照。
+`/data/adb/pikmin-ops/*-daily-recap-*` 只留在裝置，不外傳憑證；保留空間不足時停止。
+這項功能也要求 `POPUP_RECOVERY_ENABLED=1`、`SCAN_RECOVERY_ENABLED=1`；未知語言、
+解析度、登入、權限或付款畫面不納入。設為 0 停用每日結算處理，其他已知提示維持原設定。
+`native session ready` 只代表新 PID 掛鉤就緒；恢復仍須驗證至少三個不同新正式目標的
+object、非零 TSV、上傳、站台接受與成功 ACK，不能以成功重啟代替。
+
 `POPUP_RECOVERY_ENABLED=1` 啟用手機本機的已校準畫面辨識。在掃描及等待的安全檢查點，
 以 `POPUP_RECOVERY_INTERVAL_SECONDS=30` 為間隔檢查實體螢幕，不依賴電腦或 ADB。
 支援 1080×2400、1080×2160、1440×3120 的繁體中文已知安全提示、速度提示及主畫面。
