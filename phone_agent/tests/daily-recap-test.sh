@@ -21,7 +21,13 @@ scan_recovery_started() { echo throttle >>"$TMP/actions"; }
 run_as_shell() { echo "$*" >>"$TMP/actions"; }
 pidof() { return 1; }
 launch_game() { echo launch >>"$TMP/actions"; [ "$START_FAIL" = 0 ]; }
-scan_recovery_wait_native() { echo native >>"$TMP/actions"; }
+scan_recovery_wait_native() {
+  [ "$POPUP_RECOVERY_ACTIVE" = 0 ] && [ "$POPUP_DAILY_RESTART_ACTIVE" = 1 ]
+  popup_actionable driving 539 1260
+  if popup_actionable recap 540 2155; then echo 'nested daily restart allowed'; exit 1; fi
+  echo native >>"$TMP/actions"
+  [ "${NATIVE_FAIL:-0}" = 0 ]
+}
 for scenario in optout disabled pause throttle backup focus changed control; do
   POPUP_DAILY_RECAP_ENABLED=1 SCAN_RECOVERY_ENABLED=1 BLOCK=0 THROTTLE=0 BACKUP_FAIL=0 FOCUS=1 CONTROL=scan
   EXPECT=$STATE
@@ -35,6 +41,7 @@ for scenario in optout disabled pause throttle backup focus changed control; do
 done
 CONTROL=scan
 popup_daily_restart "$STATE"
+[ "$POPUP_RECOVERY_ACTIVE" = 1 ] && [ "$POPUP_DAILY_RESTART_ACTIVE" = 0 ]
 grep -q 'am force-stop test' "$TMP/actions"
 [ "$(wc -l <"$TMP/actions")" -eq 4 ]
 if popup_daily_restart "$STATE"; then echo 'six-hour limit bypassed'; exit 1; fi
@@ -46,6 +53,10 @@ if popup_daily_restart "$STATE"; then echo 'failed launch accepted'; exit 1; fi
 START_FAIL=0
 if popup_daily_restart "$STATE"; then exit 1; fi
 [ "$(wc -l <"$TMP/actions")" -eq 7 ]
+NOW=44200 NATIVE_FAIL=1
+if popup_daily_restart "$STATE"; then echo 'failed native wait accepted'; exit 1; fi
+[ "$POPUP_RECOVERY_ACTIVE" = 1 ] && [ "$POPUP_DAILY_RESTART_ACTIVE" = 0 ]
+[ "$(wc -l <"$TMP/actions")" -eq 11 ]
 printf 'test-boot corrupt\n' >"$TMP/popup.recap.last-restart"
 if popup_daily_restart "$STATE"; then echo 'malformed limit accepted'; exit 1; fi
 echo 'daily recap backup/throttle/pause/focus/control/failure tests passed'

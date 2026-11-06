@@ -19,7 +19,9 @@ popup_state() {
 
 popup_actionable() {
   case "$1" in driving|restricted|danger|speed|dashboard|recap|recapmood) ;; *) return 1;; esac
-  case "$1" in recap|recapmood) [ "${POPUP_DAILY_RECAP_ENABLED:-0}" = 1 ] || return 1;; esac
+  case "$1" in recap|recapmood)
+    [ "${POPUP_DAILY_RECAP_ENABLED:-0}" = 1 ] &&
+      [ "${POPUP_DAILY_RESTART_ACTIVE:-0}" != 1 ] || return 1;; esac
   case "$2,$3" in *[!0-9,]*|,*|*,) return 1;; esac
   [ "$2" -gt 0 ] && [ "$2" -lt 1440 ] && [ "$3" -gt 0 ] && [ "$3" -lt 3120 ]
 }
@@ -112,7 +114,16 @@ popup_daily_restart() {
   fi
   scan_can_run || return 2
   launch_game || return $?
-  scan_recovery_wait_native || return $?
+  # Ordinary startup notices may themselves block managed-domain readiness.
+  # Let their existing guarded classifier run during the native wait, while
+  # suppressing nested daily-recap attempts. Always restore both flags.
+  POPUP_DAILY_RESTART_ACTIVE=1
+  POPUP_RECOVERY_ACTIVE=0
+  POPUP_NATIVE_RESULT=0
+  scan_recovery_wait_native || POPUP_NATIVE_RESULT=$?
+  POPUP_RECOVERY_ACTIVE=1
+  POPUP_DAILY_RESTART_ACTIVE=0
+  [ "$POPUP_NATIVE_RESULT" = 0 ] || return "$POPUP_NATIVE_RESULT"
   echo '[popup] daily recap new native session ready; scan acceptance pending'
 }
 
