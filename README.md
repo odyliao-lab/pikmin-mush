@@ -6,7 +6,7 @@ Pikmin Bloom 蘑菇全球掃描、集中排程與公開地圖系統。Root Andro
 - Native 建置使用本機 ASCII 路徑的乾淨工作副本；以當前環境核對 repo 與工具位置，不沿用舊電腦的固定路徑。
 
 > [!IMPORTANT]
-> Native ARM64 新增 **Pikmin Bloom 156.1／versionCode 1793076318**，保留152–156.0各版獨立簽章保護。台中四台手機與三台 MuMu 已完成逐台升級及至少三個新非零正式目標驗收；這是有界驗收，不代表全天穩定。精確輸入、測試、發布與逐台證據見 `docs/FLEET_1561_VALIDATION_2026-11-06.md`。竹北三台仍須在當地主機獨立部署與驗證，提示詞見 `docs/ZHUBEI_1561_UPGRADE_PROMPT.md`。
+> Native ARM64 新增 **Pikmin Bloom 156.1／versionCode 1793076318**，保留152–156.0各版獨立簽章保護。台中四台手機與三台 MuMu 已完成逐台升級及至少三個新非零正式目標驗收；這是有界驗收，不代表全天穩定。精確輸入、測試、發布與逐台證據見 `docs/FLEET_1561_VALIDATION_2026-11-06.md`。竹北 Aquarius、Sagittarius、Capricorn 亦已在當地主機完成獨立備份、原地升級及各三點驗收，見 `docs/ZHUBEI_1561_VALIDATION_2026-11-06.md`；重作流程見 `docs/ZHUBEI_1561_UPGRADE_PROMPT.md`。
 
 ## 目前狀態
 
