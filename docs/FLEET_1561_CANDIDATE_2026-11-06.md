@@ -3,8 +3,10 @@
 This is a candidate profile, not fleet acceptance. The inputs were extracted
 read-only from the serial-verified Leo device, which reported game version
 156.1 and versionCode 1793076318. The APK signing-block certificate SHA-256
-matched the earlier 156.0 certificate; independent cryptographic signature
-verification is still required before rollout.
+matched the earlier 156.0 certificate. An independent local verifier checked
+the APK Signature Scheme v2 RSA/SHA-256 signatures, signer public keys and
+whole-file content digests for both APKs. This is not an apksigner validation of
+the v3 signature or every Android-platform compatibility rule.
 
 | Input | Size | SHA-256 |
 | --- | ---: | --- |
@@ -23,8 +25,7 @@ consumed field layouts and rejection of prior profiles are checked by
 checked against unintended 156.1 classification.
 
 Both native ABIs compile; no 156.1 device or emulator runtime acceptance is
-claimed. Before production deployment, follow `docs/RELEASE_GATES.md`, verify
-APK signatures, validate compatibility with the live deployed Site, back up each
+claimed. Before production deployment, follow `docs/RELEASE_GATES.md`, verify remaining APK signature/platform rules with apksigner, validate compatibility with the live deployed Site, back up each
 identified device and establish a single-device canary with PID-bound readiness
 and three different nonzero target/upload/acceptance/ACK chains. Preserve each
 Agent's authentication and upload implementation, Cancer's guard and 15 FPS,
