@@ -1,6 +1,6 @@
 """Validate the exact installed 156.1 ARM64 ELF, metadata and consumed ABI.
 
-Usage: python profile156-test.py libil2cpp.so dump.cs global-metadata.dat
+Usage: python profile1561-test.py libil2cpp.so dump.cs global-metadata.dat
 Inputs are operator-owned, untracked APK extracts; never download a substitute.
 """
 import hashlib

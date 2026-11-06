@@ -26,10 +26,14 @@ consumed field layouts and rejection of prior profiles are checked by
 `module/tests/profile1561-test.py`. The existing 156.0 profile is separately
 checked against unintended 156.1 classification.
 
-Both native ABIs compile; no 156.1 device or emulator runtime acceptance is
-claimed. Before production deployment, follow `docs/RELEASE_GATES.md`, validate compatibility with the live deployed Site, back up each
-identified device and establish a single-device canary with PID-bound readiness
-and three different nonzero target/upload/acceptance/ACK chains. Preserve each
+Both native ABIs compile. Leo has loaded the candidate with PID-bound native
+readiness; end-to-end scanning and emulator acceptance remain unverified.
+Follow `docs/RELEASE_GATES.md` and validate compatibility with the live deployed
+Site before publishing the additive 156.1 site compatibility gate. That site
+change is needed to assign formal targets to the Leo canary. Before expanding
+the device rollout, back up each identified device and verify the canary with
+PID-bound readiness and three different nonzero target/upload/acceptance/ACK
+chains. Preserve each
 Agent's authentication and upload implementation, Cancer's guard and 15 FPS,
 and Libra's disabled core and compass entry. Roll out sequentially only after
 canary validation. Unknown login or 2FA screens require the operator.
