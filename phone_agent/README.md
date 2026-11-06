@@ -1,5 +1,13 @@
 # Pikmin Scanner Agent
 
+## 模擬器唯讀維護入口
+
+2026-11-06 起以 `tools/emulator-access.py` 做日常通道／權限／生命週期健檢。
+它會重新核對本機 instance、專屬 localhost listener、Android ID與有效 Agent ID，
+自動選取既有 root／su／MuMuManager 能力，且不切換 adb root/unroot。
+故障分類、主機專屬 manifest、台中部署位置與竹北健檢提示詞見
+[模擬器維護手冊](../docs/EMULATOR_ACCESS_RUNBOOK.md)。它不取代非零掃描／上傳／ACK驗收。
+
 Cancer 1080×2160 首頁羅盤的半透明外緣會受花草背景影響，可能使首頁判為
 unknown 而反覆冷啟仍無掃描資料。2026-11-01 僅校準該機不透明圖案／內部取樣，
 保留完整外框、文字、雙畫面、前景與保護檢查；實機判斷與部署界線見

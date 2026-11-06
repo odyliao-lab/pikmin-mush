@@ -30,6 +30,7 @@ jobs:
         working-directory: .
         run: |
           bash -n phone_agent/agent.sh
+          python3 phone_agent/tests/emulator-access-test.py
           bash -n phone_agent/power-guard.sh
           bash -n phone_agent/control.sh
           bash -n phone_agent/allow-control-app-root.sh
