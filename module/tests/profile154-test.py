@@ -25,6 +25,6 @@ for name, signature in (
     assert binary[offset:offset + len(expected)] == expected, name
     assert binary[address:address + len(expected)] != expected, 'file offset confused with RVA'
     print(name, hex(address), 'signature verified')
-assert 'if (!is152 && !is153 && !is154 && !is155 && !is156)' in source
+assert 'if (!is152 && !is153 && !is154 && !is155 && !is156 && !is1561)' in source
 assert 'TARGET_PIKMIN_154_VERSION_CODE 1789606828' in source
 print('154 profile and fail-closed guard passed')

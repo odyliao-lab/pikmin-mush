@@ -83,6 +83,19 @@ for cname, namespace, members in (
 enum = re.search(r'public enum MapObjectProto\.ObjectOneofCase[^\n]*\n\{(.*?)\n\}', dump, re.S)[1]
 assert re.search(r'\bPoiMushroom = 22;', enum)
 
+# 156.1 signatures must not also identify this exact 156.0 image.
+new_profile = (
+    ('MapObjectManager_RegisterMapObject', 'SIG1561_Register'),
+    ('LocationController_Update', 'SIG1561_Update'),
+    ('SetOverride', 'SIG1561_Override'),
+)
+new_matches = []
+for name, sig in new_profile:
+    address = int(re.search(r'#define RVA1561_' + name + r' (0x[0-9A-Fa-f]+)', source)[1], 16)
+    expected = signature(sig)
+    new_matches.append(mapped_bytes(address, len(expected))[1] == expected)
+assert not all(new_matches), '156.0 misidentified as 156.1'
+
 # Old address sets must not classify this ELF as an older supported version.
 for version in ('152', '153', '154', '155'):
     prefix = 'RVA_' if version == '152' else 'RVA' + version + '_'
@@ -94,7 +107,7 @@ for version in ('152', '153', '154', '155'):
         expected = signature(sig)
         matches.append(mapped_bytes(address, len(expected))[1] == expected)
     assert not all(matches), '156 misidentified as ' + version
-assert 'if (!is152 && !is153 && !is154 && !is155 && !is156)' in source
+assert 'if (!is152 && !is153 && !is154 && !is155 && !is156 && !is1561)' in source
 assert 'TARGET_PIKMIN_156_VERSION_CODE 1792142832' in source
-assert 'if (is155 || is156)' in source  # Cancer render cap remains opt-in.
+assert 'if (is155 || is156 || is1561)' in source  # Cancer render cap remains opt-in.
 print('156 exact inputs, consumed layouts, legacy exclusion and fail-closed guard passed')

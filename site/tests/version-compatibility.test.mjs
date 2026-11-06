@@ -11,7 +11,7 @@ new Script(ts.transpileModule(source, {
 }).outputText).runInNewContext({ exports, require() { return {}; } });
 
 test("156 rollout preserves older matching versions and rejects mismatches", () => {
-  for (const version of ["149.0", "150.0", "151.0", "152.0", "153.0", "154.0", "155.0", "156.0"]) {
+  for (const version of ["149.0", "150.0", "151.0", "152.0", "153.0", "154.0", "155.0", "156.0", "156.1"]) {
     assert.equal(exports.versionCompatibility({ agent_version: "2.2.0",
       game_version: version, module_version: version }).compatible, true);
   }
@@ -21,6 +21,7 @@ test("156 rollout preserves older matching versions and rejects mismatches", () 
     ["154.0", "153.0", "2.2.0"], ["153.0", "154.0", "2.2.0"],
     ["155.0", "154.0", "2.2.0"], ["154.0", "155.0", "2.2.0"],
     ["156.0", "155.0", "2.2.5"], ["155.0", "156.0", "2.2.5"],
+    ["156.1", "156.0", "2.2.5"], ["156.0", "156.1", "2.2.5"],
     ["157.0", "157.0", "2.2.5"], ["152.0", "152.0", "1.9.9"],
   ]) {
     assert.equal(exports.versionCompatibility({ agent_version: agent,
