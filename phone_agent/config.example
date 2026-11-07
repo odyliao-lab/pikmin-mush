@@ -130,6 +130,8 @@ VISUAL_RECOVERY_ENABLED=0
 # This takes precedence over legacy visual/coordinate recovery, preserving
 # manual pause, foreground checks and stock power/thermal guard decisions.
 POPUP_RECOVERY_ENABLED=0
+# Opt-in calibrated network-error Retry; backed up, 120s apart, max3/30min.
+POPUP_NETWORK_RETRY_ENABLED=0
 POPUP_RECOVERY_INTERVAL_SECONDS=30
 # Calibrated 156.1 Traditional Chinese daily recap/mood screens on 1080x2400
 # and 1080x2160 only. Preserve data, never fill a mood/share; verify a root-only

@@ -44,6 +44,7 @@ jobs:
           bash phone_agent/tests/map-entry-test.sh
           bash phone_agent/tests/visual-recovery-test.sh
           bash phone_agent/tests/popup-recovery-test.sh
+          bash phone_agent/tests/popup-network-test.sh
           bash phone_agent/tests/daily-recap-test.sh
           bash phone_agent/tests/scan-recovery-test.sh
           bash phone_agent/tests/teleport-file-test.sh
@@ -63,3 +64,4 @@ jobs:
           python3 phone_agent/tests/ui-probe-test.py /tmp/ui-probe
           cc -O2 -Wall -Wextra -Werror phone_agent/popup-probe.c -o /tmp/popup-probe
           python3 phone_agent/tests/popup-probe-test.py /tmp/popup-probe
+          python3 phone_agent/tests/popup-package-test.py

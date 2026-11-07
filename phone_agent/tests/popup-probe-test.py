@@ -14,6 +14,14 @@ groups = {}
 for name, body in re.findall(r'PopupSample (p\d+_\w+)\[\]=\{(.*?)\};', source):
     groups[name] = [tuple(map(int, p)) for p in re.findall(r'\{(\d+),(\d+),(\d+),(\d+),(\d+)\}', body)]
 templates = re.findall(r'\{"(\w+)",(\d+),(\d+),(\d+),(\d+),(p\d+)_frame,', source)
+# Keep the two observed 156.1 phone glyph variants independently calibrated.
+# They must not be replaced with a generic confirmation-button template.
+assert ('restricted', '1080', '2400', '540', '1287', 'p20') in templates
+assert ('danger', '1440', '3120', '720', '1730', 'p21') in templates
+for prefix in ('p20', 'p21'):
+    assert len(groups[prefix+'_frame']) >= 48
+    assert len(groups[prefix+'_text']) >= 160
+    assert len(groups[prefix+'_button']) >= 96
 recovery = (root / 'popup-recovery.sh').read_text(encoding='utf-8')
 allowed = re.search(r'case "\$1" in ([a-z|]+)\) ;; \*\) return 1', recovery)
 assert allowed, 'popup action contract not found'

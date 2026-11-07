@@ -18,7 +18,8 @@ popup_state() {
 }
 
 popup_actionable() {
-  case "$1" in driving|restricted|danger|speed|dashboard|recap|recapmood) ;; *) return 1;; esac
+  case "$1" in driving|restricted|danger|speed|dashboard|recap|recapmood|network) ;; *) return 1;; esac
+  case "$1" in network) [ "${POPUP_NETWORK_RETRY_ENABLED:-0}" = 1 ] || return 1;; esac
   case "$1" in recap|recapmood)
     [ "${POPUP_DAILY_RECAP_ENABLED:-0}" = 1 ] &&
       [ "${POPUP_DAILY_RESTART_ACTIVE:-0}" != 1 ] || return 1;; esac
@@ -132,6 +133,47 @@ popup_daily_restart() {
   echo '[popup] daily recap new native session ready; scan acceptance pending'
 }
 
+popup_network_clock() {
+  cat /proc/sys/kernel/random/boot_id || return 1
+  cut -d. -f1 /proc/uptime
+}
+
+# At most three attempts per 30-minute monotonic window, 120s apart.
+# Persist before input, so a failed/ignored tap also consumes an attempt.
+popup_network_prepare() {
+  [ "${POPUP_NETWORK_RETRY_ENABLED:-0}" = 1 ] || return 1
+  POPUP_NET_CLOCK=$(popup_network_clock) || return 1
+  set -- $POPUP_NET_CLOCK
+  [ "$#" = 2 ] || return 1
+  POPUP_NET_BOOT=$1 POPUP_NET_NOW=$2
+  case "$POPUP_NET_NOW" in ''|*[!0-9]*) return 1;; esac
+  POPUP_NET_START=$POPUP_NET_NOW POPUP_NET_LAST=0 POPUP_NET_COUNT=0
+  POPUP_NET_FILE="$MODDIR/popup.network.retry"
+  [ ! -L "$POPUP_NET_FILE" ] || return 1
+  if [ -e "$POPUP_NET_FILE" ]; then
+    read -r POPUP_NET_OLD_BOOT POPUP_NET_START POPUP_NET_LAST POPUP_NET_COUNT POPUP_NET_EXTRA <"$POPUP_NET_FILE" || return 1
+    [ -z "$POPUP_NET_EXTRA" ] || return 1
+    case "$POPUP_NET_START:$POPUP_NET_LAST:$POPUP_NET_COUNT" in *[!0-9:]*) return 1;; esac
+    [ -n "$POPUP_NET_START" ] && [ -n "$POPUP_NET_LAST" ] && [ -n "$POPUP_NET_COUNT" ] || return 1
+    [ "$POPUP_NET_COUNT" -le 3 ] || return 1
+    if [ "$POPUP_NET_BOOT" != "$POPUP_NET_OLD_BOOT" ] || [ $((POPUP_NET_NOW - POPUP_NET_START)) -ge 1800 ]; then
+      POPUP_NET_START=$POPUP_NET_NOW POPUP_NET_LAST=0 POPUP_NET_COUNT=0
+    else
+      [ "$POPUP_NET_NOW" -ge "$POPUP_NET_START" ] && [ "$POPUP_NET_NOW" -ge "$POPUP_NET_LAST" ] || return 1
+      [ "$POPUP_NET_COUNT" -lt 3 ] && [ $((POPUP_NET_NOW - POPUP_NET_LAST)) -ge 120 ] || return 1
+    fi
+  fi
+  POPUP_NET_EXPECTED=$POPUP_NETWORK_EXPECTED
+  popup_daily_backup >/dev/null || return 1
+  scan_can_run && popup_foreground || return 2
+  [ "$(popup_state)" = "$POPUP_NET_EXPECTED" ] || return 1
+  POPUP_NET_CONTROL=$(scan_control) || return 1
+  [ "$POPUP_NET_CONTROL" = run ] || return 2
+  scan_can_run && popup_foreground || return 2
+  (umask 077; printf '%s %s %s %s\n' "$POPUP_NET_BOOT" "$POPUP_NET_START" "$POPUP_NET_NOW" "$((POPUP_NET_COUNT + 1))" >"$POPUP_NET_FILE.tmp.$$") || return 1
+  mv -f "$POPUP_NET_FILE.tmp.$$" "$POPUP_NET_FILE" || return 1
+}
+
 popup_recover() {
   POPUP_PREVIOUS=""
   for POPUP_STEP in 1 2 3; do
@@ -156,6 +198,10 @@ popup_recover() {
       return 0
       ;;
     esac
+    if [ "$1" = network ]; then
+      POPUP_NETWORK_EXPECTED=$POPUP_B
+      popup_network_prepare || return $?
+    fi
     POPUP_INPUT_ALLOWED=1
     POPUP_TAP_RESULT=0
     game_tap "$2" "$3" || POPUP_TAP_RESULT=$?
