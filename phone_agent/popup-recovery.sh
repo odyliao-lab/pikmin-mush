@@ -18,7 +18,8 @@ popup_state() {
 }
 
 popup_actionable() {
-  case "$1" in driving|restricted|danger|speed|dashboard|recap|recapmood|network) ;; *) return 1;; esac
+  case "$1" in driving|restricted|danger|speed|dashboard|recap|recapmood|network|announcement) ;; *) return 1;; esac
+  case "$1" in announcement) [ "${POPUP_ANNOUNCEMENT_CLOSE_ENABLED:-0}" = 1 ] || return 1;; esac
   case "$1" in network) [ "${POPUP_NETWORK_RETRY_ENABLED:-0}" = 1 ] || return 1;; esac
   case "$1" in recap|recapmood)
     [ "${POPUP_DAILY_RECAP_ENABLED:-0}" = 1 ] &&
@@ -174,6 +175,37 @@ popup_network_prepare() {
   mv -f "$POPUP_NET_FILE.tmp.$$" "$POPUP_NET_FILE" || return 1
 }
 
+# Only the calibrated public announcement's X is eligible, never its details
+# link. One attempt per 30 minutes/boot, persisted before input, fails closed.
+popup_announcement_prepare() {
+  [ "${POPUP_ANNOUNCEMENT_CLOSE_ENABLED:-0}" = 1 ] || return 1
+  POPUP_ANN_CLOCK=$(popup_network_clock) || return 1
+  set -- $POPUP_ANN_CLOCK
+  [ "$#" = 2 ] || return 1
+  POPUP_ANN_BOOT=$1 POPUP_ANN_NOW=$2
+  case "$POPUP_ANN_NOW" in ''|*[!0-9]*) return 1;; esac
+  POPUP_ANN_FILE="$MODDIR/popup.announcement.attempt"
+  [ ! -L "$POPUP_ANN_FILE" ] || return 1
+  if [ -e "$POPUP_ANN_FILE" ]; then
+    read -r POPUP_ANN_OLD_BOOT POPUP_ANN_LAST POPUP_ANN_EXTRA <"$POPUP_ANN_FILE" || return 1
+    [ -z "$POPUP_ANN_EXTRA" ] || return 1
+    case "$POPUP_ANN_LAST" in ''|*[!0-9]*) return 1;; esac
+    if [ "$POPUP_ANN_BOOT" = "$POPUP_ANN_OLD_BOOT" ]; then
+      [ "$POPUP_ANN_NOW" -ge "$POPUP_ANN_LAST" ] &&
+        [ $((POPUP_ANN_NOW - POPUP_ANN_LAST)) -ge 1800 ] || return 1
+    fi
+  fi
+  POPUP_ANN_EXPECTED=$POPUP_ANNOUNCEMENT_EXPECTED
+  popup_daily_backup >/dev/null || return 1
+  scan_can_run && popup_foreground || return 2
+  [ "$(popup_state)" = "$POPUP_ANN_EXPECTED" ] || return 1
+  POPUP_ANN_CONTROL=$(scan_control) || return 1
+  [ "$POPUP_ANN_CONTROL" = run ] || return 2
+  scan_can_run && popup_foreground || return 2
+  (umask 077; printf '%s %s\n' "$POPUP_ANN_BOOT" "$POPUP_ANN_NOW" >"$POPUP_ANN_FILE.tmp.$$") || return 1
+  mv -f "$POPUP_ANN_FILE.tmp.$$" "$POPUP_ANN_FILE" || return 1
+}
+
 popup_recover() {
   POPUP_PREVIOUS=""
   for POPUP_STEP in 1 2 3; do
@@ -201,6 +233,10 @@ popup_recover() {
     if [ "$1" = network ]; then
       POPUP_NETWORK_EXPECTED=$POPUP_B
       popup_network_prepare || return $?
+    fi
+    if [ "$1" = announcement ]; then
+      POPUP_ANNOUNCEMENT_EXPECTED=$POPUP_B
+      popup_announcement_prepare || return $?
     fi
     POPUP_INPUT_ALLOWED=1
     POPUP_TAP_RESULT=0

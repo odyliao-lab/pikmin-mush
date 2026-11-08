@@ -18,6 +18,12 @@ templates = re.findall(r'\{"(\w+)",(\d+),(\d+),(\d+),(\d+),(p\d+)_frame,', sourc
 # They must not be replaced with a generic confirmation-button template.
 assert ('restricted', '1080', '2400', '540', '1287', 'p20') in templates
 assert ('danger', '1440', '3120', '720', '1730', 'p21') in templates
+assert ('announcement', '1080', '2160', '105', '1923', 'p24') in templates
+assert len(groups['p24_frame']) >= 48 and len(groups['p24_text']) >= 192
+assert len(groups['p24_button']) >= 64
+# This is the separate X, well away from the announcement's details link.
+assert all(40 <= x <= 170 and 1850 <= y <= 1990
+           for x,y,*_ in groups['p24_button'])
 for prefix in ('p20', 'p21'):
     assert len(groups[prefix+'_frame']) >= 48
     assert len(groups[prefix+'_text']) >= 160
@@ -104,7 +110,7 @@ for kind, sw, sh, sx, sy, prefix in templates:
                 edge = bytearray(data)
                 paint(edge,w,[(580,1967,*color)])
                 check(edge, f'{kind} {x} {y}')
-    if kind in ('recap', 'recapmood'):
+    if kind in ('recap', 'recapmood', 'announcement'):
         # Full-screen daily controls have independent top/bottom anchors.
         # Do not translate them as if they were centered warning dialogs.
         for dy in (16, 80):
@@ -116,7 +122,16 @@ for kind, sw, sh, sx, sy, prefix in templates:
             bad_text = bytearray(data)
             paint(bad_text,w,[(px,py,*color) for px,py,*_ in groups[prefix+'_text']])
             check(bad_text, 'unknown')
-    if kind not in ('dashboard', 'recap', 'recapmood'):
+        if kind == 'announcement':
+            wrong_resolution = blank(w,2400)
+            for group in ('frame','text','button'):
+                paint(wrong_resolution,w,groups[prefix+'_'+group])
+            check(wrong_resolution, 'unknown')
+            details_control = bytearray(data)
+            paint(details_control,w,[(px,py,255,255,255)
+                                    for px,py,*_ in groups[prefix+'_button']])
+            check(details_control, 'unknown')
+    if kind not in ('dashboard', 'recap', 'recapmood', 'announcement'):
         shifted = blank(w,h)
         for group in ('frame','text','button'):
             paint(shifted,w,groups[prefix+'_'+group],16)

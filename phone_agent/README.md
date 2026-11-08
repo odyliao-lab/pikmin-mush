@@ -112,6 +112,14 @@ Leo／Libra 另校準「網路錯誤／重試」畫面。`POPUP_NETWORK_RETRY_EN
 保護及當前正式工作 control=run；不更改網路或登入設定。更新
 `popup-recovery.sh` 與辨識器後需重新啟動原 Agent 載入，保留所有 pending／ACK。
 
+2026-11-09 Cancer 的 1080×2160「通知／Pikmin Bloom Journey 活動日期」
+公告新增獨立 `announcement` 範本，固定解析度及位置，同時比對卡片、公共標題
+和左下角 X；只關閉公告，不點「查看詳細資訊」。
+`POPUP_ANNOUNCEMENT_CLOSE_ENABLED=1` 逐台選用，預設0，其他公告及解析度不猜測。
+沿用雙畫面、前景及保護檢查，每次先驗證裝置內 root-only 備份、再核對畫面與
+當前正式工作 control=run；每次開機每30分鐘最多一次，輸入失敗也占用額度。
+系統通知面板不屬於這個遊戲範本，不能透過放寬前景限制自動點擊。
+
 156.1 的每日步數結算與「今天過得怎麼樣呢？」另以
 `POPUP_DAILY_RECAP_ENABLED=1` 選擇啟用；目前只校準 Aries 的 1080×2400
 與 Cancer 的 1080×2160 繁體中文畫面。辨識固定卡片／文字／按鈕三組特徵，
