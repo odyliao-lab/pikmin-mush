@@ -132,6 +132,9 @@ VISUAL_RECOVERY_ENABLED=0
 POPUP_RECOVERY_ENABLED=0
 # Opt-in calibrated network-error Retry; backed up, 120s apart, max3/30min.
 POPUP_NETWORK_RETRY_ENABLED=0
+# Only the calibrated Cancer 1080x2160 Journey announcement X; backed up and
+# current formal control=run required. One attempt per 30 minutes, default off.
+POPUP_ANNOUNCEMENT_CLOSE_ENABLED=0
 POPUP_RECOVERY_INTERVAL_SECONDS=30
 # Calibrated 156.1 Traditional Chinese daily recap/mood screens on 1080x2400
 # and 1080x2160 only. Preserve data, never fill a mood/share; verify a root-only

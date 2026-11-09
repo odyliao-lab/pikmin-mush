@@ -50,7 +50,8 @@ int main(int argc, char **argv) {
         const PopupTemplate *t = &popup_templates[i];
         if (t->width != (int)h[0]) continue;
         int fixed = !strcmp(t->kind, "dashboard") ||
-                    !strcmp(t->kind, "recap") || !strcmp(t->kind, "recapmood");
+                    !strcmp(t->kind, "recap") || !strcmp(t->kind, "recapmood") ||
+                    !strcmp(t->kind, "announcement");
         if (fixed && t->height != (int)h[1]) continue;
         /* Notices may move with navigation-bar insets; all three independent
          * control/text groups must agree at the SAME translation. */
