@@ -117,7 +117,7 @@ if [ ! -x "$MAGISK_SU" ]; then
   MAGISK_SU="$(command -v su 2>/dev/null)"
 fi
 AGENT_ID="${AGENT_ID:-primary}"
-AGENT_VERSION="${AGENT_VERSION:-2.2.10}"
+AGENT_VERSION="${AGENT_VERSION:-2.2.14}"
 [ -r "$MODDIR/runtime-version.sh" ] || { echo '[version] runtime probe missing'; exit 1; }
 . "$MODDIR/runtime-version.sh"
 refresh_game_version
@@ -681,6 +681,22 @@ file_size() {
   number_or_zero "$SIZE_NOW"
 }
 
+scan_snapshot() {
+  # One fixed byte prefix for both counters. Never count a later append in rows
+  # while reporting an earlier byte size, or include an unterminated record.
+  SNAPSHOT_LIMIT="$(stat -c %s "$TSV" 2>/dev/null)"
+  case "$SNAPSHOT_LIMIT" in ''|*[!0-9]*) return 1 ;; esac
+  SNAPSHOT_FILE="$MODDIR/scan.snapshot.$$"
+  (umask 077; head -c "$SNAPSHOT_LIMIT" "$TSV" >"$SNAPSHOT_FILE") || return 1
+  SNAPSHOT_COPIED="$(wc -c <"$SNAPSHOT_FILE" | tr -d ' ')"
+  if [ "$SNAPSHOT_COPIED" != "$SNAPSHOT_LIMIT" ]; then rm -f "$SNAPSHOT_FILE"; return 1; fi
+  SNAPSHOT_LINES="$(wc -l <"$SNAPSHOT_FILE" | tr -d ' ')"
+  LC_ALL=C awk -v complete="$SNAPSHOT_LINES" -F '\t' 'NR<=complete { bytes+=length($0)+1; if ($7+0>=2) rows++ } END { print bytes+0,rows+0 }' "$SNAPSHOT_FILE"
+  SNAPSHOT_RESULT=$?
+  rm -f "$SNAPSHOT_FILE"
+  return "$SNAPSHOT_RESULT"
+}
+
 useful_line_count() {
   # TSV 第 7 欄是蘑菇等級；Fleet 只統計等級 2 以上，避免小型蘑菇
   # 觸發「有擷取」判定或灌入每個 target 的 captured rows。
@@ -947,7 +963,12 @@ retry_scan_ack() {
   IFS="$(printf '\t')"
   set -- $PENDING
   IFS="$OLD_IFS"
-  if send_scan_ack "$1" "$2" "$3" "$4" "$5" 1 "${6:-}"; then
+  # Older six-column pending ACKs remain readable. New records also bind
+  # the exact complete TSV end offset that must have an accepted upload first.
+  PENDING_END="${7:-0}"
+  case "$PENDING_END" in ''|*[!0-9]*) return 1 ;; esac
+  if [ "$OFFSET" -lt "$PENDING_END" ]; then upload_new || true; fi
+  if [ "$OFFSET" -ge "$PENDING_END" ] && send_scan_ack "$1" "$2" "$3" "$4" "$5" 1 "${6:-}"; then
     rm -f "$SCAN_PENDING"
     echo "[scan] pending ACK completed job=$1 target=$2"
     return 0
@@ -1006,8 +1027,9 @@ execute_scan_task() {
     return
   fi
   scan_can_run || return
-  BEFORE_SIZE="$(file_size)"
-  BEFORE_LINES="$(useful_line_count)"
+  SAMPLE="$(scan_snapshot)" || return
+  set -- $SAMPLE
+  BEFORE_SIZE="$1"; BEFORE_LINES="$2"
   if [ "$MAP_REFRESH_EXPERIMENT" = "1" ] && [ "$TASK_COOLDOWN" -gt 0 ]; then
     echo "[scan] cross-city cooldown ${TASK_COOLDOWN}s before direct refresh"
     interruptible_wait "$TASK_COOLDOWN" "$JOB_ID" || return
@@ -1051,8 +1073,9 @@ execute_scan_task() {
   fi
   DIAG_REFRESH_MS=$(( ($(date +%s) - DIAG_REFRESH_START) * 1000 ))
   upload_new
-  AFTER_SIZE="$(file_size)"
-  AFTER_LINES="$(useful_line_count)"
+  SAMPLE="$(scan_snapshot)" || return
+  set -- $SAMPLE
+  AFTER_SIZE="$1"; AFTER_LINES="$2"
   NEW_BYTES=$((AFTER_SIZE - BEFORE_SIZE))
   NEW_ROWS=$((AFTER_LINES - BEFORE_LINES))
   [ "$NEW_BYTES" -lt 0 ] && NEW_BYTES=0
@@ -1083,8 +1106,9 @@ execute_scan_task() {
         echo "[scan] query-only streak reached; cold restarting game at current GPS"
         if restart_game_for_scan "$JOB_ID" "$REFRESH_TOKEN"; then
           upload_new
-          AFTER_SIZE="$(file_size)"
-          AFTER_LINES="$(useful_line_count)"
+          SAMPLE="$(scan_snapshot)" || return
+          set -- $SAMPLE
+          AFTER_SIZE="$1"; AFTER_LINES="$2"
           NEW_BYTES=$((AFTER_SIZE - BEFORE_SIZE))
           NEW_ROWS=$((AFTER_LINES - BEFORE_LINES))
           [ "$NEW_BYTES" -lt 0 ] && NEW_BYTES=0
@@ -1107,14 +1131,18 @@ execute_scan_task() {
   if [ "${VISUAL_RECOVERY_ENABLED:-0}" = "1" ] && [ "$REFRESH_FAILURE_STREAK" -eq 2 ]; then
     visual_recover || true
   fi
+  # A marker timeout alone is not a dead game: empty/revisited areas can have
+  # no new MapPoiBlocker registration. Require consecutive empty failures even
+  # when visual recovery is disabled, and never restart after useful new rows.
   if [ "$MAP_REFRESH_EXPERIMENT" = "1" ] && [ "$REFRESH_OK" -eq 0 ] &&
-     { [ "${VISUAL_RECOVERY_ENABLED:-0}" != "1" ] || [ "$REFRESH_FAILURE_STREAK" -ge 3 ]; }; then
+     [ "$NEW_ROWS" -eq 0 ] && [ "$REFRESH_FAILURE_STREAK" -ge 3 ]; then
     REFRESH_FAILURE_STREAK=0
     echo "[scan] direct refresh unavailable; using cold restart fallback"
     if restart_game_for_scan "$JOB_ID" "$REFRESH_TOKEN"; then
       upload_new
-      AFTER_SIZE="$(file_size)"
-      AFTER_LINES="$(useful_line_count)"
+      SAMPLE="$(scan_snapshot)" || return
+      set -- $SAMPLE
+      AFTER_SIZE="$1"; AFTER_LINES="$2"
       NEW_BYTES=$((AFTER_SIZE - BEFORE_SIZE))
       NEW_ROWS=$((AFTER_LINES - BEFORE_LINES))
       [ "$NEW_BYTES" -lt 0 ] && NEW_BYTES=0
@@ -1127,8 +1155,9 @@ execute_scan_task() {
   elif [ "$MAP_REFRESH_EXPERIMENT" != "1" ] && [ "$NEW_ROWS" -eq 0 ]; then
     if restart_game_for_scan "$JOB_ID" ""; then
       upload_new
-      AFTER_SIZE="$(file_size)"
-      AFTER_LINES="$(useful_line_count)"
+      SAMPLE="$(scan_snapshot)" || return
+      set -- $SAMPLE
+      AFTER_SIZE="$1"; AFTER_LINES="$2"
       NEW_BYTES=$((AFTER_SIZE - BEFORE_SIZE))
       NEW_ROWS=$((AFTER_LINES - BEFORE_LINES))
       [ "$NEW_BYTES" -lt 0 ] && NEW_BYTES=0
@@ -1144,9 +1173,10 @@ execute_scan_task() {
   [ "$MAP_REFRESH_EXPERIMENT" = "1" ] || DIAG_SOURCE=legacy
   DIAG_SCAN_MS=$(( ($(date +%s) - TASK_STARTED_AT) * 1000 ))
   DIAG_QUERY="&evidence_version=1&refresh_source=$DIAG_SOURCE&scan_ms=$DIAG_SCAN_MS&refresh_ms=$DIAG_REFRESH_MS&restarts=$DIAG_RESTARTS&upload_failures=$DIAG_UPLOAD_FAILURES"
-  printf '%s\t%s\t%s\t%s\t%s\t%s\n' \
-    "$JOB_ID" "$TASK_TARGET_ID" "$TASK_LEASE" "$NEW_ROWS" "$NEW_BYTES" "$DIAG_QUERY" >"$SCAN_PENDING"
-  if send_scan_ack "$JOB_ID" "$TASK_TARGET_ID" "$TASK_LEASE" "$NEW_ROWS" "$NEW_BYTES" 1 "$DIAG_QUERY"; then
+  upload_new || true
+  printf '%s\t%s\t%s\t%s\t%s\t%s\t%s\n' \
+    "$JOB_ID" "$TASK_TARGET_ID" "$TASK_LEASE" "$NEW_ROWS" "$NEW_BYTES" "$DIAG_QUERY" "$AFTER_SIZE" >"$SCAN_PENDING"
+  if [ "$OFFSET" -ge "$AFTER_SIZE" ] && send_scan_ack "$JOB_ID" "$TASK_TARGET_ID" "$TASK_LEASE" "$NEW_ROWS" "$NEW_BYTES" 1 "$DIAG_QUERY"; then
     rm -f "$SCAN_PENDING"
     TASK_FINISHED_AT="$(date +%s)"
     TASK_ELAPSED=$((TASK_FINISHED_AT - TASK_STARTED_AT))
