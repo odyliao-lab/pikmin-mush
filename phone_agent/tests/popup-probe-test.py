@@ -18,6 +18,13 @@ templates = re.findall(r'\{"(\w+)",(\d+),(\d+),(\d+),(\d+),(p\d+)_frame,', sourc
 # They must not be replaced with a generic confirmation-button template.
 assert ('restricted', '1080', '2400', '540', '1287', 'p20') in templates
 assert ('danger', '1440', '3120', '720', '1730', 'p21') in templates
+assert ('dashboard', '1080', '2160', '540', '1925', 'p25') in templates
+assert groups['p25_frame'] == groups['p8_frame']
+assert groups['p25_text'] == groups['p8_text']
+assert len(groups['p25_button']) == 64
+assert all((x-540)**2+(y-1925)**2 <= 25**2 for x,y,*_ in groups['p25_button'])
+assert sum(all(v >= 245 for v in rgb) for x,y,*rgb in groups['p25_button']) == 32
+assert sum(rgb[1]-rgb[0] >= 40 for x,y,*rgb in groups['p25_button']) == 32
 assert ('announcement', '1080', '2160', '105', '1923', 'p24') in templates
 assert len(groups['p24_frame']) >= 48 and len(groups['p24_text']) >= 192
 assert len(groups['p24_button']) >= 64
@@ -90,14 +97,15 @@ for kind, sw, sh, sx, sy, prefix in templates:
             other_control = bytearray(data)
             paint(other_control,w,[(x,y,*color) for x,y,*_ in groups[prefix+'_button']])
             check(other_control, 'unknown')
-        if prefix in ('p8', 'p15'):
+        if prefix in ('p8', 'p15', 'p25'):
             # Cancer/Gemini translucent edges change with the flower scene.
             # Its opaque glyph/interior must still gate the action independently.
             for color in ((0,0,0), (220,80,160)):
                 scenery = bytearray(data)
+                inner = 25 if prefix == 'p25' else 36
                 ring = [(px,py,*color) for px in range(x-65,x+66)
                         for py in range(y-65,y+66)
-                        if 36**2 < (px-x)**2+(py-y)**2 <= 65**2]
+                        if inner**2 < (px-x)**2+(py-y)**2 <= 65**2]
                 paint(scenery,w,ring)
                 check(scenery, f'{kind} {x} {y}')
         if prefix == 'p8':
