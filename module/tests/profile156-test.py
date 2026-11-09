@@ -107,7 +107,7 @@ for version in ('152', '153', '154', '155'):
         expected = signature(sig)
         matches.append(mapped_bytes(address, len(expected))[1] == expected)
     assert not all(matches), '156 misidentified as ' + version
-assert 'if (!is152 && !is153 && !is154 && !is155 && !is156 && !is1561)' in source
+assert 'if (!is152 && !is153 && !is154 && !is155 && !is156 && !is1561 && !is157)' in source
 assert 'TARGET_PIKMIN_156_VERSION_CODE 1792142832' in source
-assert 'if (is155 || is156 || is1561)' in source  # Cancer render cap remains opt-in.
+assert 'if (is155 || is156 || is1561 || is157)' in source  # Cancer render cap remains opt-in.
 print('156 exact inputs, consumed layouts, legacy exclusion and fail-closed guard passed')
