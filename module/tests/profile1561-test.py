@@ -94,7 +94,11 @@ for version in ('152', '153', '154', '155', '156'):
         expected = signature(sig)
         matches.append(mapped_bytes(address, len(expected))[1] == expected)
     assert not all(matches), '156.1 misidentified as ' + version
-assert 'if (!is152 && !is153 && !is154 && !is155 && !is156 && !is1561)' in source
+for name, sig in zip(names, ('SIG157_Register', 'SIG157_Update', 'SIG157_Override')):
+    address = int(re.search(r'#define RVA157_' + name + r' (0x[0-9A-Fa-f]+)', source)[1], 16)
+    expected = signature(sig)
+    assert mapped_bytes(address, len(expected))[1] != expected, '157 entrypoint falsely matches 156.1'
+assert 'if (!is152 && !is153 && !is154 && !is155 && !is156 && !is1561 && !is157)' in source
 assert 'TARGET_PIKMIN_1561_VERSION_CODE 1793076318' in source
-assert 'if (is155 || is156 || is1561)' in source  # Cancer render cap remains opt-in.
+assert 'if (is155 || is156 || is1561 || is157)' in source  # Cancer render cap remains opt-in.
 print('156.1 exact inputs, consumed layouts, legacy exclusion and fail-closed guard passed')

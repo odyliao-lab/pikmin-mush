@@ -1,9 +1,9 @@
 import { runtime } from "./cloud";
 
-export const SUPPORTED_GAME_VERSIONS = ["149.0", "150.0", "151.0", "152.0", "153.0", "154.0", "155.0", "156.0", "156.1"] as const;
-export const REQUIRED_GAME_VERSION = "156.1";
+export const SUPPORTED_GAME_VERSIONS = ["149.0", "150.0", "151.0", "152.0", "153.0", "154.0", "155.0", "156.0", "156.1", "157.0"] as const;
+export const REQUIRED_GAME_VERSION = "157.0";
 export const MIN_AGENT_VERSION = "2.0.0";
-export const EXPECTED_MODULE_VERSION = "156.1";
+export const EXPECTED_MODULE_VERSION = "157.0";
 export const HEARTBEAT_SAMPLE_MS = 5 * 60_000;
 export const NO_DATA_WARN_STREAK = 12;
 export const NO_DATA_CRITICAL_STREAK = 30;

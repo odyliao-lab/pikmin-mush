@@ -34,6 +34,6 @@ fields('MapObjectProto', {'id_':'0x18','point_':'0x20','object_':'0x30','objectC
 fields('PointProto', {'latDegrees_':'0x18','lngDegrees_':'0x20'})
 fields('PoiMushroomProto', {'poiChallenge_':'0x18','overrideCooldownSeconds_':'0x28'})
 fields('PoiChallengeInfoProto', {'mushroomClusterId_':'0x30','challengeStartTimeMs_':'0x38','challengeFinishTimeMs_':'0x40','type_':'0x48','level_':'0x4C','challengerCapacity_':'0x6C','totalChallengerCount_':'0x70','totalChallengerPikminPower_':'0x90'})
-assert 'if (!is152 && !is153 && !is154 && !is155 && !is156 && !is1561)' in source
+assert 'if (!is152 && !is153 && !is154 && !is155 && !is156 && !is1561 && !is157)' in source
 assert 'TARGET_PIKMIN_155_VERSION_CODE 1791279164' in source
 print('155 exact ELF, mapped signatures, field layouts and fail-closed guard passed')
