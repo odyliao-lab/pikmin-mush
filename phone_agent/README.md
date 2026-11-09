@@ -112,6 +112,12 @@ Leo／Libra 另校準「網路錯誤／重試」畫面。`POPUP_NETWORK_RETRY_EN
 保護及當前正式工作 control=run；不更改網路或登入設定。更新
 `popup-recovery.sh` 與辨識器後需重新啟動原 Agent 載入，保留所有 pending／ACK。
 
+157.0 的 Gemini 1080×1920「無法連接到伺服器／錯誤代碼0／再嘗試」
+另有獨立公共文字、白色卡片及紅色按鈕範本，沿用同一 opt-in 與重試閘門。
+它只重試連線，不選Google帳戶、不輸入密碼、不接受未知同意；人工暫停或
+缺少當前正式工作control=run時不會自動點擊，不能用來解除登入維護暫停。
+MuMu需建置對應x86_64執行檔，不直接部署repo內ARM64手機封裝。
+
 2026-11-09 Cancer 的 1080×2160「通知／Pikmin Bloom Journey 活動日期」
 公告新增獨立 `announcement` 範本，固定解析度及位置，同時比對卡片、公共標題
 和左下角 X；只關閉公告，不點「查看詳細資訊」。

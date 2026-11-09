@@ -26,6 +26,9 @@ assert all((x-540)**2+(y-1925)**2 <= 25**2 for x,y,*_ in groups['p25_button'])
 assert sum(all(v >= 245 for v in rgb) for x,y,*rgb in groups['p25_button']) == 32
 assert sum(rgb[1]-rgb[0] >= 40 for x,y,*rgb in groups['p25_button']) == 32
 assert ('announcement', '1080', '2160', '105', '1923', 'p24') in templates
+assert ('network', '1080', '1920', '540', '1150', 'p26') in templates
+assert len(groups['p26_frame']) >= 48 and len(groups['p26_text']) >= 192
+assert len(groups['p26_button']) >= 96
 assert len(groups['p24_frame']) >= 48 and len(groups['p24_text']) >= 192
 assert len(groups['p24_button']) >= 64
 # This is the separate X, well away from the announcement's details link.
@@ -90,6 +93,13 @@ for kind, sw, sh, sx, sy, prefix in templates:
     for group in ('frame','text'):
         paint(missing_button,w,groups[prefix+'_'+group])
     check(missing_button, 'unknown')
+    if prefix == 'p26':
+        # Only the observed code0 retry, not a generic server/auth error card.
+        changed_code = bytearray(data)
+        paint(changed_code,w,[(px,py,255,255,255)
+                             for px,py,*_ in groups[prefix+'_text']
+                             if 400 <= px <= 440 and 1000 <= py <= 1047])
+        check(changed_code,'unknown')
     if kind == 'dashboard':
         # A white circular control or a green blob is not the compass glyph.
         # Keep foreground and negative-space checks when backgrounds animate.
