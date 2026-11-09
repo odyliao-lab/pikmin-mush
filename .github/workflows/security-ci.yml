@@ -42,6 +42,7 @@ jobs:
           bash phone_agent/tests/auth-stdin-test.sh
           bash phone_agent/tests/shell-context-test.sh
           bash phone_agent/tests/map-entry-test.sh
+          bash phone_agent/tests/launch-game-test.sh
           bash phone_agent/tests/visual-recovery-test.sh
           bash phone_agent/tests/popup-recovery-test.sh
           bash phone_agent/tests/popup-network-test.sh

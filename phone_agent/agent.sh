@@ -500,7 +500,7 @@ launch_game() {
       "am start --display $DISPLAY_ID -n $PKG/$GAME_ACTIVITY" >/dev/null 2>&1
   else
     run_as_shell \
-      "monkey -p $PKG -c android.intent.category.LAUNCHER 1" >/dev/null 2>&1
+      "am start -n $PKG/$GAME_ACTIVITY" >/dev/null 2>&1
   fi
 }
 
