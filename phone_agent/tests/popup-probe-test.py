@@ -14,6 +14,14 @@ groups = {}
 for name, body in re.findall(r'PopupSample (p\d+_\w+)\[\]=\{(.*?)\};', source):
     groups[name] = [tuple(map(int, p)) for p in re.findall(r'\{(\d+),(\d+),(\d+),(\d+),(\d+)\}', body)]
 templates = re.findall(r'\{"(\w+)",(\d+),(\d+),(\d+),(\d+),(p\d+)_frame,', source)
+assert ('danger', '1080', '1920', '540', '1085', 'p26') in templates
+assert ('dashboard', '1080', '1920', '540', '1815', 'p27') in templates
+assert groups['p26_frame'] == groups['p14_frame']
+assert groups['p27_frame'] == groups['p15_frame']
+assert groups['p27_button'] == groups['p15_button']
+assert len(groups['p26_text']) == 112 and len(groups['p26_button']) == 96
+assert len(groups['p27_text']) == 64
+assert all(545 <= x <= 939 and 64 <= y <= 98 for x,y,*_ in groups['p27_text'])
 # Keep the two observed 156.1 phone glyph variants independently calibrated.
 # They must not be replaced with a generic confirmation-button template.
 assert ('restricted', '1080', '2400', '540', '1287', 'p20') in templates
@@ -148,6 +156,12 @@ for kind, sw, sh, sx, sy, prefix in templates:
         for group in ('frame','text','button'):
             paint(far,w,groups[prefix+'_'+group],80)
         check(far,'unknown')
+    if prefix in ('p26', 'p27'):
+        # Exact local screen size only; no inferred phone-height calibration.
+        wrong_height = blank(w,2400)
+        for group in ('frame','text','button'):
+            paint(wrong_height,w,groups[prefix+'_'+group],240)
+        check(wrong_height,'unknown')
 check(blank(1080,2160), 'unknown')
 check(blank(1080,1920), 'unknown')
 check(struct.pack('<IIII',1080,1920,1,0)+b'\xff'*(1080*1920*4),'unknown')
