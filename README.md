@@ -6,7 +6,7 @@ Pikmin Bloom 蘑菇全球掃描、集中排程與公開地圖系統。Root Andro
 - Native 建置使用本機 ASCII 路徑的乾淨工作副本；以當前環境核對 repo 與工具位置，不沿用舊電腦的固定路徑。
 
 > [!IMPORTANT]
-> Native ARM64 新增 **Pikmin Bloom 156.1／versionCode 1793076318**，保留152–156.0各版獨立簽章保護。台中四台手機與三台 MuMu 已完成逐台升級及至少三個新非零正式目標驗收；這是有界驗收，不代表全天穩定。精確輸入、測試、發布與逐台證據見 `docs/FLEET_1561_VALIDATION_2026-11-06.md`。竹北三台仍須在當地主機獨立部署與驗證，提示詞見 `docs/ZHUBEI_1561_UPGRADE_PROMPT.md`。
+> Native ARM64 新增 **Pikmin Bloom 157.0／versionCode 1793360009**，保留152–156.1各版獨立簽章保護。台中七台已安裝遊戲157與Hunter157.0-r1；六台已有新非零掃描／上傳觀測，Gemini待使用者完成Google帳戶選擇，目前透過正常控制入口維護暫停。Cancer首頁羅盤辨識修正已通過自動冷啟動及至少三個新非零目標複驗；詳見 `docs/FLEET_157_VALIDATION_2026-11-09.md`，不代表全天或全提示自動恢復驗收。精確輸入見 `docs/FLEET_157_CANDIDATE_2026-11-09.md`。竹北三台與控制中心不在本次部署範圍；既有156.1成對版本仍相容，不強制其他節點一起更新。
 
 ## 目前狀態
 
@@ -71,7 +71,7 @@ Pikmin Bloom 蘑菇全球掃描、集中排程與公開地圖系統。Root Andro
 ```mermaid
 flowchart LR
   subgraph Android[Root Android Agent]
-    Game[Pikmin Bloom 156.0] <--> Hook[Zygisk native hook]
+    Game[Pikmin Bloom 157.0] <--> Hook[Zygisk native hook]
     Hook <--> Files[teleport.txt / mushrooms.tsv]
     Files <--> Agent[phone_agent 常駐服務]
   end
@@ -100,7 +100,7 @@ flowchart LR
 
 | 路徑 | 用途 |
 | --- | --- |
-| `module/cpp/` | Pikmin 152–156 獨立簽章保護、Zygisk hook、定位與 TSV 寫入原始碼 |
+| `module/cpp/` | Pikmin 152–157 獨立簽章保護、Zygisk hook、定位與 TSV 寫入原始碼 |
 | `module/build-dual-abi.ps1` | Android NDK ARM64／x86_64 建置 |
 | `module/package-module.ps1` | Magisk ZIP 建立與路徑驗證 |
 | `phone_agent/` | Android Agent、開機服務、復原與 virtual display 工具 |
@@ -130,12 +130,12 @@ npm test
 
 ### Native 模組
 
-需求：Windows PowerShell、Android NDK r27d、CMake、Ninja、Google Platform-Tools、已 root 並啟用 Magisk／Zygisk 的 Android，以及精確的 156.0／1792142832 遊戲 build。建置前核對當前工作副本與工具路徑；舊電腦的固定路徑不是新環境已具備工具的證據。
+需求：Windows PowerShell、Android NDK r27d、CMake、Ninja、Google Platform-Tools、已 root 並啟用 Magisk／Zygisk 的 Android，以及精確的 157.0／1793360009 遊戲 build。建置前核對當前工作副本與工具路徑；舊電腦的固定路徑不是新環境已具備工具的證據。
 
 ```powershell
 # 從目前乾淨 repo 根目錄執行
 powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\module\build-dual-abi.ps1
-powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\module\package-module.ps1 -GameVersion 156.0 -GameVersionCode 1792142832 -ModuleRevision r2
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\module\package-module.ps1 -GameVersion 157.0 -GameVersionCode 1793360009 -ModuleRevision r1
 ```
 
 請勿用 Windows `Compress-Archive` 自製 Magisk ZIP；一律使用專案 packaging script，確保 ZIP 內 `zygisk/` 路徑正確。腳本的歷史預設仍為152，不能省略版本參數。
@@ -150,7 +150,7 @@ powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\module\package-module.
 > [!CAUTION]
 > 方案需要 root、Magisk、Zygisk，並會讀取遊戲私有檔案、注入遊戲程序和覆寫定位。請自行評估遊戲服務條款、帳號與裝置風險。
 
-1. 確認實際 ABI、Magisk／Zygisk、遊戲版本 **156.0／1792142832**、APK 簽章及對應 native 指紋。
+1. 確認實際 ABI、Magisk／Zygisk、遊戲版本 **157.0／1793360009**、APK 簽章及對應 native 指紋。
 2. 安裝 `module/pikmin_hunter.zip` 後重開機；native `.so` 更新也必須 reboot。
 3. 在後台建立 Agent，將一次性顯示的 ID／token 只寫入該手機私有 `config`／`token`。
 4. 部署 `phone_agent/` 到 `/data/adb/modules/pikmin_scanner_agent/`，保留既有 config／token，shell 檔權限為 `0700`。
