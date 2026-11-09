@@ -48,7 +48,7 @@ test('maintenance writes require the dedicated secret and report bounded health'
       readMushroomRetentionStatus:async()=>status,
       checkMaintenanceHealth:async()=>({severity:'healthy'}),
       runMushroomRetention:async()=>{runs++;
-        if(completes)status.lastSucceededAt=Math.floor(Date.now()/1000);
+        if(completes){status.lastSucceededAt=Math.floor(Date.now()/1000);status.consecutiveFailures=0;}
         return status},
       noStoreJson:(body,code=200)=>Response.json(body,{status:code,headers:{'cache-control':'no-store'}}),
     };
