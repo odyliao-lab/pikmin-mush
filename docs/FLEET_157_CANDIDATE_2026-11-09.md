@@ -18,6 +18,7 @@ Fresh installed signatures must also match before each device update.
 
 | Input | Bytes | SHA-256 |
 | --- | ---: | --- |
+| Original APKMirror bundle | 149099968 | `b4f62fab15333604590377ef88f299af08ea3d94db201519aa965e5d5d7e3fc4` |
 | base.apk | 74766568 | `0f9aa76ee7437f99d104eff78c5e448c639f04cf9ca70676dad8e78be25758ab` |
 | split_config.arm64_v8a.apk | 87435413 | `bfed99c8b4e0c40cdc046d81ae48d7676ce6996e23354b0c5f1c4ac8b82f5ddd` |
 | libil2cpp.so | 257043464 | `6c36ef78a6d1f45cf5b36c73761ed526226a081d981001b71608984afde246a5` |
@@ -29,6 +30,13 @@ mapped RVA minus file offset is `0x4000`; new entrypoints are `0x5B87ED0`,
 fields, mushroom oneof value, managed hook arguments and delayed MapManager
 registration/recalculate contracts retain their expected layouts. No unknown
 profile fallback was added. NativeBridge startup delay and render opt-in remain.
+
+The generated dump SHA-256 is
+`9a4147e4a6628846cd8a2f7f492ab71b5bd39e6711e5f06c22a3f9ed506a611d`.
+The 33 `PoiChallengeType` values and seven map-object oneof values are unchanged
+from 156.1. Geometry remains `LatLng` doubles at 0/8 and `LatLngAlt` nested
+LatLng at 0, altitude at 0x10; static Unity targetFrameRate accessors remain.
+No mushroom category/schema migration is needed for these observed contracts.
 
 ## Local evidence (not gameplay acceptance)
 
