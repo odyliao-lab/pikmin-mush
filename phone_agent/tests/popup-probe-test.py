@@ -42,6 +42,13 @@ for prefix, x, y in [('p27', 540, 2165), ('p28', 720, 2890)]:
 # Libra's public header text replaces scenery-dependent bottom-menu samples.
 assert all(165 <= y < 248 for x,y,*_ in groups['p28_text'])
 assert ('announcement', '1080', '2160', '105', '1923', 'p24') in templates
+assert ('announcement', '1080', '2400', '105', '2165', 'p29') in templates
+assert len(groups['p29_frame']) >= 48 and len(groups['p29_text']) >= 192
+assert len(groups['p29_button']) >= 64
+assert all(40 <= x <= 170 and 2100 <= y <= 2240
+           for x,y,*_ in groups['p29_button'])
+# Public Party Walk title, excluding the details link and blurred account scene.
+assert all(y < 1400 for x,y,*_ in groups['p29_text'])
 assert len(groups['p24_frame']) >= 48 and len(groups['p24_text']) >= 192
 assert len(groups['p24_button']) >= 64
 # This is the separate X, well away from the announcement's details link.
@@ -147,9 +154,11 @@ for kind, sw, sh, sx, sy, prefix in templates:
             paint(bad_text,w,[(px,py,*color) for px,py,*_ in groups[prefix+'_text']])
             check(bad_text, 'unknown')
         if kind == 'announcement':
-            wrong_resolution = blank(w,2400)
+            wrong_height = 2160 if h == 2400 else 2400
+            wrong_resolution = blank(w,wrong_height)
             for group in ('frame','text','button'):
-                paint(wrong_resolution,w,groups[prefix+'_'+group])
+                paint(wrong_resolution,w,[p for p in groups[prefix+'_'+group]
+                                          if p[1] < wrong_height])
             check(wrong_resolution, 'unknown')
             details_control = bytearray(data)
             paint(details_control,w,[(px,py,255,255,255)
