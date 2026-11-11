@@ -1,13 +1,15 @@
 """Scoped lifecycle checks for the two approved Zhubei scanner nodes.
 
 No daemon, scheduler, resource gates, token rotation or game-data cleanup.
-The existing heartbeat invokes this tool. Raw backups remain in private storage.
+The existing heartbeat invokes this tool. Credential backups remain root-only
+inside the guest; only a verification receipt is returned to the host.
 """
 from pathlib import Path
 import argparse
 import hashlib
 import json
 import os
+import re
 import subprocess
 import time
 
@@ -153,12 +155,10 @@ class Node:
         recent = [t for t in ledger if now - t < 3 * 3600]
         if len(recent) >= 2 or (recent and now - recent[-1] < 180):
             raise RuntimeError('Bounded recovery limit/cooldown reached; report instead of restarting')
-        backup = self.adb('exec-out', f'tar -cf - -C / data/adb/modules/pikmin_scanner_agent '
-                          'data/user/0/com.nianticlabs.pikmin/files/mushrooms.tsv', timeout=90)
-        (self.out / 'before-recovery.tar').write_bytes(backup)
+        backup = self.backup_for_recovery()
         ledger.append(now)
         ledger_path.write_text(json.dumps(ledger))
-        self.result.update(recoveryAttempted=True, backupBytes=len(backup))
+        self.result.update(recoveryAttempted=True, **backup)
         self.sh(f'nohup setsid {MOD}/service.sh >>{MOD}/local-display-boot.log 2>&1 </dev/null &')
         deadline = time.monotonic() + wait_seconds
         while time.monotonic() < deadline:
@@ -175,6 +175,41 @@ class Node:
             if not after['serviceMainPids']:
                 raise RuntimeError('Recovery service exited without an Agent; no restart loop')
         self.result['status'] = 'service-starting; wait before any further intervention'
+
+    def backup_for_recovery(self):
+        """Keep credential-bearing recovery material in verified guest-only storage."""
+        dest = ('/data/adb/scanner-heartbeat-backups/' + self.name + '-recovery-'
+                + time.strftime('%Y%m%d-%H%M%S') + '-' + str(os.getpid()))
+        script = f'''set -eu
+umask 077
+D={dest}
+[ ! -e "$D" ]
+mkdir -p "$D/snapshot" "$D/verify"
+chmod 700 /data/adb/scanner-heartbeat-backups "$D" "$D/snapshot" "$D/verify"
+[ -z "$(find {MOD} -type l -print)" ]
+cp -a {MOD} "$D/snapshot/module"
+cp -a {APP}/mushrooms.tsv "$D/snapshot/mushrooms.tsv"
+cmp {MOD}/config "$D/snapshot/module/config"
+cd "$D"
+find snapshot -type f -exec sha256sum {{}} \\; > snapshot.sha256
+find snapshot -exec stat -c '%a %u %g %n' {{}} \\; > original-permissions.txt
+tar -cf archive.tar snapshot snapshot.sha256 original-permissions.txt
+chmod 600 archive.tar snapshot.sha256 original-permissions.txt
+chown 0:0 archive.tar
+[ "$(stat -c '%a %u %g' archive.tar)" = '600 0 0' ]
+[ "$(stat -c '%a %u %g' "$D")" = '700 0 0' ]
+tar -tf archive.tar >/dev/null
+tar -xf archive.tar -C verify
+(cd verify && sha256sum -c snapshot.sha256 >/dev/null)
+printf '__RECOVERY_BACKUP__ %s %s\\n' "$(stat -c %s archive.tar)" "$(sha256sum archive.tar | cut -d ' ' -f1)"
+'''
+        receipt = self.sh(script)
+        match = re.fullmatch(r'__RECOVERY_BACKUP__ ([1-9][0-9]*) ([0-9a-f]{64})', receipt)
+        if not match:
+            raise RuntimeError('Guest root-only recovery backup not verified; no service started')
+        return dict(guestBackup=dest, backupBytes=int(match[1]), backupSha256=match[2],
+                    backupRootOnly=True, backupVerified=True, credentialsExported=False,
+                    backupConsistency='copied snapshot; native TSV writer may remain active')
 
     def save(self):
         self.result['finishedAt'] = time.time()

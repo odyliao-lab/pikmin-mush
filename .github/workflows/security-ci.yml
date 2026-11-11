@@ -53,6 +53,7 @@ jobs:
           bash phone_agent/tests/gps-live-recovery-test.sh
           bash -n phone_agent/service.sh
           bash phone_agent/tests/service-boot-delay-test.sh
+          python3 phone_agent/tests/scanner-lifecycle-test.py
           bash phone_agent/tests/mumu-code-cache-test.sh
           bash phone_agent/tests/cold-restart-test.sh
           bash -n phone_agent/runtime-version.sh

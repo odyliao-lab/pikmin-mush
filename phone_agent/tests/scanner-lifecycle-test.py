@@ -2,6 +2,8 @@
 from pathlib import Path
 import importlib.util
 import os
+import json
+import tempfile
 import unittest
 
 os.environ.setdefault('LOCALAPPDATA', '/tmp/scanner-lifecycle-tests')
@@ -51,6 +53,61 @@ class Safeguards(unittest.TestCase):
     def test_unsafe_live_agent_is_not_declared_safe(self):
         with self.assertRaisesRegex(RuntimeError, 'unsafe cgroup'):
             self.node(agentMainPids=['222'], agentRunning=True, cgroups={'222': '0::/uid_0/pid_12'}).ensure(3)
+
+    def test_recovery_backup_returns_only_verified_guest_receipt(self):
+        node = object.__new__(module.Node)
+        node.name = 'sagittarius'
+        commands = []
+        def shell(command):
+            commands.append(command)
+            return '__RECOVERY_BACKUP__ 40960 ' + 'a' * 64
+        node.sh = shell
+        node.adb = lambda *a, **k: self.fail('Credential archive must not leave the guest')
+        receipt = node.backup_for_recovery()
+        self.assertFalse(receipt['credentialsExported'])
+        self.assertTrue(receipt['backupRootOnly'] and receipt['backupVerified'])
+        self.assertEqual(receipt['backupBytes'], 40960)
+        self.assertIn('sha256sum -c snapshot.sha256', commands[0])
+        self.assertIn("'600 0 0'", commands[0])
+        self.assertIn('tar -xf archive.tar -C verify', commands[0])
+
+    def test_missing_or_malformed_backup_receipt_refuses_recovery(self):
+        node = object.__new__(module.Node)
+        node.name = 'capricorn'
+        for receipt in ['', '__RECOVERY_BACKUP__ 0 ' + 'a' * 64,
+                        '__RECOVERY_BACKUP__ 40960 bad', 'warning\n__RECOVERY_BACKUP__ 40960 ' + 'a' * 64]:
+            node.sh = lambda _, value=receipt: value
+            with self.assertRaisesRegex(RuntimeError, 'no service started'):
+                node.backup_for_recovery()
+
+    def test_backup_command_failure_propagates(self):
+        node = object.__new__(module.Node)
+        node.name = 'capricorn'
+        def fail(_):
+            raise RuntimeError('Scoped ADB operation failed')
+        node.sh = fail
+        with self.assertRaisesRegex(RuntimeError, 'Scoped ADB operation failed'):
+            node.backup_for_recovery()
+
+    def test_failed_backup_neither_starts_service_nor_consumes_recovery_attempt(self):
+        node = self.node()
+        with tempfile.TemporaryDirectory() as directory:
+            node.private = Path(directory)
+            (node.private / 'provisioned-manifest.json').write_text(json.dumps({'service.sh': 'a' * 64}))
+            def shell(command):
+                if command.startswith('sha256sum '):
+                    return 'a' * 64 + '  service.sh'
+                if 'SERVICE_DETACH_ADB_CGROUP' in command:
+                    return '1'
+                self.fail('Service must not start after a failed backup')
+            node.sh = shell
+            def failed_backup():
+                raise RuntimeError('Backup verification failed')
+            node.backup_for_recovery = failed_backup
+            with self.assertRaisesRegex(RuntimeError, 'Backup verification failed'):
+                node.ensure(3)
+            self.assertFalse((node.private / 'lifecycle-recovery-attempts.json').exists())
+            self.assertFalse(node.result.get('recoveryAttempted', False))
 
 
 if __name__ == '__main__':
