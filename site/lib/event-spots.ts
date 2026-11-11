@@ -85,6 +85,8 @@ const melbourneMiniWalk = (id: string, venue: string, lat: number, lng: number, 
 });
 
 export const EVENT_SPOT_SEED: EventSpotSeed[] = [
+  limited({ id: "us-new-york-pikmin4-spaceship-202611", country: "美國", city: "紐約", name: "皮克敏4宇宙船金盆活動 — 紐約", lat: 40.75818, lng: -73.97940, rewardKind: "gold_seedling", rewardSummary: "皮克敏4宇宙船飾品金色花苗", startAt: seconds("2026-11-12T13:00:00+08:00"), endAt: seconds("2026-11-26T10:00:00+08:00"), cooldownNote: "領取次數與重置頻率未提供；請以遊戲顯示為準", eligibilityNote: "使用者提供的活動期間（台灣時間）：2026/11/12 13:00–2026/11/26 10:00；需在活動點附近，實際開放及領取條件以遊戲顯示為準", sourceTitle: "使用者提供：皮克敏4宇宙船金盆活動座標與台灣時間", sourceUrl: "", lastVerifiedAt: seconds("2026-11-12T00:00:00+08:00") }),
+  limited({ id: "us-san-francisco-pikmin4-spaceship-202611", country: "美國", city: "舊金山", name: "皮克敏4宇宙船金盆活動 — 舊金山", lat: 37.78759, lng: -122.40857, rewardKind: "gold_seedling", rewardSummary: "皮克敏4宇宙船飾品金色花苗", startAt: seconds("2026-11-12T16:00:00+08:00"), endAt: seconds("2026-11-26T13:00:00+08:00"), cooldownNote: "領取次數與重置頻率未提供；請以遊戲顯示為準", eligibilityNote: "使用者提供的活動期間（台灣時間）：2026/11/12 16:00–2026/11/26 13:00；需在活動點附近，實際開放及領取條件以遊戲顯示為準", sourceTitle: "使用者提供：皮克敏4宇宙船金盆活動座標與台灣時間", sourceUrl: "", lastVerifiedAt: seconds("2026-11-12T00:00:00+08:00") }),
   melbourneMiniWalk("carlton-gardens", "Carlton Gardens（官方地圖 #6）", -37.8062290, 144.9703030, "四葉幸運草"),
   melbourneMiniWalk("state-library", "State Library Victoria（官方地圖 #3）", -37.8100005, 144.9644355, "迷你書"),
   melbourneMiniWalk("central-a", "Melbourne Central 點位 A（獎勵對應待確認）", -37.8106646, 144.9630521, "", true),
