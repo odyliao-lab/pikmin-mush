@@ -49,6 +49,10 @@ for prefix, x, y in [('p31', 540, 2165), ('p32', 720, 2890)]:
                for px,py,*rgb in groups[prefix+'_button']) == 32
 # Libra's public header text replaces scenery-dependent bottom-menu samples.
 assert all(165 <= y < 248 for x,y,*_ in groups['p32_text'])
+# Both the inner map edge and the highlighted calendar date change at runtime.
+# Anchor strictly within the two outer white gutters, never those interiors.
+assert all((x < 100 or x > 1340) and 400 <= y < 1330
+           for x,y,*_ in groups['p32_frame'])
 assert ('announcement', '1080', '2160', '105', '1923', 'p24') in templates
 assert ('network', '1080', '1920', '540', '1150', 'p30') in templates
 assert len(groups['p30_frame']) >= 48 and len(groups['p30_text']) >= 192
@@ -101,6 +105,13 @@ def paint(data, w, pts, dy=0):
         k = 16 + ((y+dy)*w+x)*4
         data[k:k+4] = bytes((r,g,b,255))
 
+def paint_rect(data, w, rect, color):
+    x0,y0,x1,y1 = rect
+    row = bytes((*color,255)) * (x1-x0)
+    for y in range(y0,y1):
+        k = 16 + (y*w+x0)*4
+        data[k:k+len(row)] = row
+
 check(b'', 'unknown')
 check(struct.pack('<IIII', 0xffffffff, 0xffffffff, 1, 0), 'unknown')
 check(struct.pack('<IIII', 1080, 2400, 2, 0), 'unknown')
@@ -132,6 +143,14 @@ for kind, sw, sh, sx, sy, prefix in templates:
                              if 400 <= px <= 440 and 1000 <= py <= 1047])
         check(changed_code,'unknown')
     if kind == 'dashboard':
+        if prefix == 'p32':
+            # Includes water/road colors and any day's calendar highlight.
+            # Changing either whole interior cannot disable map navigation.
+            for color in ((30,150,240), (255,0,255), (0,0,0)):
+                changed_interiors = bytearray(data)
+                paint_rect(changed_interiors,w,(100,330,1340,1060),color)
+                paint_rect(changed_interiors,w,(150,1100,1290,1460),color)
+                check(changed_interiors, f'{kind} {x} {y}')
         # A white circular control or a green blob is not the compass glyph.
         # Keep foreground and negative-space checks when backgrounds animate.
         for color in ((255,255,255), (33,120,75)):
