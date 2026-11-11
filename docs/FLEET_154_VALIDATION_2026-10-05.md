@@ -37,3 +37,46 @@ is not evidence of successful or unsuccessful capture.
 
 The site compatibility release and each phone's task ACK/upload/server
 acceptance must be separately recorded below; canary capture is not a soak.
+
+## Production release and rollout
+
+PR #127 merged as GitHub main 4c624ce. Sites source tree matches tested
+subtree 249eb8b; mirror merge 8aa80512f4b26d4f9fda455062db709cf33c3555.
+Sites version 101 deployment appgdep_6ac3c9a578c4819197f3e313a6618761
+succeeded at 2026-10-06 00:00:57 Asia/Taipei. Public mushrooms API returned
+HTTP 200. Existing source audience and runtime secrets were preserved.
+
+Leo resumed at 00:01. Target 179121611134745 produced `source=object`,
+completed point 624 with +4 rows/+420 bytes, and successful incremental
+upload. Protected metrics recorded last_data_at=last_target_at=1791216145348,
+zero no-data streak and healthy status. Subsequent targets 635 and 634 also
+captured +6/+4 rows and uploaded. This is real post-resume capture/ACK and
+server acceptance, not historical cumulative TSV or heartbeat evidence.
+
+Aries was backed up, installed and rebooted next. DHCP changed its endpoint;
+the hardware serial was rechecked before resuming. Its 154 signatures and
+GPS hook were verified at runtime. First fallback was a sea target (no rows);
+the next target 179121661334778 returned object readiness and point 657
+captured +4 rows/+433 bytes. Both incremental uploads succeeded. Protected
+metrics recorded last_data_at=1791216671156 and zero streak/healthy. Following
+points 659 and 85 captured +3 rows each; the map was confirmed foreground.
+
+Cancer was installed and rebooted next, preserving its 60% recovery threshold
+and factory thermal/charging protection. At 00:12:58 Android thermal status 3
+triggered `cooling/thermal-severe` at battery 76%, 37.7C. Native/scan acceptance
+is pending natural cooling; no guard bypass is authorized or performed.
+
+Scorpio installation followed while Cancer cooled; its hardware serial was
+verified and private root backup retained before reboot. Runtime verified 154
+signatures and MapManager resolver 0xCEDA140. Target 179121702834627 returned
+object readiness and +11 rows/+1257 bytes; successful uploads totaled the same
+1257 bytes. Subsequent points captured +3/+4 rows and uploaded. Protected
+metrics recorded last_data_at=last_target_at=1791217070680, healthy/zero streak.
+
+At 00:18 Cancer's thermal status had naturally fallen to 0, battery 80%,
+temperature 33.3C. Android still reported charge status 4 (not charging), and
+the read-only sysfs check showed charge_disable=1, input_suspend=0. This does
+not satisfy the unchanged recovery policy (charging/full plus stable period).
+The user was asked to reconnect its charger. No sysfs charging flags, thermal
+protection or recovery policy were changed. Cancer's real native/capture/upload
+validation remains pending; do not claim four-phone recovery from install alone.
