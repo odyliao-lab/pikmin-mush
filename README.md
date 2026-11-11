@@ -8,6 +8,8 @@ Pikmin Bloom 蘑菇全球掃描、集中排程與公開地圖系統。Root Andro
 > [!IMPORTANT]
 > Native ARM64 新增 **Pikmin Bloom 157.0／versionCode 1793360009**，保留152–156.1各版獨立簽章保護。台中七台已安裝遊戲157與Hunter157.0-r1；六台已有新非零掃描／上傳觀測，Gemini待使用者完成Google帳戶選擇，目前透過正常控制入口維護暫停。Cancer首頁羅盤辨識修正已通過自動冷啟動及至少三個新非零目標複驗；詳見 `docs/FLEET_157_VALIDATION_2026-11-09.md`，不代表全天或全提示自動恢復驗收。精確輸入見 `docs/FLEET_157_CANDIDATE_2026-11-09.md`。竹北三台與控制中心不在本次部署範圍；既有156.1成對版本仍相容，不強制其他節點一起更新。
 
+竹北先前的 156.1 三台驗收與 guest-only 備份修正記錄見 `docs/ZHUBEI_1561_VALIDATION_2026-11-06.md`；此為歷史版本驗收，不取代目前 157 文件。
+
 ## 目前狀態
 
 開發中（尚未部署／啟用）：[台中唯一 dispatcher 的持久協調與全域批次／回程查核](docs/TAICHUNG_DISPATCH_COORDINATION_2026-10-23.md)。預設保留既有行為；正式切換與 Agent 端對端驗收仍待另行核准，不新增 scheduler。

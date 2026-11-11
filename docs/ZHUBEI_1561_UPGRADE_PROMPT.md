@@ -29,6 +29,16 @@ https://mush.odyliao.cc/api/controller/maintenance。
 手機／模擬器憑證不得匯出。等待 ACK 邊界後才停止已確認的 Agent 程序，
 不刪 pending、offset、TSV 或遊戲資料，不共用其他節點憑證。
 
+MuMu 重啟另須保全 guest 內的 Android Settings／SSAID 原檔及 fallback，
+仍只存於裝置內 root-only 備份，不輸出 per-app ID 或 user key。
+先核對該 instance 的裝置重設設定，使用 MuMu 正常單 instance 關閉／啟動，
+不要以 `adb reboot` 代替：竹北 Aquarius 曾因沿用開機時的 device-reset
+屬性，由 nemuinit 移除 secure／SSAID 設定，造成 Android ID 重生。
+重啟後 Android ID 或應用程式識別異常時保持手動暫停，先保全現況並查核
+原 guest 備份；不得改信任清單來接受新 ID，也不得盲目覆蓋其他 instance
+或清遊戲資料。這次事故與有界還原記錄見
+[竹北驗收文件](ZHUBEI_1561_VALIDATION_2026-11-06.md)。
+
 取得有來源的官方簽署 156.1 安裝檔，驗證簽章及既有簽署者相符，再就地更新。
 台中精確 ARM64 輸入見候選文件；如取得不同 ABI／版本碼，需獨立分析驗證，
 不可將 ARM64 指標直接套到原生 x86 遊戲。Hunter 從對應 main 原始碼重建並
