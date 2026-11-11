@@ -6,7 +6,7 @@ Pikmin Bloom 蘑菇全球掃描、集中排程與公開地圖系統。Root Andro
 - Native 建置使用本機 ASCII 路徑的乾淨工作副本；以當前環境核對 repo 與工具位置，不沿用舊電腦的固定路徑。
 
 > [!IMPORTANT]
-> Native ARM64 新增 **Pikmin Bloom 157.0／versionCode 1793360009**，保留152–156.1各版獨立簽章保護。台中七台已安裝遊戲157與Hunter157.0-r1；六台已有新非零掃描／上傳觀測，Gemini待使用者完成Google帳戶選擇，目前透過正常控制入口維護暫停。Cancer首頁羅盤辨識修正已通過自動冷啟動及至少三個新非零目標複驗；詳見 `docs/FLEET_157_VALIDATION_2026-11-09.md`，不代表全天或全提示自動恢復驗收。精確輸入見 `docs/FLEET_157_CANDIDATE_2026-11-09.md`。竹北三台後續部署及驗收限制見 `docs/ZHUBEI_157_VALIDATION_2026-11-09.md`；控制中心不在本次部署範圍；既有156.1成對版本仍相容，不強制其他節點一起更新。
+> 目前候選與部署基準為 **Pikmin Bloom 157.0／versionCode 1793360009、Hunter157.0-r1**。精確APK簽章、ELF／metadata與發行包雜湊見 [157候選紀錄](docs/FLEET_157_CANDIDATE_2026-11-09.md)。Native保留152–156.1獨立版本保護；網站仍接受其支援清單內的舊版成對回報，不代表每個舊版都重新完成當次實機驗收。MuMu x86_64透過NativeBridge執行ARM64遊戲，不是原生x86遊戲相容證明。
 
 竹北先前的 156.1 三台驗收與 guest-only 備份修正記錄見 `docs/ZHUBEI_1561_VALIDATION_2026-11-06.md`；此為歷史版本驗收，不取代目前 157 文件。
 
@@ -14,12 +14,17 @@ Pikmin Bloom 蘑菇全球掃描、集中排程與公開地圖系統。Root Andro
 
 開發中（尚未部署／啟用）：[台中唯一 dispatcher 的持久協調與全域批次／回程查核](docs/TAICHUNG_DISPATCH_COORDINATION_2026-10-23.md)。預設保留既有行為；正式切換與 Agent 端對端驗收仍待另行核准，不新增 scheduler。
 
-截至 2026-10-27，正式架構為「四台手機自主 Agent + 雲端集中協調」。正式機隊為 **Agent Aries、Agent Cancer、Agent Leo、Agent Libra**；日常掃描不依賴 Windows、USB、ADB、固定 IP 或同一 Wi-Fi，ADB 僅供安裝、升級與維修。Scorpio 保留為控制中心測試機，不納入掃描。
+文件審視日期：2026-11-12。架構為「Android自主Agent＋雲端逐點派工」，包含實體手機與MuMu模擬器。以下是最近的**版本驗收紀錄**，不是即時健康或在線台數：
 
-2026-10-29 起另加入 **Agent Taurus**（MuMu instance 2）進行第五節點實驗驗收，
-沿用雲端正式派工，不取代以上四台手機。Taurus 依賴這台 Windows 電腦與 MuMu
-持續運行；不能沿用實體手機「不依賴電腦」的結論。環境差異、備份與逐點證據見
-[Taurus 模擬器驗收](docs/TAURUS_EMULATOR_VALIDATION_2026-10-29.md)。
+| 群組 | 已記錄成員 | 157驗收與限制 |
+| --- | --- | --- |
+| 台中手機 | Aries、Cancer、Leo、Libra | 已有新非零掃描／上傳鏈；Cancer另通過自動冷啟回地圖與至少3個新非零目標 |
+| 台中MuMu | Gemini、Taurus、Virgo | 七台均已安裝157/Hunter157.0-r1；11/9紀錄中Gemini仍待使用者選擇Google帳戶、維護暫停，其餘有非零資料；後續提示修正不等於解除登入阻擋 |
+| 竹北MuMu | Aquarius、Sagittarius、Capricorn | 三台均完成至少3個不同新正式目標的native→非零TSV→上傳接受→站端ACK；Aquarius／Sagittarius保留scoped Agent2.2.14，Capricorn保留2.2.13及原刷新／冷啟政策 |
+
+詳細證據與未完成項見 [台中157紀錄](docs/FLEET_157_VALIDATION_2026-11-09.md)、[竹北157紀錄](docs/ZHUBEI_157_VALIDATION_2026-11-09.md)。24小時耐久、全提示與自然冷啟恢復仍不得以短驗代替。Scorpio及獨立控制中心專案不列入正式掃描部署。
+
+實體手機的日常掃描不依賴Windows、USB、ADB、固定IP或同一Wi-Fi；MuMu必須保持所屬Windows主機與instance運行。所有維修先依 [模擬器維護手冊](docs/EMULATOR_ACCESS_RUNBOOK.md) 重新核對身分與專屬通道，不能照搬跨主機instance／ADB端點或歷史PID。
 
 - 雲端以逐點 lease 分派 target；停用、暫停、離線或 lease 逾時會安全釋放並重排。
 - 正式資料僅保留等級 2–4；等級 1 在手機與雲端擷取流程中略過。
@@ -36,17 +41,20 @@ Pikmin Bloom 蘑菇全球掃描、集中排程與公開地圖系統。Root Andro
 
 - 手機友善的 Leaflet／OpenStreetMap 地圖與清單；地圖預設每 20 秒刷新，清單第一頁每分鐘更新。載入多頁時保留瀏覽位置與快照時間，可隨時按「立即刷新」回到最新第一頁。
 - 等級、類型多選、國家／城市／POI／GPS 搜尋與多種排序；活動類型預設不顯示。
+- 篩選仍以「活動」合併選取；清單／地圖詳情會分別顯示「萬聖節」與「輝煌」，避免跨月資料混淆。
 - 預設以最新發現排序，優先且異色標示參加人數未滿 5 人的蘑菇；圖示會依等級和低人數狀態變化。
 - 詳情含等級、類型、國家－城市、POI、GPS、參加人數／上限、總戰力、挑戰起訖、剩餘時間、更新時間與發現 Agent 名稱。
 - 可複製 GPS 或精簡資訊、開啟 Google 地圖。前端採 viewport bbox + cursor pagination，避免資料量增加後拖慢地圖。
 
 ### 活動金盆
 
-`/event-spots.html` 與蘑菇掃描分離，提供可追溯的常設／限時活動資源點：
+`/event-spots`（亦可使用 `/event-spots.html`）與蘑菇掃描分離，提供可追溯的常設／限時活動資源點：
 
 - 顯示活動期間、獎勵、資格、限制、座標說明及來源 URL。
-- 可依國家、有效狀態或關鍵字篩選，複製 GPS 或在地圖定位。
+- 可依國家、有效狀態或關鍵字篩選；只有有效數值座標才提供GPS複製與地圖定位。
 - 官方與社群座標明確區分，並保留驗證日期與座標精度註記，避免把概略位置當成官方精確點位。
+- `site/lib/event-spots.ts` 是已定位資源點；`site/public/event-spot-notices.json` 保存官方活動已公布但精確GPS待確認的卡片。卡片不產生地圖標記，也不會把null轉成0,0。
+- 11/12更新後為57個座標點與4張待座標卡，包含既有紐約／舊金山宇宙船活動。韓國蠶室與釜山兩筆僅為場館導航參考，尚未遊戲複核；新加坡兩場、巴黎香榭麗舍及荷蘭動漫展的精確GPS待確認。這是目錄數量，啟用有效日期篩選後顯示筆數會不同。
 
 ### 雲端管理後台
 
@@ -64,6 +72,7 @@ Pikmin Bloom 蘑菇全球掃描、集中排程與公開地圖系統。Root Andro
 完整 catalog 位於 `site/lib/scan-plans.ts`，自動輪替規則位於 `site/lib/rotation-plan.mjs`。
 
 - 04:00 掃亞洲／大洋洲，12:00 掃歐洲／中東／非洲，20:00 掃北美／中美／南美；每個城市包在規定時段必須已進入當地當日 01:00 以後。
+- 保留各Agent時段資格；12:00輪替的柏林取樣權重為3倍，詳見 [柏林權重規則](docs/BERLIN_WEIGHT_2026-10-23.md)。
 - **台灣與日本不納入自動輪替。** 既有 catalog 僅供歷史／必要時的手動管理，並非每日排程來源。
 - 同時段各路線互不重疊；每日更換 Agent 與路線對應。依當時可派工 Agent 數重新均分同時段全部城市包，保留全部地區涵蓋；目前容量支援最多十二個正式節點，超過亞洲國家包數時以獨立 lease 共用國家包。定時任務按時段容量對每城取樣並於循環時偏移，不把完整 8km 網格一次排進短時段。
 - Agent 名單改變、手動重排或排程換區前，先等待正式情報複查與回程驗收完成；之後系統會停止舊工作、使舊 lease 失效並新建循環工作，避免舊區域回傳污染新工作。
@@ -90,13 +99,13 @@ flowchart LR
 2. target 寫至 `teleport.txt`，擷取結果累積寫入 `mushrooms.tsv`。
 3. `phone_agent/agent.sh` claim、續租、等待 map refresh、增量上傳 TSV、ACK，並處理 pause／stop／復原。
 4. `service.sh` 開機後啟動 Agent；Magisk action 可做受限時長冷重啟與程序檢查。
-5. 正式機隊使用實體螢幕正常顯示遊戲（`LOCAL_DISPLAY=0`）。virtual display 僅為相容／診斷選項，需另行驗證。
+5. 正式掃描使用Android主顯示畫面（`LOCAL_DISPLAY=0`；MuMu為guest主顯示）。專用virtual display是另行驗證的選項，未宣稱遊戲切背景或關閉渲染後仍可等效掃描。
 
 ### 雲端與 Windows
 
 - `site/` 包含 Vinext／React、Cloudflare Worker、D1 migration 與測試；Agent v2 API 支援逐點派工、續租、ACK、TSV upload 與 fleet metrics。
 - 公開 `/api/mushrooms` 會輸出未過期資料、粗粒度進度及發現 Agent 的顯示名稱；不輸出 token、裝置定位、target／lease、裝置版本或內部計數器。
-- Windows 用於開發、native build、首次安裝、升級及維修；舊掃描器不是正式 fleet 必要元件。
+- Windows用於開發、native build、首次安裝、升級、維修，並承載MuMu節點；舊 `scanner/` 不是雲端自主Agent的必要元件。
 
 ## 專案結構
 
@@ -107,7 +116,10 @@ flowchart LR
 | `module/package-module.ps1` | Magisk ZIP 建立與路徑驗證 |
 | `phone_agent/` | Android Agent、開機服務、復原與 virtual display 工具 |
 | `agent_control_app/` | 手機端 GPS／城市／掃描結果與暫停控制 App |
+| `agent_gps_bridge/` | Android9逐點系統定位輔助，無網路權限；不負責派工 |
 | `site/` | 網站、活動金盆、後台、API、D1 schema／migration／測試 |
+| `maintenance-worker/` | 獨立Cloudflare資料清理入口；啟用須另有正式驗收 |
+| `tools/` | 身分綁定的唯讀模擬器通道健檢等維修工具 |
 | `scanner/` | 舊 Windows 掃描器與維修工具 |
 | `reference/` | 本機 IL2CPP 逆向參考資料；大型 dump 不納入 Git |
 | `SPEC_*.md` | Native、顯示、supervisor、fleet 的詳細規格與歷史 |
@@ -121,14 +133,16 @@ flowchart LR
 ```powershell
 # 從目前 repo 根目錄執行
 Set-Location .\site
-Copy-Item .env.example .env.local
+Copy-Item .env.example .env.local  # 僅首次建立；已有設定不覆蓋
 npm ci
 npm run dev
-npm run lint
+# 驗證時另執行；npm test包含完整build及Node測試
 npm test
 ```
 
 `.env.local` 只在本機保存必要資料，絕不可提交。後台唯一帳號為 Sites 認證的 `ody.liao@gmail.com`；舊 `ADMIN_EMAILS` 不再擴增權限。`AGENT_TOKEN`、`CONTROLLER_TOKEN` 僅為相容／維修與服務查詢，新 Agent 均用個別 token 雜湊保存。
+
+網站結構、D1與安全標頭修改方式見 [site/README.md](site/README.md)。CI另有lint、production lockfile audit及Android shell／probe測試，實際命令以 `.github/workflows/security-ci.yml` 為準；Node測試成功不代表實機或24h驗收成功。
 
 ### Native 模組
 
@@ -153,17 +167,17 @@ powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\module\package-module.
 > 方案需要 root、Magisk、Zygisk，並會讀取遊戲私有檔案、注入遊戲程序和覆寫定位。請自行評估遊戲服務條款、帳號與裝置風險。
 
 1. 確認實際 ABI、Magisk／Zygisk、遊戲版本 **157.0／1793360009**、APK 簽章及對應 native 指紋。
-2. 安裝 `module/pikmin_hunter.zip` 後重開機；native `.so` 更新也必須 reboot。
-3. 在後台建立 Agent，將一次性顯示的 ID／token 只寫入該手機私有 `config`／`token`。
-4. 部署 `phone_agent/` 到 `/data/adb/modules/pikmin_scanner_agent/`，保留既有 config／token，shell 檔權限為 `0700`。
-5. 保持 `LOCAL_DISPLAY=0`，除非裝置已完成 virtual display 驗證；Android 9 GPS bridge 依 `phone_agent/config.example` 設定。
-6. 重啟後，同時確認 target 城市、map refresh、TSV 新行、uploaded count 與 ACK。
+2. 任何變更前先驗證guest／裝置內root-only完整備份；在無未決ACK且已上傳的安全邊界停止唯一原Agent。
+3. 就地更新已驗證的遊戲與Hunter；安裝 `module/pikmin_hunter.zip` 或更新native `.so` 後必須重啟該Android裝置／guest，不重啟整台Windows主機。
+4. 僅新節點需在後台建立獨立Agent，將一次性ID／token寫入裝置私有config／token。既有節點保留原身分、帳戶、憑證與地區資格，不重建節點。
+5. 以scoped更新保留原上傳程式、config、token、TSV、offset及pending狀態，不整包覆蓋別機配置。shell檔權限為 `0700`；保持 `LOCAL_DISPLAY=0`，Android9 GPS bridge另依該元件README及已驗證配置處理。
+6. 重啟後核對載入雜湊及唯一Agent，完成至少3個不同新正式target的native object、非零TSV、接受上傳及站端ACK，再回原工作。
 
-日常掃描不需要 ADB。首次安裝或維修可使用 Google 官方 ADB，例如 `%LOCALAPPDATA%\CodexTools\android-platform-tools\platform-tools\adb.exe`。
+日常掃描不需要ADB連線。首次安裝／維修使用當地主機已確認的工具與受限通道；不執行共用ADB server重啟或任意root/unroot，避免中斷其他Agent。詳細步驟見 [phone_agent/README.md](phone_agent/README.md)。
 
 ### Sites／D1
 
-程式碼流程是 feature branch → PR → checks → merge。合併後若 `site/` 有變更，依 `CLAUDE_HANDOFF.md` 產生 `site` subtree、以短效 source credential 建版、部署至 `succeeded`，並驗證 `/`、`/map.html`、`/event-spots.html`、`/api/mushrooms`、`/api/event-spots` 和登入後的 `/admin`。純 README／非 `site/` 文件變更不需重部署。
+GitHub main是唯一開發來源，Sites是正式發布鏡像；流程為feature branch → PR → checks → merge。發布依 [RELEASE_GATES.md](docs/RELEASE_GATES.md) 及當次Sites工具流程，先核對現有project、正式版本與來源差異，再準備精確site來源、短效credential與build archive，部署至 `succeeded` 並驗證公開路由及授權後台。不得直接以舊交接文件的固定路徑或Git分支覆蓋當前工作。純README（包括 `site/README.md`）變更不需重部署；GitHub合併與網站發布是兩個獨立結果。
 
 Native 或 Agent 變更必須完成實機端到端驗證：版本簽章、hook log、目標城市、TSV、upload、ACK 缺一不可。
 
@@ -186,6 +200,8 @@ Native 或 Agent 變更必須完成實機端到端驗證：版本簽章、hook l
 | `/api/agent/upload` | Agent | 增量 UTF-8 TSV upload |
 
 `mushrooms.tsv` 是累積檔；新增量必須以新 row／蘑菇 ID 判斷，不能以檔案總行數推論。上傳端對 body、row 數與欄位做邊界檢查及正規化。
+
+Agent2.2.14以同一個完整換行TSV前綴計算rows／bytes，接受上傳游標涵蓋該前綴後才送成功ACK。`receipt-v1` 則是另行opt-in的重送去重協定（`UPLOAD_RECEIPTS_ENABLED=0`預設停用）；不能把站端支援說成全部Agent已啟用，見 [UPLOAD_RECEIPTS.md](docs/UPLOAD_RECEIPTS.md)。
 
 公開蘑菇 API 所有請求均分頁（預設 500、每頁最多 1,000 筆）；完整結果須沿 `next_cursor` 讀到結束，並非總數上限。網頁可使用 15 秒短快取，Discord 原有查詢維持不快取。分頁相容性、限流與觀測方式見 [公開查詢效能說明](docs/PUBLIC_MAP_EFFICIENCY.md)。
 
@@ -214,9 +230,9 @@ Discord 通知服務是獨立 repo／獨立排程，使用控制器認證查詢�
 3. `SPEC_autoscan.md`：hook、欄位偏移、native build／deploy 歷史與 gotchas。
 4. `phone_agent/README.md`：Agent 協定、設定與更新。
 5. `SPEC_ON_DEVICE_DISPLAY.md`、`SPEC_GLOBAL_FLEET.md`：顯示與 fleet 設計。
-6. `CLAUDE_HANDOFF.md`、`CLAUDE_SITES_DEPLOY_HANDOFF_2026-08-20.md`：Sites 交接／維運。
+6. `docs/RELEASE_GATES.md`、`docs/EMULATOR_ACCESS_RUNBOOK.md`：現行發布及通道維護入口；`CLAUDE_HANDOFF.md`、`CLAUDE_SITES_DEPLOY_HANDOFF_2026-08-20.md` 是歷史交接，須重新核對版本、路徑與權限。
 7. `WORKLOG.md`、`DEV_HISTORY.md`、`DESIGN_autoscan.md`、`HOOK_TARGETS.md`：歷史決策與除錯。
 
-後續優先方向：將城市 catalog、權重與排程策略資料化；導入依新鮮度／失敗率／Agent 能力的 scheduler v3；補強 fleet heatmap、長時間 soak 與安全遠端版本管理；持續擴增活動金盆但嚴守來源與座標精度標示。
+後續待驗：157長時間耐久與自然冷啟恢復、逐機提示覆蓋、receipt-v1實機canary及配置推廣。allocation shadow與dispatcher協調的未啟用功能，須各自完成文件規定的觀測與核准；活動金盆持續依可追溯來源補充，場館參考與精確遊戲GPS分開標示。
 
 本專案是非官方研究與個人維運工具，與 Niantic 或 Nintendo 無關。
