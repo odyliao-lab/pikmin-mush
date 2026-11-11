@@ -37,6 +37,8 @@ write_game_teleport() { printf '%s\n' "$1" >"$TELEPORT"; }
 ensure_game_running() { return 0; }
 file_size() { echo 100; }
 useful_line_count() { echo 2; }
+scan_snapshot() { echo "100 2"; }
+OFFSET=100
 game_keyevent() { return 0; }
 game_tap() { return 0; }
 sleep() { return 0; }
@@ -46,6 +48,8 @@ send_scan_ack() { printf '%s\n' "$*" >>"$TMP/acks"; }
 wait_for_map_refresh() { return 1; }
 restart_game_for_scan() { PG_BLOCK=1; return 2; }
 PG_BLOCK=0
+# Exercise the bounded third-empty-refresh fallback.
+REFRESH_FAILURE_STREAK=2
 execute_scan_task 42 100 0 20 1.1 2.2 0 0 0 1 lease country city || true
 test ! -e "$TMP/acks"
 test ! -e "$SCAN_PENDING"
