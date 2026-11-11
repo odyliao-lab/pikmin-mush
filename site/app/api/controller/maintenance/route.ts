@@ -8,6 +8,9 @@ import {readHistoryRetention,runHistoryRetention} from '../../../../lib/history-
 const UPLOAD_STALE_MS = 2 * 60 * 60 * 1000;
 const MAINTENANCE_STALE_SECONDS = 30 * 60;
 
+const diagnosticNumber = (value: unknown) =>
+  typeof value === 'number' && Number.isFinite(value) && value >= 0 ? value : null;
+
 async function snapshot() {
   const now = Date.now();
   const retention = await readMushroomRetentionStatus();
@@ -55,22 +58,35 @@ export async function GET(request: Request) {
 
 export async function POST(request: Request) {
   if (!maintenanceAuthorized(request)) return noStoreJson({ error: "unauthorized" }, 401);
-  await ensureSchema();
+  const attemptedAtMs = Date.now();
+  const event = request.headers.get('x-maintenance-event');
+  const source = ['schedule', 'cloudflare-cron', 'workflow_dispatch'].includes(event ?? '') ? event : 'unknown';
+  let stage = 'schema', reason = 'exception', sourceReceiptRecorded = false;
+  let completed: Awaited<ReturnType<typeof runMushroomRetention>> | undefined;
+  let history: Awaited<ReturnType<typeof runHistoryRetention>> | undefined;
   try {
-    const completed = await runMushroomRetention();
-    if (!completed.lastSucceededAt ||
-      Date.now() / 1_000 - completed.lastSucceededAt > 5 * 60) {
-      throw new Error("maintenance did not complete recently");
-    }
-    const history = await runHistoryRetention(runtime().DB);
+    await ensureSchema();
+    stage = 'mushroom_run';
+    completed = await runMushroomRetention();
+    stage = 'mushroom_receipt';
+    const mushroomNow = Date.now() / 1_000;
+    reason = !Number.isFinite(completed.lastSucceededAt) || completed.lastSucceededAt <= 0 ? 'invalid_timestamp'
+      : completed.lastSucceededAt > mushroomNow + 60 ? 'future_timestamp'
+      : mushroomNow - completed.lastSucceededAt > 300 ? 'stale_receipt'
+      : completed.consecutiveFailures > 0 ? 'recorded_failure' : '';
+    if (reason) throw new Error('mushroom receipt rejected');
+    stage = 'history_run'; reason = 'exception';
+    history = await runHistoryRetention(runtime().DB);
+    stage = 'history_receipt';
     const now = Date.now();
-    if (!Number.isFinite(history.lastSucceededAt) || !history.lastSucceededAt ||
-      history.lastSucceededAt > now + 60_000 || now - history.lastSucceededAt > 300_000 ||
-      (history.lastSucceededAt < history.lastRunAt && !history.busy) || history.consecutiveFailures > 0 ||
-      history.tables.some(table => Boolean(table.last_error))) {
-      throw new Error('history maintenance incomplete');
-    }
-    const source = request.headers.get("x-maintenance-event");
+    reason = !Number.isFinite(history.lastSucceededAt) || history.lastSucceededAt <= 0 ? 'invalid_timestamp'
+      : history.lastSucceededAt > now + 60_000 ? 'future_timestamp'
+      : now - history.lastSucceededAt > 300_000 ? 'stale_receipt'
+      : history.lastSucceededAt < history.lastRunAt && !history.busy ? 'incomplete_run'
+      : history.consecutiveFailures > 0 ? 'recorded_failure'
+      : history.tables.some(table => Boolean(table.last_error)) ? 'table_failure' : '';
+    if (reason) throw new Error('history receipt rejected');
+    stage = 'source_receipt'; reason = 'exception';
     if (source === "schedule" || source === "cloudflare-cron") {
       const name = source === "schedule" ? 'mushroom-retention-scheduled' : 'mushroom-retention-independent';
       const db = runtime().DB;
@@ -78,11 +94,27 @@ export async function POST(request: Request) {
         VALUES (?)`).bind(name).run();
       await db.prepare(`UPDATE maintenance_state SET last_run_at=?
         WHERE name=?`).bind(Math.floor(Date.now() / 1_000), name).run();
+      sourceReceiptRecorded = true;
     }
+    stage = 'health';
     const health = await checkMaintenanceHealth();
+    stage = 'snapshot';
     return noStoreJson({ ...await snapshot(), history, maintenanceHealth: health });
   } catch {
+    // Fixed stages and numeric receipt summaries only: never exception messages,
+    // request headers, database rows, remote bodies, URLs, or credentials.
+    const maintenanceFailure = {
+      stage, reason, source, attemptedAtMs, observedAtMs: Date.now(), sourceReceiptRecorded,
+      mushroomLastRunAt: diagnosticNumber(completed?.lastRunAt),
+      mushroomLastSucceededAt: diagnosticNumber(completed?.lastSucceededAt),
+      mushroomConsecutiveFailures: diagnosticNumber(completed?.consecutiveFailures),
+      historyLastRunAtMs: diagnosticNumber(history?.lastRunAt),
+      historyLastSucceededAtMs: diagnosticNumber(history?.lastSucceededAt),
+      historyConsecutiveFailures: diagnosticNumber(history?.consecutiveFailures),
+      historyBusy: typeof history?.busy === 'boolean' ? history.busy : null,
+    };
+    console.warn(JSON.stringify({event: 'maintenance_request_failed', ...maintenanceFailure}));
     try { await checkMaintenanceHealth(); } catch { /* caller records failed request */ }
-    return noStoreJson({ error: "maintenance failed" }, 503);
+    return noStoreJson({ error: "maintenance failed", maintenanceFailure }, 503);
   }
 }

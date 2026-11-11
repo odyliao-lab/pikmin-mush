@@ -8,7 +8,7 @@ test('retention checks coalesce as read-only probes and retry transient errors',
  let now=1800000000000,calls=0,fail=false;
  class Clock extends Date { static now(){return now;} }
  const db={prepare(){return {bind(){return this},async run(){calls++;if(fail)throw Error('transient');return {meta:{changes:0}}},
-   async first(){calls++;if(fail)throw Error('transient');return {last_run_at:Math.floor(now/1000),last_deleted:1,pending:0}}}}};
+   async first(){calls++;if(fail)throw Error('transient');return {last_run_at:Math.floor(now/1000),lastSucceededAt:Math.floor(now/1000),consecutiveFailures:0,last_deleted:1,pending:0}}}}};
  const source=readFileSync(new URL('../lib/cloud.ts',import.meta.url),'utf8');
  const section=source.slice(source.indexOf('export async function runMushroomRetention'));
  const exports={};
@@ -98,4 +98,44 @@ test('maintenance alerts dedupe each severity and retry failed sends after five 
  await exports.notify(t+20,{}, {severity:'critical'});assert.equal(sends,2);
  ok=true;await exports.notify(t+311,{}, {severity:'critical'});assert.equal(sends,3);
  await exports.notify(t+25*3600,{}, {severity:'degraded'});assert.equal(sends,4);
+});
+
+function memoFixture() {
+  let now = 1_800_000_000_000, reads = 0;
+  let row = {last_run_at: now / 1000 - 299, last_succeeded_at: now / 1000 - 299, consecutive_failures: 0};
+  class Clock extends Date { static now() { return now; } }
+  const db = {prepare() { return {async first() { reads++; return {...row}; }}; }};
+  const source = readFileSync(new URL('../lib/cloud.ts', import.meta.url), 'utf8');
+  const section = source.slice(source.indexOf('export async function runMushroomRetention'));
+  const exports = {};
+  new Script(ts.transpileModule(section, {compilerOptions: {module: ts.ModuleKind.CommonJS,
+    target: ts.ScriptTarget.ES2022}}).outputText).runInNewContext({exports, Date: Clock, console,
+    runtime: () => ({DB: db}),
+    retentionStatus: r => ({lastRunAt: r.last_run_at, lastSucceededAt: r.last_succeeded_at,
+      consecutiveFailures: r.consecutive_failures}),
+    MUSHROOM_RETENTION_SECONDS: 7 * 86400, LEVEL_TWO_THREE_INVALID_AFTER_SECONDS: 2 * 86400,
+    MUSHROOM_RETENTION_INTERVAL_SECONDS: 300,
+  });
+  return {run: exports.runMushroomRetention, reads: () => reads,
+    advance(ms) { now += ms; }, state(next) { row = {...row, ...next}; }};
+}
+
+test('a read-only memo must not extend a successful receipt beyond its five-minute validity', async () => {
+  const f = memoFixture();
+  await f.run();
+  f.advance(2000);
+  f.state({last_run_at: 1_800_000_002, last_succeeded_at: 1_800_000_002});
+  const recovered = await f.run();
+  assert.equal(f.reads(), 2, 'probe D1 again when the cached receipt expires, even inside the 30-second memo');
+  assert.equal(recovered.lastSucceededAt, 1_800_000_002);
+});
+
+test('an in-flight owner with no recent success cannot poison the next local receipt probe', async () => {
+  const f = memoFixture();
+  f.state({last_run_at: 1_800_000_000, last_succeeded_at: 1_799_999_000});
+  assert.equal((await f.run()).lastSucceededAt, 1_799_999_000);
+  f.advance(1000);
+  f.state({last_succeeded_at: 1_800_000_000});
+  assert.equal((await f.run()).lastSucceededAt, 1_800_000_000);
+  assert.equal(f.reads(), 2, 'a prior lock loser must observe the owner success without a forced cleanup retry');
 });

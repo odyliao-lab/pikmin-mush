@@ -30,12 +30,15 @@ jobs:
         run: |
           set -euo pipefail
           request_failed=0
-          response="$(curl --fail-with-body --silent --show-error --max-time 90 \
+          result="$(curl --fail-with-body --silent --show-error --max-time 90 \
+            --write-out '\n%{http_code}' \
             -X POST -H "Authorization: Bearer $MAINTENANCE_TOKEN" \
             -H "X-Maintenance-Event: $EVENT_NAME" \
             -H 'Accept: application/json' \
             https://mush.odyliao.cc/api/controller/maintenance)" || request_failed=1
-          REQUEST_FAILED="$request_failed" RESPONSE="$response" python3 - <<'PY'
+          response="${result%$'\n'*}"
+          http_status="${result##*$'\n'}"
+          HTTP_STATUS="$http_status" REQUEST_FAILED="$request_failed" RESPONSE="$response" python3 - <<'PY'
           import json, math, os, re, time, urllib.request, urllib.error
           def number(obj, key):
               value = obj.get(key)
@@ -43,13 +46,23 @@ jobs:
           def boolean(obj, key):
               value = obj.get(key)
               return value if type(value) is bool else None
+          def choice(obj, key, allowed):
+              value = obj.get(key)
+              return value if type(value) is str and value in allowed else 'unknown'
+          def http_status(value):
+              return value if type(value) is int and 100 <= value <= 599 else None
+          try:
+              data = json.loads(os.environ['RESPONSE'])
+              data = data if isinstance(data, dict) else {}
+          except (ValueError, KeyError):
+              data = {}
           failed = False
           message = ''
           try:
               assert os.environ['REQUEST_FAILED'] == '0'
-              data = json.loads(os.environ['RESPONSE'])
               retention = data['retention']
-              assert time.time() - retention['lastSucceededAt'] <= 300, 'stale cleanup receipt'
+              succeeded = number(retention, 'lastSucceededAt')
+              assert succeeded and -60 <= time.time() - succeeded <= 300, 'invalid cleanup receipt'
               print('retention', {**{key: number(retention, key) for key in
                     ('lastSucceededAt', 'lastDeleted', 'pending', 'consecutiveFailures', 'lastDurationMs')},
                     'lastBatchSaturated': boolean(retention, 'lastBatchSaturated')})
@@ -76,6 +89,23 @@ jobs:
                   message = '【蘑菇機隊維護警示】兩小時無成功上傳：' + ', '.join(silent)
           except Exception:
               failed = True
+              failure = data.get('maintenanceFailure')
+              failure = failure if isinstance(failure, dict) else {}
+              status = os.environ.get('HTTP_STATUS', '')
+              diagnostic = {
+                  'httpStatus': http_status(int(status)) if re.fullmatch('[0-9]{3}', status) else None,
+                  'requestFailed': os.environ.get('REQUEST_FAILED') != '0',
+                  'stage': choice(failure, 'stage', ('schema', 'mushroom_run', 'mushroom_receipt',
+                      'history_run', 'history_receipt', 'source_receipt', 'health', 'snapshot')),
+                  'reason': choice(failure, 'reason', ('exception', 'invalid_timestamp', 'future_timestamp',
+                      'stale_receipt', 'incomplete_run', 'recorded_failure', 'table_failure')),
+                  'source': choice(failure, 'source', ('schedule', 'cloudflare-cron', 'workflow_dispatch')),
+                  **{key: number(failure, key) for key in ('attemptedAtMs', 'observedAtMs',
+                      'mushroomLastRunAt', 'mushroomLastSucceededAt', 'mushroomConsecutiveFailures',
+                      'historyLastRunAtMs', 'historyLastSucceededAtMs', 'historyConsecutiveFailures')},
+                  **{key: boolean(failure, key) for key in ('sourceReceiptRecorded', 'historyBusy')},
+              }
+              print('maintenanceFailure', json.dumps(diagnostic, sort_keys=True))
               message = '【蘑菇清理連線異常】GitHub 無法取得清理成功回報；請檢查站台或憑證，不能假設備援正常。'
           if os.environ.get('SCHEDULE') == '13 * * * *' and message:
               webhook = os.environ.get('DISCORD_WEBHOOK', '')
@@ -84,11 +114,17 @@ jobs:
               request = urllib.request.Request(webhook,
                   data=json.dumps({'content': message, 'allowed_mentions': {'parse': []}}).encode(),
                   headers={'Content-Type': 'application/json'}, method='POST')
+              delivery_status = None
               try:
                   with urllib.request.urlopen(request, timeout=20) as reply:
+                      delivery_status = http_status(reply.status)
                       if reply.status not in (200, 204):
                           raise RuntimeError('delivery rejected')
-              except Exception:
+              except Exception as error:
+                  if isinstance(error, urllib.error.HTTPError):
+                      delivery_status = http_status(error.code)
+                  print('fleetAlertFailure', json.dumps({'httpStatus': delivery_status,
+                      'stage': 'http' if delivery_status is not None else 'request'}, sort_keys=True))
                   print('::warning::Fleet alert delivery failed; cleanup result is separate')
           raise SystemExit(1 if failed else 0)
           PY

@@ -822,7 +822,13 @@ export function scheduleRetentionEmergencyFallback(): void {
 
 export async function runMushroomRetention(): Promise<MushroomRetentionStatus> {
   const now = Date.now();
-  if (retentionCached && now - retentionCheckedAt < 30_000) return retentionCached;
+  // A lock loser can return the owner's previous receipt. Do not memoize that
+  // receipt past its validity, or delay observing a newly completed owner.
+  if (retentionCached && now - retentionCheckedAt < 30_000 &&
+    Number.isFinite(retentionCached.lastSucceededAt) && retentionCached.lastSucceededAt > 0 &&
+    retentionCached.lastSucceededAt <= now / 1_000 + 60 &&
+    now / 1_000 - retentionCached.lastSucceededAt <= MUSHROOM_RETENTION_INTERVAL_SECONDS &&
+    retentionCached.consecutiveFailures === 0) return retentionCached;
   if (retentionInFlight) return retentionInFlight;
   retentionInFlight = performMushroomRetention();
   try {
