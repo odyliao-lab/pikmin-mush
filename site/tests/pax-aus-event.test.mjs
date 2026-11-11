@@ -24,7 +24,7 @@ test('PAX Aus preserves four user coordinates, AEDT window and access restrictio
     assert.equal(row.spotKind,'limited');
     assert.equal(row.rewardKind,'gold_seedling');
   }
-  const historical=exported.EVENT_SPOT_SEED.filter(s=>!s.id.startsWith('au-melbourne-mini-walk-2026-')&&!s.id.includes('-pikmin4-spaceship-202611'));
+  const historical=exported.EVENT_SPOT_SEED.filter(s=>!s.id.startsWith('au-melbourne-mini-walk-2026-')&&!s.id.includes('-pikmin4-spaceship-202611')&&!s.id.startsWith('kr-lotte-2026-'));
   assert.equal(historical.length,47);
   assert.equal(new Set(historical.map(s=>s.id)).size,47);
   assert.equal(exported.EVENT_SPOT_SEED.filter(s=>s.id.startsWith('tw-ikea-')).length,0);

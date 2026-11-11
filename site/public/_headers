@@ -4,4 +4,4 @@
   Referrer-Policy: strict-origin-when-cross-origin
   X-Frame-Options: DENY
   Permissions-Policy: camera=(), microphone=(), geolocation=(), payment=()
-  Content-Security-Policy: default-src 'self'; script-src 'self' https://unpkg.com 'sha256-lg9ZMqKZzUKA7iLlLBDtZDKkvJE6ea+UVFwIojGdix8=' 'sha256-s3D7Z/rx5nE9gep6zwZabNwIE51CkObSB0zP/O8+Td0='; style-src 'self' 'unsafe-inline' https://unpkg.com; img-src 'self' data: https://*.tile.openstreetmap.org; connect-src 'self'; object-src 'none'; base-uri 'self'; frame-ancestors 'none'; form-action 'self'; upgrade-insecure-requests
+  Content-Security-Policy: default-src 'self'; script-src 'self' https://unpkg.com 'sha256-lg9ZMqKZzUKA7iLlLBDtZDKkvJE6ea+UVFwIojGdix8=' 'sha256-6gpddhje8uQ2roK6VOEXBUps7lXqN71DhYAJmM4PDPo='; style-src 'self' 'unsafe-inline' https://unpkg.com; img-src 'self' data: https://*.tile.openstreetmap.org; connect-src 'self'; object-src 'none'; base-uri 'self'; frame-ancestors 'none'; form-action 'self'; upgrade-insecure-requests

@@ -17,8 +17,8 @@ test('Melbourne MINI WALK preserves six supplied GPS and verified AEDT/Taipei wi
     [-37.8062290,144.9703030],[-37.8100005,144.9644355],[-37.8106646,144.9630521],
     [-37.8108850,144.9639360],[-37.8101367,144.9631035],[-37.8119920,144.9604610],
   ]);
-  assert.equal(all.length,55);
-  assert.equal(new Set(all.map(s=>s.id)).size,55);
+  assert.equal(all.length,57);
+  assert.equal(new Set(all.map(s=>s.id)).size,57);
   for(const row of rows){
     assert.equal(row.startAt,Date.parse('2026-10-29T07:00:00+08:00')/1000);
     assert.equal(row.endAt,Date.parse('2026-11-01T19:00:00+08:00')/1000);
