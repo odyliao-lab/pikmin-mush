@@ -53,6 +53,13 @@ assert ('announcement', '1080', '2160', '105', '1923', 'p24') in templates
 assert ('network', '1080', '1920', '540', '1150', 'p30') in templates
 assert len(groups['p30_frame']) >= 48 and len(groups['p30_text']) >= 192
 assert len(groups['p30_button']) >= 96
+assert ('announcement', '1080', '2400', '105', '2165', 'p33') in templates
+assert len(groups['p33_frame']) >= 48 and len(groups['p33_text']) >= 192
+assert len(groups['p33_button']) >= 64
+assert all(40 <= x <= 170 and 2100 <= y <= 2240
+           for x,y,*_ in groups['p33_button'])
+# Public Party Walk title, excluding the details link and blurred account scene.
+assert all(y < 1400 for x,y,*_ in groups['p33_text'])
 assert len(groups['p24_frame']) >= 48 and len(groups['p24_text']) >= 192
 assert len(groups['p24_button']) >= 64
 # This is the separate X, well away from the announcement's details link.
@@ -165,9 +172,11 @@ for kind, sw, sh, sx, sy, prefix in templates:
             paint(bad_text,w,[(px,py,*color) for px,py,*_ in groups[prefix+'_text']])
             check(bad_text, 'unknown')
         if kind == 'announcement':
-            wrong_resolution = blank(w,2400)
+            wrong_height = 2160 if h == 2400 else 2400
+            wrong_resolution = blank(w,wrong_height)
             for group in ('frame','text','button'):
-                paint(wrong_resolution,w,groups[prefix+'_'+group])
+                paint(wrong_resolution,w,[p for p in groups[prefix+'_'+group]
+                                          if p[1] < wrong_height])
             check(wrong_resolution, 'unknown')
             details_control = bytearray(data)
             paint(details_control,w,[(px,py,255,255,255)
