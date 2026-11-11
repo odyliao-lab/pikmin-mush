@@ -33,6 +33,22 @@ assert len(groups['p25_button']) == 64
 assert all((x-540)**2+(y-1925)**2 <= 25**2 for x,y,*_ in groups['p25_button'])
 assert sum(all(v >= 245 for v in rgb) for x,y,*rgb in groups['p25_button']) == 32
 assert sum(rgb[1]-rgb[0] >= 40 for x,y,*rgb in groups['p25_button']) == 32
+assert ('dashboard', '1080', '2400', '540', '2165', 'p31') in templates
+assert ('dashboard', '1440', '3120', '720', '2890', 'p32') in templates
+assert groups['p31_frame'] == groups['p9_frame']
+assert groups['p31_text'] == groups['p9_text']
+for prefix, x, y in [('p31', 540, 2165), ('p32', 720, 2890)]:
+    assert len(groups[prefix+'_frame']) >= 64
+    assert len(groups[prefix+'_text']) >= 96
+    assert len(groups[prefix+'_button']) == 64
+    assert all((px-x)**2+(py-y)**2 <= 25**2
+               for px,py,*_ in groups[prefix+'_button'])
+    assert sum(all(v >= 245 for v in rgb)
+               for px,py,*rgb in groups[prefix+'_button']) == 32
+    assert sum(rgb[1]-rgb[0] >= 40
+               for px,py,*rgb in groups[prefix+'_button']) == 32
+# Libra's public header text replaces scenery-dependent bottom-menu samples.
+assert all(165 <= y < 248 for x,y,*_ in groups['p32_text'])
 assert ('announcement', '1080', '2160', '105', '1923', 'p24') in templates
 assert ('network', '1080', '1920', '540', '1150', 'p30') in templates
 assert len(groups['p30_frame']) >= 48 and len(groups['p30_text']) >= 192
@@ -115,12 +131,12 @@ for kind, sw, sh, sx, sy, prefix in templates:
             other_control = bytearray(data)
             paint(other_control,w,[(x,y,*color) for x,y,*_ in groups[prefix+'_button']])
             check(other_control, 'unknown')
-        if prefix in ('p8', 'p15', 'p25'):
+        if prefix in ('p8', 'p15', 'p25', 'p31', 'p32'):
             # Cancer/Gemini translucent edges change with the flower scene.
             # Its opaque glyph/interior must still gate the action independently.
             for color in ((0,0,0), (220,80,160)):
                 scenery = bytearray(data)
-                inner = 25 if prefix == 'p25' else 36
+                inner = 25 if prefix in ('p25', 'p31', 'p32') else 36
                 ring = [(px,py,*color) for px in range(x-65,x+66)
                         for py in range(y-65,y+66)
                         if inner**2 < (px-x)**2+(py-y)**2 <= 65**2]
