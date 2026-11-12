@@ -117,7 +117,7 @@ if [ ! -x "$MAGISK_SU" ]; then
   MAGISK_SU="$(command -v su 2>/dev/null)"
 fi
 AGENT_ID="${AGENT_ID:-primary}"
-AGENT_VERSION="${AGENT_VERSION:-2.2.16}"
+AGENT_VERSION="${AGENT_VERSION:-2.2.17}"
 [ -r "$MODDIR/runtime-version.sh" ] || { echo '[version] runtime probe missing'; exit 1; }
 . "$MODDIR/runtime-version.sh"
 refresh_game_version
@@ -155,12 +155,24 @@ LAST_SEQ="$(cat "$SEQ_FILE" 2>/dev/null)"
 case "$OFFSET" in ''|*[!0-9]*) OFFSET=0 ;; esac
 case "$LAST_SEQ" in ''|*[!0-9]*) LAST_SEQ=0 ;; esac
 
+pending_upload_bytes() {
+  case "$OFFSET" in ''|*[!0-9]*) return ;; esac
+  case "$OFFSET" in 0?*) return ;; esac
+  PENDING_SIZE="$(stat -c %s "$TSV" 2>/dev/null)"
+  case "$PENDING_SIZE" in ''|*[!0-9]*) return ;; esac
+  case "$PENDING_SIZE" in 0?*) return ;; esac
+  [ "${#PENDING_SIZE}" -le 15 ] && [ "${#OFFSET}" -le 15 ] || return
+  [ "$PENDING_SIZE" -ge "$OFFSET" ] || return
+  printf '%s' "$((PENDING_SIZE - OFFSET))"
+}
+
 auth_curl() {
+  TELEMETRY_PENDING="$(pending_upload_bytes)"
   if [ -n "$CURL_DNS_SERVERS" ]; then
     printf 'Authorization: Bearer %s\n' "$TOKEN" |
     "$CURL_BIN" -fsS --dns-servers "$CURL_DNS_SERVERS" --connect-timeout 10 --max-time 45 \
       -H @- \
-      -H "X-Agent-Id: $AGENT_ID" \
+      -H "X-Agent-Id: $AGENT_ID" -H "X-Agent-Pending-Bytes: $TELEMETRY_PENDING" \
       -H "X-Agent-Version: $AGENT_VERSION" \
       -H "X-Game-Version: $GAME_VERSION" \
       -H "X-Module-Version: $MODULE_VERSION" "$@"
@@ -169,7 +181,7 @@ auth_curl() {
   printf 'Authorization: Bearer %s\n' "$TOKEN" |
   "$CURL_BIN" -fsS --connect-timeout 10 --max-time 45 \
     -H @- \
-    -H "X-Agent-Id: $AGENT_ID" \
+    -H "X-Agent-Id: $AGENT_ID" -H "X-Agent-Pending-Bytes: $TELEMETRY_PENDING" \
     -H "X-Agent-Version: $AGENT_VERSION" \
     -H "X-Game-Version: $GAME_VERSION" \
     -H "X-Module-Version: $MODULE_VERSION" "$@"

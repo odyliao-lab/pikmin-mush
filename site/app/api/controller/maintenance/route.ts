@@ -4,6 +4,7 @@ import {
   checkMaintenanceHealth,
 } from "../../../../lib/cloud";
 import {readHistoryRetention,runHistoryRetention} from '../../../../lib/history-retention.mjs';
+import {pendingUploadState} from '../../../../lib/upload-pending.mjs';
 
 const UPLOAD_STALE_MS = 2 * 60 * 60 * 1000;
 const MAINTENANCE_STALE_SECONDS = 30 * 60;
@@ -25,7 +26,17 @@ async function snapshot() {
     FROM scan_agent_events WHERE event_type='upload' AND at>=? GROUP BY agent_id`)
     .bind(now - 24 * 60 * 60 * 1000).all<{ agent_id: string; last_upload_at: number }>();
   const uploadedAt = new Map((uploads.results ?? []).map(row => [row.agent_id, row.last_upload_at]));
-  const fleet = (agents.results ?? []).map(agent => ({
+  const samples = await runtime().DB.prepare(`SELECT agent_id,at,detail FROM scan_agent_events
+    WHERE event_type='heartbeat' AND at>=? ORDER BY at DESC LIMIT 5000`)
+    .bind(now - 3 * 60 * 60 * 1000).all<{agent_id:string;at:number;detail:string}>();
+  const fleet = (agents.results ?? []).map(agent => {
+    const pending = (samples.results ?? []).filter(row=>row.agent_id===agent.id).map(row=>{
+      let pendingBytes:unknown=null;
+      try {pendingBytes=JSON.parse(row.detail).pendingBytes;} catch {}
+      return {at:Number(row.at),pendingBytes};
+    });
+    const pendingState=pendingUploadState(pending,now,uploadedAt.get(agent.id)??0);
+    return {
     id: agent.id, name: agent.display_name, enabled: !!agent.enabled,
     paused: !!agent.paused, lastSeen: agent.last_seen, lastAcceptedDataAt: agent.last_data_at,
     lastAcceptedUploadAt: uploadedAt.get(agent.id) ?? 0,
@@ -33,7 +44,9 @@ async function snapshot() {
     uploadSilent: !!agent.enabled && !agent.paused && !!agent.current_job_id &&
       now - agent.created_at > UPLOAD_STALE_MS &&
       now - (uploadedAt.get(agent.id) ?? 0) > UPLOAD_STALE_MS,
-  }));
+    uploadPendingState:pendingState,
+    uploadStalled:!!agent.enabled && !agent.paused && pendingState==='stalled',
+  };});
   const history = await readHistoryRetention(runtime().DB);
   return {
     now, retention, history, fleet,
@@ -43,7 +56,9 @@ async function snapshot() {
       maintenanceFailing: retention.consecutiveFailures >= 2,
       retentionBacklog: retention.pending > 0 || retention.lastBatchSaturated,
       historyRetentionFailing: history.tables.some(table => Boolean(table.last_error)),
-      uploadSilentAgents: fleet.filter(agent => agent.uploadSilent).map(agent => agent.id),
+      uploadSilentAgents: fleet.filter(agent => agent.uploadStalled).map(agent => agent.id),
+      uploadDataGapAgents: fleet.filter(agent => agent.uploadSilent).map(agent => agent.id),
+      uploadPendingUnknownAgents: fleet.filter(agent => agent.enabled && !agent.paused && agent.uploadPendingState==='unknown').map(agent => agent.id),
     },
   };
 }

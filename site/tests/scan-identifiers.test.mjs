@@ -69,3 +69,13 @@ test('an unconfirmed scan cannot make the fleet soak verdict pass', () => {
   assert.equal(soakVerdict(true, 0, 1, 1), 'warn');
   assert.equal(soakVerdict(true, 0, 0, 0), 'pass');
 });
+
+test('Agent pending byte telemetry rejects malformed and unsafe numbers', () => {
+  const source=readFileSync(new URL('../lib/fleet.ts',import.meta.url),'utf8');
+  const section=source.slice(source.indexOf('export function agentRequestVersions'),source.indexOf('export async function touchAgent'));
+  const exports={};
+  new Script(ts.transpileModule(section,{compilerOptions:{module:ts.ModuleKind.CommonJS}}).outputText).runInNewContext({exports});
+  const read=value=>exports.agentRequestVersions(new Request('https://example.test',{headers:value===null?{}:{'x-agent-pending-bytes':value}})).pendingBytes;
+  assert.equal(read('0'),0);assert.equal(read('12345'),12345);
+  for(const value of [null,'','-1','1e9','9007199254740992'])assert.equal(read(value),undefined);
+});
