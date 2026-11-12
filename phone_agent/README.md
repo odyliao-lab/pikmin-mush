@@ -6,7 +6,7 @@ Root Android常駐掃描Agent，接受雲端逐點派工、等待遊戲native刷
 
 ## 版本與驗收範圍
 
-- repo `agent.sh` 預設回報 **2.2.14**；目前遊戲／Hunter基準為 **157.0／1793360009、157.0-r1**。精確簽署APK、ABI及native指紋見 [157候選紀錄](../docs/FLEET_157_CANDIDATE_2026-11-09.md)。
+- repo `agent.sh` 新尺寸政策候選預設回報 **2.2.16**，只計大菇3與巨菇4，並在原有等待結束後重新結算，涵蓋刷新標記後才到達的物件；獨立Hunter候選為157.0-r2-large-giant，逐台部署狀態另行驗收，見 [尺寸政策](../docs/LARGE_GIANT_ONLY_POLICY_2026-11-12.md)。先前已驗收的基準是 **157.0／1793360009、157.0-r1**；原APK簽署及native指紋見 [157候選紀錄](../docs/FLEET_157_CANDIDATE_2026-11-09.md)。
 - 竹北Aquarius／Sagittarius保留scoped2.2.14，Capricorn保留scoped2.2.13與既有刷新／冷啟政策；三台有至少3個不同新正式目標的完整鏈證據，見 [竹北157紀錄](../docs/ZHUBEI_157_VALIDATION_2026-11-09.md)。不能以repo版本推論每台都已覆蓋更新。
 - 台中逐台狀態與登入阻擋見 [157機隊紀錄](../docs/FLEET_157_VALIDATION_2026-11-09.md)。短驗不等於24小時穩定、全部提示或自然冷啟恢復驗收。
 - `config.example` 的 `MODULE_VERSION=156.0`、`primary` 及部分註解仍為歷史範例，Agent無設定時另有舊版fallback；它們不是157正式配置。沿用有效裝置config，按實裝Hunter設定MODULE_VERSION；GAME_VERSION由 `runtime-version.sh` 查實際安裝，不能改標籤假裝相容。Magisk的 `module.prop` 也不代表Agent腳本回報版本。
@@ -16,7 +16,7 @@ Root Android常駐掃描Agent，接受雲端逐點派工、等待遊戲native刷
 
 1. 每台以獨立AGENT_ID與Bearer token輪詢 `/api/agent/v2/task`；當前工作透過 `/api/agent/v2/control` 續租及接收pause／stop。
 2. Agent把target寫入遊戲私有 `teleport.txt`，native讀取並刷新物件，將結果追加至 `mushrooms.tsv`。
-3. 依byte offset上傳 `/api/agent/upload`。只以完整換行前綴計算有用rows／bytes，不把TSV總長或半行當成當次新資料。
+3. 依byte offset上傳 `/api/agent/upload`。以同一完整換行前綴計算raw bytes與有用3/4級rows，不把TSV總長、半行或舊一般菇當成新有效資料。尺寸過濾不重寫待送receipt或舊offset。
 4. 成功上傳游標涵蓋當次前綴後，才經 `/api/agent/v2/ack` 回報成功；pending ACK保留其結束游標，仍可讀舊六欄格式。網路失敗不推進接受游標、不清待送狀態。
 5. 驗收至少3個不同新正式target，各自有 **當前遊戲PID的native object → 新非零TSV → 接受上傳／游標涵蓋 → 站端接受 → 成功ACK**。重試同一target、query-only、零筆、地圖、心跳或native.ready不算成功。
 
@@ -97,6 +97,7 @@ pause保留於 `pause.until`，manual不會自行到期；resume不繞過其他�
 bash -n phone_agent/agent.sh
 bash -n phone_agent/service.sh
 bash phone_agent/tests/scan-accounting-test.sh
+bash phone_agent/tests/scan-late-object-test.sh
 bash phone_agent/tests/scan-ack-upload-boundary-test.sh
 python phone_agent/tests/emulator-access-test.py
 ```

@@ -2,11 +2,20 @@ import { adminAuthorized, ensureSchema, noStoreJson, runtime } from "../../../..
 import { activeOrLatestJob, publicJob } from "../../../../lib/scans";
 import { publicAgent, type ScanAgentRow } from "../../../../lib/fleet";
 import { rotationStatus } from "../../../../lib/rotation";
+import { parseTargetAckEvidence, readTargetAckEvidence } from "../../../../lib/target-ack-evidence.mjs";
 
 export async function GET(request: Request) {
   if (!adminAuthorized(request)) return noStoreJson({ error: "forbidden" }, 403);
   await ensureSchema();
   const db = runtime().DB;
+  const params=new URL(request.url).searchParams;
+  if(params.has('evidence_targets')) {
+    let query;
+    try {query=parseTargetAckEvidence(params);}
+    catch {return noStoreJson({error:'invalid target evidence query'},400);}
+    try {return noStoreJson(await readTargetAckEvidence(db,query));}
+    catch {return noStoreJson({error:'target evidence temporarily unavailable'},503);}
+  }
   // Legacy callers still receive logs; the compact UI opts out until expanded.
   const includeLogs=new URL(request.url).searchParams.get('logs')!=='0';
   // A rotation rebuild may temporarily fail while a large target queue is being

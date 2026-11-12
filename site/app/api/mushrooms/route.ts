@@ -189,6 +189,7 @@ async function readMushrooms(request: Request, trace: ReturnType<typeof createQu
 
   const where = [
     "level >= ?",
+    "level <= 4",
     "mushroom_status='active'",
     "(finish_ms = 0 OR finish_ms > ?)",
   ];

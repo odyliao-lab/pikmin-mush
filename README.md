@@ -27,7 +27,7 @@ Pikmin Bloom 蘑菇全球掃描、集中排程與公開地圖系統。Root Andro
 實體手機的日常掃描不依賴Windows、USB、ADB、固定IP或同一Wi-Fi；MuMu必須保持所屬Windows主機與instance運行。所有維修先依 [模擬器維護手冊](docs/EMULATOR_ACCESS_RUNBOOK.md) 重新核對身分與專屬通道，不能照搬跨主機instance／ADB端點或歷史PID。
 
 - 雲端以逐點 lease 分派 target；停用、暫停、離線或 lease 逾時會安全釋放並重排。
-- 正式資料僅保留等級 2–4；等級 1 在手機與雲端擷取流程中略過。
+- 2026-11-12新政策只保留大菇3與巨菇4，排除小菇1與一般菇2；網站也移除一般菇篩選。站端過濾與各地Hunter／scoped Agent更新須分別驗證，不能把來源已修改當作全機隊已部署。清理、相容及逐台驗收見 [尺寸政策](docs/LARGE_GIANT_ONLY_POLICY_2026-11-12.md)。
 - 全域掃描預設為 **1 km 偏移網格**，每個 cycle 依四個相位改變網格原點，降低重複涵蓋。後台另提供固定 **500 m 精細模式**。
 - 每日 `04:00`、`12:00`、`20:00`（Asia/Taipei）重建輪替工作，每段 8 小時。它是 request-driven：時間到後由 Agent 或後台的下一個請求觸發，並由 D1 狀態鎖保證每時段只執行一次。
 - Codex Sites 提供網站與 Worker，D1 保存掃描與排程資料。Windows `scanner/` 僅保留作相容與維修用途。

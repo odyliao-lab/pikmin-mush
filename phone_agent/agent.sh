@@ -117,7 +117,7 @@ if [ ! -x "$MAGISK_SU" ]; then
   MAGISK_SU="$(command -v su 2>/dev/null)"
 fi
 AGENT_ID="${AGENT_ID:-primary}"
-AGENT_VERSION="${AGENT_VERSION:-2.2.14}"
+AGENT_VERSION="${AGENT_VERSION:-2.2.16}"
 [ -r "$MODDIR/runtime-version.sh" ] || { echo '[version] runtime probe missing'; exit 1; }
 . "$MODDIR/runtime-version.sh"
 refresh_game_version
@@ -691,16 +691,16 @@ scan_snapshot() {
   SNAPSHOT_COPIED="$(wc -c <"$SNAPSHOT_FILE" | tr -d ' ')"
   if [ "$SNAPSHOT_COPIED" != "$SNAPSHOT_LIMIT" ]; then rm -f "$SNAPSHOT_FILE"; return 1; fi
   SNAPSHOT_LINES="$(wc -l <"$SNAPSHOT_FILE" | tr -d ' ')"
-  LC_ALL=C awk -v complete="$SNAPSHOT_LINES" -F '\t' 'NR<=complete { bytes+=length($0)+1; if ($7+0>=2) rows++ } END { print bytes+0,rows+0 }' "$SNAPSHOT_FILE"
+  LC_ALL=C awk -v complete="$SNAPSHOT_LINES" -F '\t' 'NR<=complete { bytes+=length($0)+1; if (($7+0==3 || $7+0==4)) rows++ } END { print bytes+0,rows+0 }' "$SNAPSHOT_FILE"
   SNAPSHOT_RESULT=$?
   rm -f "$SNAPSHOT_FILE"
   return "$SNAPSHOT_RESULT"
 }
 
 useful_line_count() {
-  # TSV 第 7 欄是蘑菇等級；Fleet 只統計等級 2 以上，避免小型蘑菇
+  # TSV 第 7 欄是蘑菇等級；Fleet 只統計大菇3與巨菇4，避免小菇／一般菇
   # 觸發「有擷取」判定或灌入每個 target 的 captured rows。
-  LINES_NOW="$(awk -F '\t' '$7 + 0 >= 2 { count++ } END { print count + 0 }' "$TSV" 2>/dev/null)"
+  LINES_NOW="$(awk -F '\t' '($7 + 0 == 3 || $7 + 0 == 4) { count++ } END { print count + 0 }' "$TSV" 2>/dev/null)"
   LINES_NOW="$(echo "$LINES_NOW" | tr -d ' ')"
   number_or_zero "$LINES_NOW"
 }
@@ -1169,6 +1169,15 @@ execute_scan_task() {
   fi
   interruptible_wait "$TASK_DELAY" "$JOB_ID" || return
   scan_can_run || return
+  # Map-object readiness can precede large/giant registrations. Include the
+  # complete TSV prefix after the existing dwell, before freezing pending ACK.
+  SAMPLE="$(scan_snapshot)" || return
+  set -- $SAMPLE
+  AFTER_SIZE="$1"; AFTER_LINES="$2"
+  NEW_BYTES=$((AFTER_SIZE - BEFORE_SIZE))
+  NEW_ROWS=$((AFTER_LINES - BEFORE_LINES))
+  [ "$NEW_BYTES" -lt 0 ] && NEW_BYTES=0
+  [ "$NEW_ROWS" -lt 0 ] && NEW_ROWS=0
   case "$REFRESH_SOURCE" in object|query) DIAG_SOURCE="$REFRESH_SOURCE" ;; *) DIAG_SOURCE=timeout ;; esac
   [ "$MAP_REFRESH_EXPERIMENT" = "1" ] || DIAG_SOURCE=legacy
   DIAG_SCAN_MS=$(( ($(date +%s) - TASK_STARTED_AT) * 1000 ))
