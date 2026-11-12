@@ -3,6 +3,7 @@
 import {useEffect,useRef,useState} from 'react';
 
 import Link from 'next/link';
+import LevelCleanup from './level-cleanup';
 
 type Table={table:string;managed:string;eligible_count?:number;deleted_last_run?:number;last_error?:string;checked_at?:number};
 
@@ -58,6 +59,7 @@ export default function RetentionClient(){
  return <main style={{maxWidth:920,margin:'40px auto',padding:24,fontFamily:'system-ui',lineHeight:1.7}}>
 
   <Link href="/admin">← 回到探險隊後台</Link><h1>歷史資料清理</h1>
+  <LevelCleanup/>
 
   <p>只清理已超過保留期限且通過相依檢查的紀錄。刪除前原子備份，保留 7 天供維運復原；不清除挑戰身分、地點目錄、上傳收據或執行中工作。</p>
 

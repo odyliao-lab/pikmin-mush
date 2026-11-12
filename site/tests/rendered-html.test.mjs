@@ -34,7 +34,7 @@ test("ships the public mushroom map and protected scan console", async () => {
   assert.match(map, /href="\/admin"/);
   assert.match(map, /api\/mushrooms/);
   assert.doesNotMatch(map, /id="lv1"/);
-  assert.match(map, /\[2,3,4\]/);
+  assert.match(map, /\[3,4\]/);
   assert.match(map, /EVENT_TYPE_IDS=new Set\(\['10','14','15','16','19','20','21','22','23','24','25'\]\)/);
   assert.match(map, /DEFAULT_HIDDEN_TYPE_KEYS=new Set\(\['event'\]\)/);
   assert.match(map, /selectedTypes\.has\(typeKey\(m\.type\)\)/);
@@ -369,7 +369,7 @@ test("shows the Agent that discovered a mushroom without guessing legacy sources
   assert.match(migration, /discovered_by_agent_id/);
 });
 
-test("excludes level 1 mushrooms throughout the ingest and public API paths", async () => {
+test("retains only large and giant mushrooms throughout ingest and public API paths", async () => {
   const [cloud, api, phoneAgent, hook, scanner, legacyMap] = await Promise.all([
     readFile(new URL("lib/cloud.ts", root), "utf8"),
     readFile(new URL("app/api/mushrooms/route.ts", root), "utf8"),
@@ -379,15 +379,15 @@ test("excludes level 1 mushrooms throughout the ingest and public API paths", as
     readFile(new URL("../scanner/map.html", root), "utf8"),
   ]);
 
-  assert.equal(MIN_MUSHROOM_LEVEL, 2);
+  assert.equal(MIN_MUSHROOM_LEVEL, 3);
   assert.equal(isUsefulMushroomLevel(1), false);
-  assert.equal(isUsefulMushroomLevel(2), true);
+  assert.equal(isUsefulMushroomLevel(2), false);
   assert.equal(isUsefulMushroomLevel(4), true);
   assert.match(cloud, /isUsefulMushroomLevel\(level\)/);
   assert.match(cloud, /rows\.filter\(\(row\) => isUsefulMushroomLevel\(row\.level\)\)/);
   assert.match(api, /"level >= \?"/);
-  assert.match(phoneAgent, /\$7 \+ 0 >= 2/);
-  assert.match(hook, /should_log = level >= 2/);
-  assert.match(scanner, /WHERE level>=2/);
-  assert.doesNotMatch(legacyMap, /id="lv1"|mush-lv1/);
+  assert.match(phoneAgent, /\$7 \+ 0 == 3 \|\| \$7 \+ 0 == 4/);
+  assert.match(hook, /should_log = \(level == 3 \|\| level == 4\)/);
+  assert.match(scanner, /WHERE level IN \(3,4\)/);
+  assert.doesNotMatch(legacyMap, /id="lv[12]"|mush-lv[12]/);
 });

@@ -40,6 +40,8 @@ Vite／Cloudflare plugin依 `.openai/hosting.json` 模擬D1 binding `DB`；本�
 
 ## 目錄、資料與修改注意
 
+蘑菇新資料政策只接受大菇3／巨菇4，網站不提供一般菇篩選；受保護後台可原子備份並分批清理舊小菇／一般菇快照與觀測，不清Agent狀態、收據或共用身分。舊Agent raw bytes與ACK保持相容；站端發布不代表各地Hunter已更新。詳見 [尺寸政策與回復](../docs/LARGE_GIANT_ONLY_POLICY_2026-11-12.md)。
+
 11/12目錄為57個座標點＋4張待座標卡；有效日期篩選不等於全部筆數。韓國兩點只有場館導航參考、未經遊戲複核；四張待座標卡使用null，不產生marker或GPS操作。來源官方不等於座標官方。新加坡活動日期精度不代表遊戲啟閉分鐘已公布。
 
 修改已定位目錄必須提高 `lib/catalogue-seed.mjs` 的CATALOGUE_REVISION。D1僅接受更高revision的原子同步，舊Worker不反向覆蓋新目錄；seed惰性放在event-spots路徑，不阻斷蘑菇上傳。待座標卡屬靜態資產，日期未知保持未知。
