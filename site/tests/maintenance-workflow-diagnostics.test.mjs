@@ -21,6 +21,7 @@ function run(health) {
   const result = spawnSync(interpreter, ['-c', harness], {
     encoding: 'utf8', timeout: 10_000, env: {...process.env, PYTHONIOENCODING: 'utf-8', TEST_PARSER: python,
       REQUEST_FAILED: '0', RESPONSE: JSON.stringify(response), SCHEDULE: '7,22,37,52 * * * *',
+      HTTP_STATUS: '200', REQUEST_STARTED_AT: String(now),
       DISCORD_WEBHOOK: '', GITHUB_SHA: 'a'.repeat(40)},
   });
   assert.ifError(result.error);
@@ -58,9 +59,10 @@ test('legacy or malformed diagnostics preserve unknowns and never print remote s
     'historyBacklogPersistent', 'cleanupAge']) assert.equal(malformed[key], null);
 });
 
-function runFailure({body = {}, requestFailed = '1', status = '503', delivery = 'none', exitCode = 1} = {}) {
+function runFailure({body = {}, requestFailed = '1', status = '503', delivery = 'none', exitCode = 1,
+  receivedAt = now, startedAt = receivedAt} = {}) {
   // The extracted parser runs against a stub transport only. Never execute curl.
-  const harness = `import os, time, urllib.request, urllib.error\ntime.time = lambda: ${now}\n` +
+  const harness = `import os, time, urllib.request, urllib.error\ntime.time = lambda: ${receivedAt}\n` +
     `def send(*args, **kwargs):\n` +
     `    if os.environ['TEST_DELIVERY'] == 'http':\n` +
     `        raise urllib.error.HTTPError('https://PRIVATE.invalid/TOKEN', 404, 'PRIVATE_ERROR', {}, None)\n` +
@@ -72,6 +74,7 @@ function runFailure({body = {}, requestFailed = '1', status = '503', delivery = 
   const result = spawnSync(interpreter, ['-c', harness], {
     encoding: 'utf8', timeout: 10_000, env: {...process.env, PYTHONIOENCODING: 'utf-8', TEST_PARSER: python,
       REQUEST_FAILED: requestFailed, HTTP_STATUS: status,
+      REQUEST_STARTED_AT: startedAt === null ? '' : String(startedAt),
       RESPONSE: typeof body === 'string' ? body : JSON.stringify(body),
       SCHEDULE: delivery === 'none' ? '7,22,37,52 * * * *' : '13 * * * *',
       DISCORD_WEBHOOK: delivery === 'none' ? '' : 'https://local.invalid/webhooks/fixture', TEST_DELIVERY: delivery},
@@ -94,7 +97,9 @@ test('non-2xx receipt diagnostics survive curl failure without printing the resp
     historyConsecutiveFailures: 0, historyBusy: true};
   const output = runFailure({body: {maintenanceFailure: {...failure, error: 'PRIVATE_EXCEPTION'},
     fleet: [{name: 'PRIVATE_AGENT'}], token: 'PRIVATE_TOKEN'}});
-  assert.deepEqual(output.failure, {httpStatus: 503, requestFailed: true, ...failure});
+  assert.deepEqual(output.failure, {httpStatus: 503, requestFailed: true, ...failure,
+    clientStage: 'request', clientReason: 'transport_failure', requestStartedAt: now,
+    observedAt: now, requestDurationSeconds: 0, receiptLastSucceededAt: null, receiptConsecutiveFailures: null});
 });
 
 test('malformed, legacy and untrusted failure fields stay unknown, and all requests still fail', () => {
@@ -132,4 +137,101 @@ test('successful cleanup remains successful when its separate hourly fleet warni
       alerts: {uploadSilentAgents: ['fixture-agent']}, maintenanceHealth: {severity: 'healthy'}}});
   assert.equal(output.failure, null);
   assert.deepEqual(output.fleet, {httpStatus: 404, stage: 'http'});
+});
+
+function successBody(lastSucceededAt = now) {
+  return {now: now * 1000, retention: {lastSucceededAt, consecutiveFailures: 0},
+    alerts: {uploadSilentAgents: []}, maintenanceHealth: {severity: 'healthy'}};
+}
+function runOkResponse(body, options = {}) {
+  return runFailure({body, requestFailed: '0', status: '200', ...options});
+}
+
+test('request-start freshness survives history/health/transport time without retrying cleanup', () => {
+  for (const age of [295, 300]) {
+    const body = successBody(now - age);
+    assert.ok(now + 10 - body.retention.lastSucceededAt > 300,
+      'the former receive-time check rejects this otherwise successful response');
+    const output = runOkResponse(body, {startedAt: now, receivedAt: now + 10, exitCode: 0});
+    assert.equal(output.failure, null);
+  }
+  // A successful cleanup can be produced during a request lasting more than 60s.
+  // Keep the future bound at receipt time, not at request start.
+  assert.equal(runOkResponse(successBody(now + 90), {
+    startedAt: now, receivedAt: now + 90, exitCode: 0,
+  }).failure, null);
+});
+
+test('freshness remains strict at request start and future skew remains strict at receipt time', () => {
+  const stale = runOkResponse({...successBody(now - 300.001), now: (now - 1000) * 1000}, {
+    startedAt: now, receivedAt: now + 10,
+  }).failure;
+  assert.equal(stale.clientStage, 'mushroom_receipt');
+  assert.equal(stale.clientReason, 'stale_receipt');
+  assert.equal(stale.receiptLastSucceededAt, now - 300.001);
+  assert.equal(stale.requestStartedAt, now);
+  assert.equal(stale.observedAt, now + 10);
+  assert.equal(stale.requestDurationSeconds, 10);
+  for (const [offset, exitCode] of [[60, 0], [60.001, 1]]) {
+    const output = runOkResponse(successBody(now + 10 + offset), {
+      startedAt: now, receivedAt: now + 10, exitCode,
+    });
+    assert.equal(output.failure?.clientReason ?? null, exitCode ? 'future_timestamp' : null);
+  }
+});
+
+test('missing, invalid, reversed or overlong request timing fails closed', () => {
+  for (const startedAt of [null, '', 'PRIVATE_TIMESTAMP', 'nan', 'inf', '-inf', 0, -1]) {
+    const failure = runOkResponse(successBody(), {startedAt}).failure;
+    assert.equal(failure.clientStage, 'request_timing');
+    assert.equal(failure.clientReason, 'invalid_timestamp');
+  }
+  for (const startedAt of [now + 0.001, now - 91.001]) {
+    const failure = runOkResponse(successBody(), {startedAt}).failure;
+    assert.equal(failure.clientStage, 'request_timing');
+    assert.equal(failure.clientReason, 'invalid_duration');
+  }
+  // The cap is curl's 90s plus only 1s for local process/timestamp overhead.
+  assert.equal(runOkResponse(successBody(), {startedAt: now - 91, exitCode: 0}).failure, null);
+});
+
+test('HTTP 200 receipt and parse failures are distinguished without exposing remote content', () => {
+  const cases = [
+    ['<html>PRIVATE_BODY</html>', 'response_json', 'invalid_json'],
+    [null, 'response_json', 'invalid_shape'],
+    [[], 'response_json', 'invalid_shape'],
+    [{}, 'mushroom_receipt', 'invalid_shape'],
+    [{retention: 'PRIVATE_RETENTION'}, 'mushroom_receipt', 'invalid_shape'],
+    [{retention: {lastSucceededAt: true}}, 'mushroom_receipt', 'invalid_timestamp'],
+    [{retention: {lastSucceededAt: 0}}, 'mushroom_receipt', 'invalid_timestamp'],
+    [{retention: {lastSucceededAt: 'PRIVATE_TIMESTAMP'}}, 'mushroom_receipt', 'invalid_timestamp'],
+    ['{"retention":{"lastSucceededAt":1e9999}}', 'mushroom_receipt', 'invalid_timestamp'],
+    [`{"retention":{"lastSucceededAt":${'9'.repeat(400)}}}`, 'mushroom_receipt', 'invalid_timestamp'],
+    [{retention: {lastSucceededAt: now}}, 'mushroom_receipt', 'invalid_failure_count'],
+    [{retention: {lastSucceededAt: now, consecutiveFailures: 1}}, 'mushroom_receipt', 'recorded_failure'],
+    [{...successBody(), alerts: 'PRIVATE_ALERTS'}, 'alerts', 'invalid_shape'],
+    [{...successBody(), alerts: {}}, 'alerts', 'invalid_shape'],
+    [{...successBody(), alerts: {uploadSilentAgents: 'PRIVATE_AGENTS'}}, 'alerts', 'invalid_shape'],
+    [{...successBody(), alerts: {uploadSilentAgents: [{token: 'PRIVATE_TOKEN'}]}}, 'alerts', 'invalid_shape'],
+  ];
+  for (const [body, stage, reason] of cases) {
+    const {failure} = runOkResponse(body);
+    assert.equal(failure.httpStatus, 200);
+    assert.equal(failure.requestFailed, false);
+    assert.equal(failure.clientStage, stage);
+    assert.equal(failure.clientReason, reason);
+    assert.equal(failure.stage, 'unknown', 'unavailable server diagnostics stay unknown');
+  }
+  for (const consecutiveFailures of [null, true, -1, 'PRIVATE_FAILURE']) {
+    const body = successBody(); body.retention.consecutiveFailures = consecutiveFailures;
+    assert.equal(runOkResponse(body).failure.clientReason, 'invalid_failure_count');
+  }
+  assert.equal(runOkResponse(successBody(), {status: '302'}).failure.clientReason, 'http_status');
+});
+
+test('shell captures fractional request start immediately before the unchanged bounded curl call', () => {
+  assert.match(workflow, /request_started_at="\$\(date \+%s\.%N\)"\n\s+result="\$\(curl/);
+  assert.match(workflow, /curl --fail-with-body --silent --show-error --max-time 90/);
+  assert.match(workflow, /REQUEST_STARTED_AT="\$request_started_at" HTTP_STATUS=/);
+  assert.doesNotMatch(workflow, /--retry/);
 });

@@ -30,6 +30,7 @@ jobs:
         run: |
           set -euo pipefail
           request_failed=0
+          request_started_at="$(date +%s.%N)"
           result="$(curl --fail-with-body --silent --show-error --max-time 90 \
             --write-out '\n%{http_code}' \
             -X POST -H "Authorization: Bearer $MAINTENANCE_TOKEN" \
@@ -38,11 +39,14 @@ jobs:
             https://mush.odyliao.cc/api/controller/maintenance)" || request_failed=1
           response="${result%$'\n'*}"
           http_status="${result##*$'\n'}"
-          HTTP_STATUS="$http_status" REQUEST_FAILED="$request_failed" RESPONSE="$response" python3 - <<'PY'
+          REQUEST_STARTED_AT="$request_started_at" HTTP_STATUS="$http_status" REQUEST_FAILED="$request_failed" RESPONSE="$response" python3 - <<'PY'
           import json, math, os, re, time, urllib.request, urllib.error
           def number(obj, key):
               value = obj.get(key)
-              return value if type(value) in (int, float) and math.isfinite(value) and value >= 0 else None
+              try:
+                  return value if type(value) in (int, float) and math.isfinite(value) and value >= 0 else None
+              except OverflowError:
+                  return None
           def boolean(obj, key):
               value = obj.get(key)
               return value if type(value) is bool else None
@@ -51,18 +55,50 @@ jobs:
               return value if type(value) is str and value in allowed else 'unknown'
           def http_status(value):
               return value if type(value) is int and 100 <= value <= 599 else None
+          class ValidationFailure(Exception):
+              def __init__(self, stage, reason):
+                  self.stage, self.reason = stage, reason
+          def require(condition, stage, reason):
+              if not condition:
+                  raise ValidationFailure(stage, reason)
+          observed_at = time.time()
+          try:
+              request_started_at = float(os.environ.get('REQUEST_STARTED_AT', ''))
+              request_started_at = number({'value': request_started_at}, 'value')
+          except ValueError:
+              request_started_at = None
+          parse_reason = ''
           try:
               data = json.loads(os.environ['RESPONSE'])
-              data = data if isinstance(data, dict) else {}
+              if not isinstance(data, dict):
+                  data, parse_reason = {}, 'invalid_shape'
           except (ValueError, KeyError):
-              data = {}
+              data, parse_reason = {}, 'invalid_json'
+          retention = data.get('retention')
+          retention = retention if isinstance(retention, dict) else {}
+          succeeded = number(retention, 'lastSucceededAt')
+          failures = number(retention, 'consecutiveFailures')
+          request_duration = observed_at - request_started_at if request_started_at is not None else None
           failed = False
           message = ''
           try:
-              assert os.environ['REQUEST_FAILED'] == '0'
-              retention = data['retention']
-              succeeded = number(retention, 'lastSucceededAt')
-              assert succeeded and -60 <= time.time() - succeeded <= 300, 'invalid cleanup receipt'
+              require(os.environ.get('REQUEST_FAILED') == '0', 'request', 'transport_failure')
+              require(os.environ.get('HTTP_STATUS') == '200', 'request', 'http_status')
+              require(not parse_reason, 'response_json', parse_reason)
+              require(request_started_at is not None and request_started_at > 0,
+                      'request_timing', 'invalid_timestamp')
+              # curl is capped at 90 seconds; allow at most one second for local
+              # process/timestamp overhead, never an unbounded stale-time extension.
+              require(0 <= request_duration <= 91, 'request_timing', 'invalid_duration')
+              require(isinstance(data.get('retention'), dict), 'mushroom_receipt', 'invalid_shape')
+              require(succeeded is not None and succeeded > 0, 'mushroom_receipt', 'invalid_timestamp')
+              # A receipt fresh when this request began must not age out while
+              # the server finishes history/health/snapshot. The endpoint still
+              # enforces its own strict 300-second bound at receipt validation.
+              require(request_started_at - succeeded <= 300, 'mushroom_receipt', 'stale_receipt')
+              require(succeeded - observed_at <= 60, 'mushroom_receipt', 'future_timestamp')
+              require(failures is not None, 'mushroom_receipt', 'invalid_failure_count')
+              require(failures == 0, 'mushroom_receipt', 'recorded_failure')
               print('retention', {**{key: number(retention, key) for key in
                     ('lastSucceededAt', 'lastDeleted', 'pending', 'consecutiveFailures', 'lastDurationMs')},
                     'lastBatchSaturated': boolean(retention, 'lastBatchSaturated')})
@@ -84,10 +120,14 @@ jobs:
                       'historyFailing', 'historyBacklogPersistent')},
               }
               print('maintenanceHealth', json.dumps(diagnostic, sort_keys=True))
-              silent = data['alerts']['uploadSilentAgents']
+              alerts = data.get('alerts')
+              require(isinstance(alerts, dict), 'alerts', 'invalid_shape')
+              silent = alerts.get('uploadSilentAgents')
+              require(isinstance(silent, list) and all(isinstance(agent, str) for agent in silent),
+                      'alerts', 'invalid_shape')
               if silent:
                   message = '【蘑菇機隊維護警示】兩小時無成功上傳：' + ', '.join(silent)
-          except Exception:
+          except Exception as error:
               failed = True
               failure = data.get('maintenanceFailure')
               failure = failure if isinstance(failure, dict) else {}
@@ -95,6 +135,11 @@ jobs:
               diagnostic = {
                   'httpStatus': http_status(int(status)) if re.fullmatch('[0-9]{3}', status) else None,
                   'requestFailed': os.environ.get('REQUEST_FAILED') != '0',
+                  'clientStage': error.stage if isinstance(error, ValidationFailure) else 'parser',
+                  'clientReason': error.reason if isinstance(error, ValidationFailure) else 'exception',
+                  'requestStartedAt': request_started_at, 'observedAt': observed_at,
+                  'requestDurationSeconds': number({'value': request_duration}, 'value'),
+                  'receiptLastSucceededAt': succeeded, 'receiptConsecutiveFailures': failures,
                   'stage': choice(failure, 'stage', ('schema', 'mushroom_run', 'mushroom_receipt',
                       'history_run', 'history_receipt', 'source_receipt', 'health', 'snapshot')),
                   'reason': choice(failure, 'reason', ('exception', 'invalid_timestamp', 'future_timestamp',
