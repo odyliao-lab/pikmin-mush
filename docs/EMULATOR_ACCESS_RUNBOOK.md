@@ -71,6 +71,13 @@
 config/token、offset、pending、待送資料、ACK與TSV，再一次處理一台。
 未確認身分、未知登入／2FA或無法備份時停止該項，不以放寬權限換取成功。
 
+備份完成後在guest內執行`sync`並重核archive雜湊，再進入狀態變更；套件推送及
+安裝staging驗證後也要`sync`，才依當地流程關閉單一MuMu實例。2026-11-12竹北
+Aquarius曾在關閉前驗到正確ZIP／staging雜湊，重新開機後ZIP卻為0 bytes、Hunter
+仍為r1；重新推送、安裝及sync後的一次有界重啟才驗到新版。這支持未持久化寫入
+的判斷，並非不同主機都已證明相同原因。正常Manager shutdown及page-cache內
+雜湊不取代持久化檢查。重啟後再驗備份、磁碟檔及實際載入，不盲目重裝／重啟。
+
 舊 `scanner-lifecycle.py` 是另有部署清單與歷史 root/unroot 語意的維修工具，
 不能拿其 `status`／`restore-adb` 取代本唯讀檢查或直接搬到台中執行。
 不得啟動另一套 watchdog/dispatcher/sender，不更動其他用途的排程。
