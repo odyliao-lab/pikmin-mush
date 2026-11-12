@@ -62,8 +62,12 @@ test('legacy or malformed diagnostics preserve unknowns and never print remote s
 function runFailure({body = {}, requestFailed = '1', status = '503', delivery = 'none', exitCode = 1,
   receivedAt = now, startedAt = receivedAt} = {}) {
   // The extracted parser runs against a stub transport only. Never execute curl.
-  const harness = `import os, time, urllib.request, urllib.error\ntime.time = lambda: ${receivedAt}\n` +
+  const harness = `import os, time, json, urllib.request, urllib.error\ntime.time = lambda: ${receivedAt}\n` +
     `def send(*args, **kwargs):\n` +
+    `    if os.environ['TEST_DELIVERY'] == 'capture':\n` +
+    `        print('capturedMessage ' + json.loads(args[0].data)['content'])\n` +
+    `        class Reply:\n            status = 204\n            def __enter__(self): return self\n            def __exit__(self, *args): pass\n` +
+    `        return Reply()\n` +
     `    if os.environ['TEST_DELIVERY'] == 'http':\n` +
     `        raise urllib.error.HTTPError('https://PRIVATE.invalid/TOKEN', 404, 'PRIVATE_ERROR', {}, None)\n` +
     `    if os.environ['TEST_DELIVERY'] == 'request':\n` +
@@ -86,7 +90,8 @@ function runFailure({body = {}, requestFailed = '1', status = '503', delivery = 
     const line = result.stdout.split(/\r?\n/).find(item => item.startsWith(label + ' '));
     return line ? JSON.parse(line.slice(label.length + 1)) : null;
   };
-  return {failure: diagnostic('maintenanceFailure'), fleet: diagnostic('fleetAlertFailure')};
+  const message=result.stdout.split(/\r?\n/).find(item=>item.startsWith('capturedMessage '));
+  return {failure: diagnostic('maintenanceFailure'), fleet: diagnostic('fleetAlertFailure'), message:message?.slice('capturedMessage '.length)};
 }
 
 test('non-2xx receipt diagnostics survive curl failure without printing the response body', () => {
@@ -146,6 +151,14 @@ function successBody(lastSucceededAt = now) {
 function runOkResponse(body, options = {}) {
   return runFailure({body, requestFailed: '0', status: '200', ...options});
 }
+
+test('old data gaps remain unknown and confirmed stalls are reported separately',()=>{
+  const old=runOkResponse({...successBody(),alerts:{uploadSilentAgents:['old-agent']}},{delivery:'capture',exitCode:0});
+  assert.match(old.message,/待送狀態未知/);assert.doesNotMatch(old.message,/持續兩小時未上傳/);
+  const current=runOkResponse({...successBody(),alerts:{uploadSilentAgents:['stalled'],uploadPendingUnknownAgents:['old-agent'],uploadDataGapAgents:['old-agent']}},{delivery:'capture',exitCode:0});
+  assert.match(current.message,/待送資料持續兩小時未上傳：stalled/);
+  assert.match(current.message,/待送狀態未知：old-agent/);
+});
 
 test('request-start freshness survives history/health/transport time without retrying cleanup', () => {
   for (const age of [295, 300]) {

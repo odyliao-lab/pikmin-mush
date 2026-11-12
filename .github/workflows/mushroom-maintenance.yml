@@ -125,8 +125,23 @@ jobs:
               silent = alerts.get('uploadSilentAgents')
               require(isinstance(silent, list) and all(isinstance(agent, str) for agent in silent),
                       'alerts', 'invalid_shape')
+              if 'uploadPendingUnknownAgents' in alerts:
+                  unknown = alerts['uploadPendingUnknownAgents']
+                  gaps = alerts.get('uploadDataGapAgents')
+                  require(isinstance(unknown, list) and all(isinstance(agent, str) for agent in unknown)
+                          and isinstance(gaps, list) and all(isinstance(agent, str) for agent in gaps),
+                          'alerts', 'invalid_shape')
+                  unknown = [agent for agent in gaps if agent in unknown]
+              else:
+                  # Older sites only report a data gap; it is not proof of a stall.
+                  unknown, silent = silent, []
+              messages = []
               if silent:
-                  message = '【蘑菇機隊上傳警示】待送資料持續兩小時未上傳：' + ', '.join(silent)
+                  messages.append('待送資料持續兩小時未上傳：' + ', '.join(silent))
+              if unknown:
+                  messages.append('兩小時無新資料、待送狀態未知：' + ', '.join(unknown))
+              if messages:
+                  message = '【蘑菇機隊上傳檢查】' + '；'.join(messages)
           except Exception as error:
               failed = True
               failure = data.get('maintenanceFailure')
