@@ -22,7 +22,7 @@ POST只回報已提交批次，完整盤點獨立GET並降為每10批讀取一�
 
 Native只更改 `module/cpp/il2cpp_dump.cpp` 的TSV輸出尺寸判定，保留native object刷新marker與所有遊戲版本指紋、offset、NativeBridge、等待及既有hook。不能把沒有大／巨菇的正常object刷新判為故障。
 
-Agent來源預設版本2.2.15，snapshot／useful rows只計3/4；raw bytes仍覆蓋同一完整換行前綴。Uploader、認證、ACK／pending格式、冷啟節流及保護設定不因尺寸政策重寫。正式節點是scoped變體，只移植這些必要修改，不整包覆蓋其他主機或Capricorn的暖重試／冷啟策略。
+Agent來源預設版本2.2.16，snapshot／useful rows只計3/4；raw bytes仍覆蓋同一完整換行前綴。Capricorn候選2.2.15實測發現：刷新標記可能比大菇註冊早0.28～2.4秒，原先第一次snapshot結算為零，既有等待期間到達的3級資料卻在最後upload送出。2.2.16在原有等待後、最後upload及凍結pending ACK前，重新取得一致的完整TSV前綴與delta；若上傳未涵蓋該前綴，仍保留pending，不能提前ACK。無新增等待或冷啟動。Uploader、認證、ACK／pending格式、冷啟節流及保護設定不因尺寸政策重寫。正式節點是scoped變體，只移植這些必要修改，不整包覆蓋其他主機或Capricorn的暖重試／冷啟策略。
 
 Hunter候選獨立命名157.0-r2-large-giant（遊戲仍157.0／1793360009），不是替換同名r1資產。NDK27.3.13750724與CMake3.22.1的ARM64／x86_64建置及正式packaging script已通過；原APK不變。候選ZIP SHA256：`da3627773970a9cf396d1f32a3ef9048ba46a352314ad9b52cd7250a9aa6fecf`。此處是建置證據，並非各裝置已載入或實機驗收。
 
