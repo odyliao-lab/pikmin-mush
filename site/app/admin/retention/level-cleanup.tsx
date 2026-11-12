@@ -7,14 +7,14 @@ export default function LevelCleanup(){
  const [message,setMessage]=useState('正在讀取等級政策…'),[removed,setRemoved]=useState(0);
  const stop=useRef(false);
  useEffect(()=>{fetch('/api/admin/mushroom-policy',{cache:'no-store'}).then(async r=>{if(!r.ok)throw Error();return r.json()})
-  .then(setPolicy).catch(()=>setMessage('無法讀取等級政策，請確認管理員登入。'));return()=>{stop.current=true}},[]);
+  .then(p=>{setPolicy(p);setMessage('等級政策盤點已更新。')}).catch(()=>setMessage('無法讀取等級政策，請確認管理員登入。'));return()=>{stop.current=true}},[]);
  async function clean(){
   stop.current=false;setRunning(true);setRemoved(0);let total=0;
   try{
    for(let pass=0;pass<100&&!stop.current;pass++){
     setMessage('正在備份並移除小菇／一般菇，保留大菇與巨菇…');
     const r=await fetch('/api/admin/mushroom-policy',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({action:'archive-excluded'})});
-    const d=await r.json();if(!r.ok||!d.ok)throw Error('等級清理未完成，已停止；請保留目前診斷。');
+    const d=await r.json();if(!r.ok||!d.ok)throw Error(`等級清理未完成，已停止（${d.stage||'request'}/${d.reason||r.status}）；已完成批次保留備份。`);
     const n=d.batches.reduce((sum:number,b:{deleted:number})=>sum+b.deleted,0);total+=n;setRemoved(total);setPolicy(d.policy);
     if(d.policy.excludedTotal===0){setMessage('等級清理完成：小菇與一般菇剩餘0筆。');return;}
     if(n===0)throw Error('沒有可安全清理的紀錄，已停止；請檢查過大資料或相依問題。');
