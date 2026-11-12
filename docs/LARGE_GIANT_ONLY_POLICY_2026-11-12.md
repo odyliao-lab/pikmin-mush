@@ -32,6 +32,8 @@ Hunter候選獨立命名157.0-r2-large-giant（遊戲仍157.0／1793360009），
 
 每台至少3個不同新正式target：native object→新非零且全為3/4的TSV→正常接受上傳／游標涵蓋→站端新3/4資料→有效ACK。另觀察有object但無大／巨菇的合法空點，不應因此新增冷啟迴圈。未達標標部分／待驗，不能用舊TSV、心跳、query-only或native.ready湊數。保留有界恢復、原資格與04/12/20、12時柏林3倍及正式複查優先。不跨主機操作、不新增dispatcher或巡檢。
 
+既有admin GET `/api/admin/scans` 增加唯讀證據模式：`evidence_agent=<非秘密AGENT_ID>&evidence_targets=<最多10個不同target ID>`。沿用原admin認證，從最近7天的`scan_agent_events`查`target_completed`數字欄位；不啟動換區／派工，不回傳detail、lease、座標或憑證。一般呼叫及`logs=0`契約不變。事件在佇列進入下一輪後仍可查回，避免最新120筆UI日誌滑出視窗就無法獨立驗ACK；沒有事件仍如實待驗，不以缺資料補成功。上傳發生在某個target ACK之後的晚到物件仍可正常保存，但不當成該已完成target的非零計數。
+
 ## 產能觀測
 
 使用者已排程的產能盤點需等政策正式生效與清理確認，再以3/4口徑重建至少48小時資料；舊2–4數量不可直接比較。各地Hunter更新前後的傳輸量分開，站端保留量與原始wire bytes分開。實際發布版本、清理數量及逐機部署結果見當地主機交接；此文件不宣稱全天穩定。

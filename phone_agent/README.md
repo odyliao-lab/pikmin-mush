@@ -97,6 +97,7 @@ pause保留於 `pause.until`，manual不會自行到期；resume不繞過其他�
 bash -n phone_agent/agent.sh
 bash -n phone_agent/service.sh
 bash phone_agent/tests/scan-accounting-test.sh
+bash phone_agent/tests/scan-late-object-test.sh
 bash phone_agent/tests/scan-ack-upload-boundary-test.sh
 python phone_agent/tests/emulator-access-test.py
 ```
