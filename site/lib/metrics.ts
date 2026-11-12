@@ -5,8 +5,7 @@ export const REQUIRED_GAME_VERSION = "157.0";
 export const MIN_AGENT_VERSION = "2.0.0";
 export const EXPECTED_MODULE_VERSION = "157.0";
 export const HEARTBEAT_SAMPLE_MS = 5 * 60_000;
-export const NO_DATA_WARN_STREAK = 12;
-export const NO_DATA_CRITICAL_STREAK = 30;
+export const NO_DATA_OBSERVATION_STREAK = 12;
 
 type AgentHealthRow = {
   enabled: number;
@@ -110,7 +109,7 @@ export function agentHealth(row: AgentHealthRow, now = Date.now()) {
   } else if (row.current_target_id && now - lastTargetAt >= 30 * 60_000) {
     status = now - lastTargetAt >= 60 * 60_000 ? "critical" : "warning";
     message = `仍在線且有掃描任務，但已 ${Math.floor((now - lastTargetAt) / 60_000)} 分鐘未完成掃描點；請檢查 ACK／遊戲狀態`;
-  } else if (streak >= NO_DATA_WARN_STREAK) {
+  } else if (streak >= NO_DATA_OBSERVATION_STREAK) {
     status = "collecting";
     message = `連續 ${streak} 個掃描點沒有新資料；擷取狀態待佐證`;
   } else if (compatibility.status === "unknown") {
