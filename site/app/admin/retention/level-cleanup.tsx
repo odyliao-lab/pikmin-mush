@@ -9,18 +9,30 @@ export default function LevelCleanup(){
  useEffect(()=>{fetch('/api/admin/mushroom-policy',{cache:'no-store'}).then(async r=>{if(!r.ok)throw Error();return r.json()})
   .then(p=>{setPolicy(p);setMessage('等級政策盤點已更新。')}).catch(()=>setMessage('無法讀取等級政策，請確認管理員登入。'));return()=>{stop.current=true}},[]);
  async function clean(){
-  stop.current=false;setRunning(true);setRemoved(0);let total=0;
+  if(!policy)return;
+  stop.current=false;setRunning(true);setRemoved(0);let total=0,current=policy;
+  async function inventory(){
+   const r=await fetch('/api/admin/mushroom-policy',{cache:'no-store'});
+   if(!r.ok)throw Error('盤點讀取失敗；未宣稱清理完成。');
+   return await r.json() as Policy;
+  }
   try{
    for(let pass=0;pass<100&&!stop.current;pass++){
     setMessage('正在備份並移除小菇／一般菇，保留大菇與巨菇…');
     const r=await fetch('/api/admin/mushroom-policy',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({action:'archive-excluded'})});
     const d=await r.json();if(!r.ok||!d.ok)throw Error(`等級清理未完成，已停止（${d.stage||'request'}/${d.reason||r.status}）；已完成批次保留備份。`);
-    const n=d.batches.reduce((sum:number,b:{deleted:number})=>sum+b.deleted,0);total+=n;setRemoved(total);setPolicy(d.policy);
-    if(d.policy.excludedTotal===0){setMessage('等級清理完成：小菇與一般菇剩餘0筆。');return;}
-    if(n===0)throw Error('沒有可安全清理的紀錄，已停止；請檢查過大資料或相依問題。');
-    await new Promise(resolve=>setTimeout(resolve,750));
+    const n=d.batches.reduce((sum:number,b:{deleted:number})=>sum+b.deleted,0);total+=n;setRemoved(total);
+    const tables={...current.tables};
+    for(const b of d.batches)tables[b.table]={...tables[b.table],excluded:Math.max(0,tables[b.table].excluded-b.deleted)};
+    current={...current,tables,excludedTotal:Object.values(tables).reduce((sum,t)=>sum+t.excluded,0)};setPolicy(current);
+    if(pass%10===9||n===0||current.excludedTotal===0){
+     current=await inventory();setPolicy(current);
+     if(current.excludedTotal===0){setMessage('等級清理完成：小菇與一般菇剩餘0筆。');return;}
+     if(n===0)throw Error('沒有可安全清理的紀錄，已停止；請檢查過大資料或相依問題。');
+    }
+    await new Promise(resolve=>setTimeout(resolve,1500));
    }
-   setMessage(stop.current?'已停止後續等級清理批次。':'已達本次批次上限，可依剩餘筆數再繼續。');
+   setPolicy(await inventory());setMessage(stop.current?'已停止後續等級清理批次。':'已達本次批次上限，可依剩餘筆數再繼續。');
   }catch(e){setMessage(e instanceof Error?e.message:'清理停止。')}finally{setRunning(false)}
  }
  return <section aria-label="蘑菇等級資料政策" style={{border:'1px solid #9ab79d',borderRadius:12,padding:20,margin:'24px 0'}}>

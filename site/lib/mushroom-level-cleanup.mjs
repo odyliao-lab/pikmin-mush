@@ -23,9 +23,9 @@ export async function readMushroomLevelPolicy(db, now=Date.now()) {
 
 // The allowlisted snapshot and observation rows are backed up and removed in
 // one D1 transaction. Identities, receipts, leases and Agent state are untouched.
-export async function archiveExcludedMushrooms(db, table, now=Date.now(), limit=1000) {
+export async function archiveExcludedMushrooms(db, table, now=Date.now(), limit=5000) {
   if (!Object.hasOwn(TABLES,table)) throw Error('cleanup table not allowed');
-  if (!Number.isInteger(limit)||limit<1||limit>1000) throw Error('invalid cleanup limit');
+  if (!Number.isInteger(limit)||limit<1||limit>5000) throw Error('invalid cleanup limit');
   const columns = (await db.prepare(`PRAGMA table_info(${table})`).all()).results;
   if (!columns.length) throw Error('cleanup schema missing');
   const key=ident(TABLES[table]);

@@ -56,7 +56,7 @@ test('backup/delete failure rolls back both; limits and byte cap never discard u
  assert.equal(f.sql.prepare('SELECT COUNT(*) n FROM mushrooms').get().n,5);
  f.fail('');assert.equal((await archiveExcludedMushrooms(f.db,'mushrooms',Date.now(),1)).deleted,1);
  await assert.rejects(archiveExcludedMushrooms(f.db,'scan_agents'),/not allowed/);
- await assert.rejects(archiveExcludedMushrooms(f.db,'mushrooms',Date.now(),1001),/limit/);
+ await assert.rejects(archiveExcludedMushrooms(f.db,'mushrooms',Date.now(),5001),/limit/);
  f.sql.prepare('INSERT INTO mushrooms VALUES(?,?,?)').run('oversize',2,'x'.repeat(500001));
  await archiveExcludedMushrooms(f.db,'mushrooms');
  assert.equal(f.sql.prepare("SELECT level FROM mushrooms WHERE id='oversize'").get().level,2);
@@ -68,6 +68,16 @@ test('recovery never overwrites a later large snapshot and expires after7days',a
  assert.equal(await restoreMushroomLevelBackup(f.db,'mushrooms','row-2',now+1),false);
  assert.equal(f.sql.prepare("SELECT payload FROM mushrooms WHERE id='row-2'").get().payload,'new-large');
  assert.equal(await restoreMushroomLevelBackup(f.db,'mushrooms','row-1',now+7*86400000),false);
+});
+
+test('aggregate recovery JSON stays below2MiB even for a5k-row batch',async()=>{
+ const f=fixture();f.sql.exec('DELETE FROM mushrooms');
+ const insert=f.sql.prepare('INSERT INTO mushrooms VALUES(?,?,?)');
+ for(let i=0;i<2500;i++)insert.run(String(i).padStart(6,'0'),2,'x'.repeat(1500));
+ const result=await archiveExcludedMushrooms(f.db,'mushrooms');
+ assert.ok(result.deleted>0&&result.deleted<2500);
+ assert.ok(f.sql.prepare('SELECT SUM(length(CAST(row_json AS BLOB))) bytes FROM retention_backups').get().bytes<=2*1024*1024);
+ assert.equal(f.sql.prepare('SELECT COUNT(*) n FROM mushrooms').get().n,2500-result.deleted);
 });
 
 test('public query cannot expose small/normal/future levels, including legacy level filters',async()=>{
@@ -83,7 +93,7 @@ test('cleanup route rejects anonymous/controller writes, cross-origin and arbitr
  new Script(src).runInNewContext({exports,JSON,Object,Error,require(p){
   if(p.endsWith('/cloud'))return {adminAuthorized:()=>owner,controllerAuthorized:()=>controller,ensureSchema:async()=>{},runtime:()=>({DB:{}}),readBoundedUtf8:async r=>({text:await r.text()})};
   if(p.endsWith('/gps-access.mjs'))return {browserWrite,privateJson};
-  if(p.endsWith('/mushroom-level-cleanup.mjs'))return {readMushroomLevelPolicy:async()=>({excludedTotal:0}),archiveExcludedMushrooms:async()=>{calls++;return {deleted:1}}};
+  if(p.endsWith('/mushroom-level-cleanup.mjs'))return {readMushroomLevelPolicy:async()=>{throw Error('inventory unavailable after commit')},archiveExcludedMushrooms:async()=>{calls++;return {deleted:1}}};
   throw Error(p);
  }});
  const req=(origin='https://example.test',action='archive-excluded')=>new Request('https://example.test/api/admin/mushroom-policy',{method:'POST',headers:{origin,'content-type':'application/json'},body:JSON.stringify({action})});
