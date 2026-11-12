@@ -489,7 +489,7 @@ export async function renewLease(
   jobId: number,
   targetId: number,
   leaseToken: string,
-  versions: ReturnType<typeof agentRequestVersions> = { version: "", gameVersion: "", moduleVersion: "" },
+  versions: ReturnType<typeof agentRequestVersions> = { version: "", gameVersion: "", moduleVersion: "", pendingBytes: undefined },
 ) {
   const db = runtime().DB;
   const now = Date.now();

@@ -30,9 +30,9 @@ for CURL_DNS_SERVERS in '' '1.1.1.1'; do
     [ "$(cat "$TMP/stdin")" = "Authorization: Bearer $TOKEN" ]
     if grep -F "$TOKEN" "$TMP/argv"; then echo token-in-argv; exit 1; fi
     grep -Fx '@-' "$TMP/argv" >/dev/null
+    grep -Fx 'X-Agent-Pending-Bytes: 10' "$TMP/argv" >/dev/null
     if [ "$fn" = auth_curl ]; then
       grep -Fx "@$TMP/body" "$TMP/argv" >/dev/null
-      grep -Fx 'X-Agent-Pending-Bytes: 10' "$TMP/argv" >/dev/null
     fi
     CURL_RESULT=22; export CURL_RESULT
     if "$fn" https://fixture.invalid; then echo curl-error-lost; exit 1; else [ "$?" = 22 ]; fi

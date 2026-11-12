@@ -722,11 +722,12 @@ scan_control() {
   # short so a slow control endpoint cannot stretch a bounded map refresh into
   # several minutes. Empty/error responses fail open; lease validation still
   # happens on the normal task and ACK requests.
+  TELEMETRY_PENDING="$(pending_upload_bytes)"
   if [ -n "$CURL_DNS_SERVERS" ]; then
     printf 'Authorization: Bearer %s\n' "$TOKEN" |
     "$CURL_BIN" -fsS --dns-servers "$CURL_DNS_SERVERS" --connect-timeout 3 --max-time 5 \
       -H @- \
-      -H "X-Agent-Id: $AGENT_ID" \
+      -H "X-Agent-Id: $AGENT_ID" -H "X-Agent-Pending-Bytes: $TELEMETRY_PENDING" \
       -H "X-Agent-Version: $AGENT_VERSION" \
       -H "X-Game-Version: $GAME_VERSION" \
       -H "X-Module-Version: $MODULE_VERSION" \
@@ -737,7 +738,7 @@ scan_control() {
   printf 'Authorization: Bearer %s\n' "$TOKEN" |
   "$CURL_BIN" -fsS --connect-timeout 3 --max-time 5 \
     -H @- \
-    -H "X-Agent-Id: $AGENT_ID" \
+    -H "X-Agent-Id: $AGENT_ID" -H "X-Agent-Pending-Bytes: $TELEMETRY_PENDING" \
     -H "X-Agent-Version: $AGENT_VERSION" \
     -H "X-Game-Version: $GAME_VERSION" \
     -H "X-Module-Version: $MODULE_VERSION" \
