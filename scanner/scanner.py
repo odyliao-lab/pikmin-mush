@@ -182,7 +182,7 @@ def db_init():
     con.commit(); con.close()
 
 def db_upsert(rows):
-    rows = [row for row in rows if row.get("level", 0) >= 2]
+    rows = [row for row in rows if row.get("level", 0) in (3, 4)]
     if not rows: return 0
     con = sqlite3.connect(DB_PATH)
     now = int(time.time())
@@ -214,7 +214,7 @@ def db_active():
     cur = con.execute("""SELECT id,lat,lng,level,type,cluster,cooldown,finish_ms,first_seen,last_seen,
                          challenger_count,challenger_capacity,total_power,start_ms
                          FROM mushrooms
-                         WHERE level>=2 AND (finish_ms=0 OR finish_ms>?)""", (now_ms,))
+                         WHERE level IN (3,4) AND (finish_ms=0 OR finish_ms>?)""", (now_ms,))
     cols = ["id","lat","lng","level","type","cluster","cooldown","finish_ms","first_seen","last_seen",
             "challenger_count","challenger_capacity","total_power","start_ms"]
     out = [dict(zip(cols, row)) for row in cur.fetchall()]
@@ -323,7 +323,7 @@ def parse_tsv_text(text):
         except ValueError:
             total_power = 0
         level = g(6)
-        if level < 2:
+        if level not in (3, 4):
             continue
         rows.append(dict(id=p[1], lat=lat, lng=lng, cluster=(p[4] if len(p) > 4 else ""),
                          cooldown=g(5), level=level, type=g(7), finish_ms=g(8),

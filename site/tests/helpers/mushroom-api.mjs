@@ -54,7 +54,7 @@ export function createApi({ size = 2305, gpsAuthorized = true, realAccess = fals
       if(p.endsWith('/gps-access.mjs'))return realAccess?gps:{access:async()=>({owner:false,authorized:gpsAuthorized,expires_at:null}),privateJson:(data,status=200)=>Response.json(data,{status})};
       if(p.endsWith('/fleet'))return {publicAgent:row=>({...row,id:row.id,name:row.display_name,online:false})};
       if(p.endsWith('/map-agents.mjs'))return mapAgents;
-      if(p.endsWith('/mushroom-policy.mjs'))return {MIN_MUSHROOM_LEVEL:2};
+      if(p.endsWith('/mushroom-policy.mjs'))return {MIN_MUSHROOM_LEVEL:3};
       if(p.endsWith('/scan-plans'))return {COUNTRY_PACK_CATALOG:[{name:'fixture-east',cities:[['east',25,121]]},{name:'fixture-west',cities:[['west',-33,-70]]}]};
       if(p.endsWith('/query-contract.mjs'))return query;
       if(p.endsWith('/list-query.mjs'))return list;

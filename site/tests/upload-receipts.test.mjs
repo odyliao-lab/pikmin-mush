@@ -18,7 +18,31 @@ function load(file, deps, globals={}) {
 }
 const stream='12345678-1234-1234-1234-123456789abc';
 const row='0\tfixture-poi\t1\t2\tcity\t0\t3\t2\t0\t1\t35\t10\t1000\n';
-function fixture() {
+
+test('mixed-size receipt advances the full immutable range but retains only3/4; retries remain deduplicated',async()=>{
+  const f=fixture();
+  const body=[1,2,3,4].map(level=>row.replace('fixture-poi',`size-${level}`).replace('\t3\t2\t0\t','\t'+level+'\t2\t0\t')).join('');
+  assert.equal(await(await f.send(body)).text(),'accepted=2\n');
+  assert.equal(await(await f.send(body)).text(),'accepted=2\n');
+  assert.equal(f.count('mushrooms'),2);assert.equal(f.count('mushroom_observations'),2);
+  assert.equal(f.sql.prepare('SELECT end_offset FROM agent_upload_receipts').get().end_offset,Buffer.byteLength(body));
+  const excluded=row.replace('\t3\t2\t0\t','\t2\t2\t0\t');
+  assert.equal(await(await f.send(excluded,Buffer.byteLength(body))).text(),'accepted=0\n');
+  assert.equal(f.count('mushrooms'),2);assert.equal(f.count('agent_upload_receipts'),2);
+});
+
+test('legacy mixed-size upload accepts transport with excluded rows and drains partial state safely',async()=>{
+  const f=fixture({legacy:true});
+  const normal=row.replace('\t3\t2\t0\t','\t2\t2\t0\t');
+  const body=normal+row;
+  assert.equal((await f.sendLegacy(body.slice(0,-2))).status,200);
+  assert.equal(f.count('mushrooms'),0);
+  assert.equal((await f.sendLegacy(body.slice(-2))).status,200);
+  assert.equal(f.count('mushrooms'),1);assert.equal(f.count('mushroom_observations'),1);
+  assert.equal(f.sql.prepare('SELECT partial_text FROM scan_agents WHERE id=?').get('fixture').partial_text,'');
+  assert.equal((await f.sendLegacy(normal)).status,200);assert.equal(f.count('mushrooms'),1);
+});
+function fixture({legacy=false}={}) {
   const sql=new DatabaseSync(':memory:'); let fail='',clock=1000000000000,batchCount=0,maxStatements=0;
   for(const file of ['0015_slimy_klaw.sql','0016_superb_random.sql'])
     sql.exec(readFileSync(new URL('../drizzle/'+file,import.meta.url),'utf8'));
@@ -52,13 +76,14 @@ function fixture() {
     '../../../../lib/cloud':{...cloud,ensureSchema:async()=>{},scheduleRetentionEmergencyFallback:()=>{}},
     '../../../../lib/upload-receipts':receipts,
     '../../../../lib/fleet':{authorizeFleetAgent:async()=>authorized?agent:null,agentRequestVersions:()=>({version:'2.2.1',gameVersion:'154.0',moduleVersion:'154.0'}),
-      touchAgent:async()=>{throw Error('receipt path must not call late touch');}},
-    '../../../../lib/metrics':{recordAgentEvent:async()=>{throw Error('event must be atomic');}}});
+      touchAgent:async()=>{if(!legacy)throw Error('receipt path must not call late touch');}},
+    '../../../../lib/metrics':{recordAgentEvent:async()=>{if(!legacy)throw Error('event must be atomic');}}});
   return {sql,agent,fail(v){fail=v;},advance(){clock+=2000;},unauthorize(){authorized=false;},
     stats(){return {batchCount,maxStatements};},
     async send(body=row,start=0,headers={}){return route.POST(new Request('https://example.invalid/api/agent/upload',
       {method:'POST',body,headers:{'x-upload-protocol':'receipt-v1','x-upload-stream':stream,
         'x-upload-start':String(start),'x-upload-end':String(start+Buffer.byteLength(body)),...headers}}));},
+    async sendLegacy(body){return route.POST(new Request('https://example.invalid/api/agent/upload',{method:'POST',body}));},
     count(table){return sql.prepare('SELECT COUNT(*) n FROM '+table).get().n;}};
 }
 test('response loss replay preserves original observation/time/counters and target',async()=>{

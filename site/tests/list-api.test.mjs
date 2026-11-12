@@ -16,7 +16,7 @@ test('real API SQL preserves global counts, Chinese search and sorted cursor con
   if(p.endsWith('/gps-access.mjs'))return {privateJson:(data,status=200)=>Response.json(data,{status})};
   if(p.endsWith('/fleet'))return {publicAgent:()=>({})};
   if(p.endsWith('/map-agents.mjs'))return mapAgents;
-  if(p.endsWith('/mushroom-policy.mjs'))return {MIN_MUSHROOM_LEVEL:2};
+  if(p.endsWith('/mushroom-policy.mjs'))return {MIN_MUSHROOM_LEVEL:3};
   if(p.endsWith('/scan-plans'))return {COUNTRY_PACK_CATALOG:[{name:'台灣',cities:[['台北',25,121]]}]};
   if(p.endsWith('/public-read.mjs'))return {...publicRead,createPublicReader:()=>publicRead.createPublicReader()};
   if(p.endsWith('/public-read-guard.mjs'))return {acquirePublicRead:()=>{throw Error('Covered by real D1 admission fixture');}};

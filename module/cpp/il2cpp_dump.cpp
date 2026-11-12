@@ -844,8 +844,8 @@ static void observe_map_object(void *thiz, void *obj, bool legacy_map_manager) {
                 std::string key(id);
                 long ts = (long) time(nullptr);
                 auto seen = g_seen.find(key);
-                // 等級 1（小型）不具雷達參考價值；也排除尚未解析出有效等級的資料。
-                bool should_log = level >= 2 && !key.empty() &&
+                // Only large(3)/giant(4) enter TSV. Object-refresh evidence remains independent.
+                bool should_log = (level == 3 || level == 4) && !key.empty() &&
                     (seen == g_seen.end() || seen->second.finish_ms != finishMs ||
                      seen->second.challenger_count != challengerCount ||
                      seen->second.total_power != totalPower ||
