@@ -18,9 +18,23 @@ export async function POST(request:Request) {
   } catch {return privateJson({error:'invalid action'},400);}
   await ensureSchema();
   const db=runtime().DB;
+  let stage='archive_mushrooms';
   try {
     const batches=[];
-    for (const table of ['mushrooms','mushroom_observations']) batches.push(await archiveExcludedMushrooms(db,table));
+    for (const table of ['mushrooms','mushroom_observations']) {
+      stage=`archive_${table}`;batches.push(await archiveExcludedMushrooms(db,table));
+    }
+    stage='read_policy';
     return privateJson({ok:true,batches,policy:await readMushroomLevelPolicy(db)});
-  } catch {return privateJson({error:'cleanup stopped; committed batches remain recoverable'},503);}
+  } catch (error) {
+    const message=error instanceof Error?error.message:'';
+    const reason=/too many sql variables/i.test(message)?'sql_variables'
+      :/busy|locked/i.test(message)?'database_busy'
+      :/time|duration|CPU/i.test(message)?'database_timeout'
+      :/too big|too large|size|memory/i.test(message)?'database_limit'
+      :/constraint/i.test(message)?'database_constraint'
+      :/no such|schema|column/i.test(message)?'database_schema':'database_error';
+    console.warn(JSON.stringify({event:'mushroom_level_cleanup_failed',stage,reason}));
+    return privateJson({error:'cleanup stopped; committed batches remain recoverable',stage,reason},503);
+  }
 }
