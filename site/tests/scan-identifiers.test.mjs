@@ -60,6 +60,8 @@ test('online heartbeats do not hide prolonged unfinished targets; paused/idle re
   assert.equal(agentHealth({...row, last_target_at: now}, now).status, 'healthy');
   assert.equal(agentHealth({...row, last_target_at: now, last_data_at: 1, no_data_streak: 100}, now).status, 'collecting');
   assert.equal(agentHealth({...row, last_target_at: now - 61 * 60000, no_data_streak: 100}, now).status, 'critical');
+  assert.equal(agentHealth({...row, last_seen: now - 48000}, now).heartbeat_age_ms, 48000);
+  assert.equal(agentHealth({...row, last_seen: 0}, now).heartbeat_age_ms, null);
 });
 
 test('an unconfirmed scan cannot make the fleet soak verdict pass', () => {

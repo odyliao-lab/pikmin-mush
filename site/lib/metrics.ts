@@ -90,6 +90,8 @@ export function agentHealth(row: AgentHealthRow, now = Date.now()) {
   const lastTargetAt = Number(row.last_target_at ?? 0);
   const lastDataAt = Number(row.last_data_at ?? 0);
   const dataAgeMs = lastDataAt ? now - lastDataAt : null;
+  const lastSeenAt = Number(row.last_seen ?? 0);
+  const heartbeatAgeMs = lastSeenAt > 0 ? Math.max(0, now - lastSeenAt) : null;
   let status: "healthy" | "warning" | "critical" | "offline" | "paused" |
     "version_mismatch" | "collecting" = "healthy";
   let message = "掃描與資料流正常";
@@ -122,6 +124,7 @@ export function agentHealth(row: AgentHealthRow, now = Date.now()) {
     last_data_at: lastDataAt,
     last_target_at: lastTargetAt,
     data_age_ms: dataAgeMs,
+    heartbeat_age_ms: heartbeatAgeMs,
     compatibility,
   };
 }
