@@ -22,6 +22,9 @@ printf 'payload\n' >"$TMP/body"
 printf '123456789\n' >"$TSV"
 [ "$(pending_upload_bytes)" = 10 ]
 OFFSET=4; [ "$(pending_upload_bytes)" = 6 ]
+printf 'partial' >>"$TSV"; [ -z "$(pending_upload_bytes)" ]
+printf '\n' >>"$TSV"; [ "$(pending_upload_bytes)" = 14 ]
+printf '123456789\n' >"$TSV"
 OFFSET=100; [ -z "$(pending_upload_bytes)" ]
 OFFSET=0
 for CURL_DNS_SERVERS in '' '1.1.1.1'; do

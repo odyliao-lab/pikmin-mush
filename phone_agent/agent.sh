@@ -163,6 +163,12 @@ pending_upload_bytes() {
   case "$PENDING_SIZE" in 0?*) return ;; esac
   [ "${#PENDING_SIZE}" -le 15 ] && [ "${#OFFSET}" -le 15 ] || return
   [ "$PENDING_SIZE" -ge "$OFFSET" ] || return
+  if [ "$PENDING_SIZE" -gt "$OFFSET" ]; then
+    # A partial final record is not an uploadable prefix. Keep telemetry
+    # unknown until it is complete rather than reporting a false stall.
+    PENDING_TAIL="$(tail -c 1 "$TSV" 2>/dev/null; printf x)"
+    [ "$PENDING_TAIL" = "$(printf '\nx')" ] || return
+  fi
   printf '%s' "$((PENDING_SIZE - OFFSET))"
 }
 
