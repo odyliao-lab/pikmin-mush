@@ -103,7 +103,9 @@ test('dashboard city belongs to a live owned lease and log omission is opt-in',a
   if(p.endsWith('/cloud'))return{adminAuthorized:()=>true,ensureSchema:async()=>{},runtime:()=>({DB:adapter}),noStoreJson:d=>Response.json(d)};
   if(p.endsWith('/scans'))return{activeOrLatestJob:async()=>({id:1}),publicJob:x=>x};
   if(p.endsWith('/fleet'))return{publicAgent:a=>({id:a.id,online:true,uploaded_rows:0,uploaded_bytes:0})};
-  if(p.endsWith('/rotation'))return{rotationStatus:async()=>({enabled:true})};throw Error(p);
+  if(p.endsWith('/rotation'))return{rotationStatus:async()=>({enabled:true})};
+  if(p.endsWith('/target-ack-evidence.mjs'))return{parseTargetAckEvidence(){throw Error('default dashboard must not enter evidence mode')},readTargetAckEvidence(){throw Error('default dashboard must not read evidence')}};
+  throw Error(p);
  }});
  const get=async suffix=>(await exports.GET(new Request('https://example.test/api/admin/scans'+suffix))).json();
  const body=await get('?logs=0');assert.equal(body.logs.length,0);assert.equal(body.agents[0].current_city,'城市');

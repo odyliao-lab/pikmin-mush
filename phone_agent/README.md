@@ -6,7 +6,7 @@ Root Android常駐掃描Agent，接受雲端逐點派工、等待遊戲native刷
 
 ## 版本與驗收範圍
 
-- repo `agent.sh` 新尺寸政策候選預設回報 **2.2.15**，只計大菇3與巨菇4；獨立Hunter候選為157.0-r2-large-giant，逐台部署狀態另行驗收，見 [尺寸政策](../docs/LARGE_GIANT_ONLY_POLICY_2026-11-12.md)。先前已驗收的基準是 **157.0／1793360009、157.0-r1**；原APK簽署及native指紋見 [157候選紀錄](../docs/FLEET_157_CANDIDATE_2026-11-09.md)。
+- repo `agent.sh` 新尺寸政策候選預設回報 **2.2.16**，只計大菇3與巨菇4，並在原有等待結束後重新結算，涵蓋刷新標記後才到達的物件；獨立Hunter候選為157.0-r2-large-giant，逐台部署狀態另行驗收，見 [尺寸政策](../docs/LARGE_GIANT_ONLY_POLICY_2026-11-12.md)。先前已驗收的基準是 **157.0／1793360009、157.0-r1**；原APK簽署及native指紋見 [157候選紀錄](../docs/FLEET_157_CANDIDATE_2026-11-09.md)。
 - 竹北Aquarius／Sagittarius保留scoped2.2.14，Capricorn保留scoped2.2.13與既有刷新／冷啟政策；三台有至少3個不同新正式目標的完整鏈證據，見 [竹北157紀錄](../docs/ZHUBEI_157_VALIDATION_2026-11-09.md)。不能以repo版本推論每台都已覆蓋更新。
 - 台中逐台狀態與登入阻擋見 [157機隊紀錄](../docs/FLEET_157_VALIDATION_2026-11-09.md)。短驗不等於24小時穩定、全部提示或自然冷啟恢復驗收。
 - `config.example` 的 `MODULE_VERSION=156.0`、`primary` 及部分註解仍為歷史範例，Agent無設定時另有舊版fallback；它們不是157正式配置。沿用有效裝置config，按實裝Hunter設定MODULE_VERSION；GAME_VERSION由 `runtime-version.sh` 查實際安裝，不能改標籤假裝相容。Magisk的 `module.prop` 也不代表Agent腳本回報版本。
@@ -97,6 +97,7 @@ pause保留於 `pause.until`，manual不會自行到期；resume不繞過其他�
 bash -n phone_agent/agent.sh
 bash -n phone_agent/service.sh
 bash phone_agent/tests/scan-accounting-test.sh
+bash phone_agent/tests/scan-late-object-test.sh
 bash phone_agent/tests/scan-ack-upload-boundary-test.sh
 python phone_agent/tests/emulator-access-test.py
 ```

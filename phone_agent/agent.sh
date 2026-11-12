@@ -117,7 +117,7 @@ if [ ! -x "$MAGISK_SU" ]; then
   MAGISK_SU="$(command -v su 2>/dev/null)"
 fi
 AGENT_ID="${AGENT_ID:-primary}"
-AGENT_VERSION="${AGENT_VERSION:-2.2.15}"
+AGENT_VERSION="${AGENT_VERSION:-2.2.16}"
 [ -r "$MODDIR/runtime-version.sh" ] || { echo '[version] runtime probe missing'; exit 1; }
 . "$MODDIR/runtime-version.sh"
 refresh_game_version
@@ -1169,6 +1169,15 @@ execute_scan_task() {
   fi
   interruptible_wait "$TASK_DELAY" "$JOB_ID" || return
   scan_can_run || return
+  # Map-object readiness can precede large/giant registrations. Include the
+  # complete TSV prefix after the existing dwell, before freezing pending ACK.
+  SAMPLE="$(scan_snapshot)" || return
+  set -- $SAMPLE
+  AFTER_SIZE="$1"; AFTER_LINES="$2"
+  NEW_BYTES=$((AFTER_SIZE - BEFORE_SIZE))
+  NEW_ROWS=$((AFTER_LINES - BEFORE_LINES))
+  [ "$NEW_BYTES" -lt 0 ] && NEW_BYTES=0
+  [ "$NEW_ROWS" -lt 0 ] && NEW_ROWS=0
   case "$REFRESH_SOURCE" in object|query) DIAG_SOURCE="$REFRESH_SOURCE" ;; *) DIAG_SOURCE=timeout ;; esac
   [ "$MAP_REFRESH_EXPERIMENT" = "1" ] || DIAG_SOURCE=legacy
   DIAG_SCAN_MS=$(( ($(date +%s) - TASK_STARTED_AT) * 1000 ))
