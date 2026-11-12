@@ -108,12 +108,9 @@ export function agentHealth(row: AgentHealthRow, now = Date.now()) {
   } else if (row.current_target_id && now - lastTargetAt >= 30 * 60_000) {
     status = now - lastTargetAt >= 60 * 60_000 ? "critical" : "warning";
     message = `仍在線且有掃描任務，但已 ${Math.floor((now - lastTargetAt) / 60_000)} 分鐘未完成掃描點；請檢查 ACK／遊戲狀態`;
-  } else if (streak >= NO_DATA_CRITICAL_STREAK) {
-    status = "critical";
-    message = `連續 ${streak} 個掃描點沒有新資料`;
   } else if (streak >= NO_DATA_WARN_STREAK) {
-    status = "warning";
-    message = `連續 ${streak} 個掃描點沒有新資料`;
+    status = "collecting";
+    message = `連續 ${streak} 個掃描點沒有新資料；擷取狀態待佐證`;
   } else if (compatibility.status === "unknown") {
     status = "collecting";
     message = compatibility.reasons[0];

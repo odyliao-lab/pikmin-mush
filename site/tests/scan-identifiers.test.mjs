@@ -58,4 +58,6 @@ test('online heartbeats do not hide prolonged unfinished targets; paused/idle re
   assert.equal(agentHealth({...row, paused: 1}, now).status, 'paused');
   assert.equal(agentHealth({...row, current_target_id: null}, now).status, 'healthy');
   assert.equal(agentHealth({...row, last_target_at: now}, now).status, 'healthy');
+  assert.equal(agentHealth({...row, last_target_at: now, last_data_at: 1, no_data_streak: 100}, now).status, 'collecting');
+  assert.equal(agentHealth({...row, last_target_at: now - 61 * 60000, no_data_streak: 100}, now).status, 'critical');
 });
