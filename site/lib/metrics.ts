@@ -174,6 +174,10 @@ type SoakEventRow = {
   last_event_at: number;
 };
 
+export function soakVerdict(complete: boolean, critical: number, warning: number, unconfirmed: number) {
+  return !complete ? "collecting" : critical ? "fail" : warning ? "warn" : unconfirmed ? "collecting" : "pass";
+}
+
 export async function buildSoakReport(hours = 24) {
   const boundedHours = Math.max(1, Math.min(168, Math.round(hours)));
   const now = Date.now();
@@ -253,6 +257,7 @@ export async function buildSoakReport(hours = 24) {
     ["critical", "version_mismatch"].includes(row.health.status)).length;
   const warning = reports.filter((row) =>
     ["warning", "offline"].includes(row.health.status)).length;
+  const unconfirmed = reports.filter((row) => row.health.status === "collecting").length;
   const completeWindow = observedHours >= boundedHours - 0.1;
   return {
     generated_at: now,
@@ -260,7 +265,7 @@ export async function buildSoakReport(hours = 24) {
     requested_hours: boundedHours,
     observed_hours: Math.round(observedHours * 10) / 10,
     complete_window: completeWindow,
-    verdict: !completeWindow ? "collecting" : critical ? "fail" : warning ? "warn" : "pass",
+    verdict: soakVerdict(completeWindow, critical, warning, unconfirmed),
     fleet: {
       agents: reports.length,
       online: reports.filter((row) => row.health.status !== "offline").length,
