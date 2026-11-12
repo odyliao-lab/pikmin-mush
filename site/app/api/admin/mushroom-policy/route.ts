@@ -24,12 +24,15 @@ export async function POST(request:Request) {
     for (const table of ['mushrooms','mushroom_observations']) {
       stage=`archive_${table}`;batches.push(await archiveExcludedMushrooms(db,table));
     }
-    stage='read_policy';
-    return privateJson({ok:true,batches,policy:await readMushroomLevelPolicy(db)});
+    // Successful committed work must not be reported as failed because a later
+    // full inventory read hit a separate database/request limit. GET owns that
+    // inventory; the client verifies it before declaring cleanup complete.
+    return privateJson({ok:true,batches});
   } catch (error) {
-    const message=error instanceof Error?error.message:'';
+    const message=String((error as {message?:unknown})?.message??error??'');
     const reason=/too many sql variables/i.test(message)?'sql_variables'
       :/busy|locked/i.test(message)?'database_busy'
+      :/subrequest|quota|rate.limit|too many requests/i.test(message)?'request_limit'
       :/time|duration|CPU/i.test(message)?'database_timeout'
       :/too big|too large|size|memory/i.test(message)?'database_limit'
       :/constraint/i.test(message)?'database_constraint'

@@ -12,9 +12,9 @@
 
 管理後台「歷史資料清理」新增等級清理區；GET `/api/admin/mushroom-policy` 只供既有admin／controller唯讀；POST只允許既有管理員、精確同來源JSON與固定action，不接受任意SQL或表名。
 
-清理範圍只有 `mushrooms` 快照與 `mushroom_observations` 中非3/4紀錄。每批每表最多1000筆、備份總量最多2MiB；每個D1 batch先把全欄位JSON寫入 `retention_backups` 再刪除，任一statement失敗整批回滾。過大資料不強刪，零進度停止。兩表各自原子，跨兩表不是單一大交易；先完成的批次仍可回復。
+清理範圍只有 `mushrooms` 快照與 `mushroom_observations` 中非3/4紀錄。每批每表最多5000筆、備份總量最多2MiB；每個D1 batch先把全欄位JSON寫入 `retention_backups` 再刪除，任一statement失敗整批回滾。過大資料不強刪，零進度停止。兩表各自原子，跨兩表不是單一大交易；先完成的批次仍可回復。
 
-備份7天，內容不透過HTTP回傳。`restoreMushroomLevelBackup` 是維運函式而非公開寫入入口，只能恢復此政策備份且不覆蓋較新live資料；完整回復須先恢復相容接受政策，再以受控維運通道逐鍵恢復。單純回退程式版本不等於資料已恢復。
+POST只回報已提交批次，完整盤點獨立GET並降為每10批讀取一次；最終必須獨立盤點為零才宣告完成，避免後續統計失敗把已提交交易誤判成失敗。備份7天，內容不透過HTTP回傳。`restoreMushroomLevelBackup` 是維運函式而非公開寫入入口，只能恢復此政策備份且不覆蓋較新live資料；完整回復須先恢復相容接受政策，再以受控維運通道逐鍵恢復。單純回退程式版本不等於資料已恢復。
 
 保留共用挑戰／地點身分、upload receipts、Agent/config/token、offset、pending ACK、lease、路線與任務歷史。這些不是可任意清除的一般菇清單資料；不得為統計回溯重寫舊計數。
 
