@@ -2,6 +2,7 @@ import {DatabaseSync} from 'node:sqlite';
 import {readFileSync, readdirSync} from 'node:fs';
 import {Script} from 'node:vm';
 import ts from 'typescript';
+import {pendingUploadState} from '../../lib/upload-pending.mjs';
 import {DAY, DRY_RUN_MS, runHistoryRetention, readHistoryRetention, restoreRetentionBackup} from '../../lib/history-retention.mjs';
 
 const NOW = 1_800_000_000_000;
@@ -61,6 +62,7 @@ function maintenanceRoute(f, historyOverride) {
     if (path.endsWith('/history-retention.mjs')) return {
       runHistoryRetention: db => historyOverride ?? runHistoryRetention(db, NOW), readHistoryRetention: db => readHistoryRetention(db, NOW),
     };
+    if (path.endsWith('/upload-pending.mjs')) return {pendingUploadState};
     if (path.endsWith('/cloud')) return {
       maintenanceAuthorized: () => true, controllerAuthorized: () => false, ensureSchema: async () => {},
       runtime: () => ({DB: f.db}), runMushroomRetention: async () => healthy,
