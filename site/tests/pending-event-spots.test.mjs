@@ -17,13 +17,13 @@ test('pending venues remain searchable records without fake map or GPS coordinat
  assert.equal(out.EVENT_SPOT_SEED.length,57);
  assert.equal(new Set([...out.EVENT_SPOT_SEED,...notices].map(s=>s.id)).size,61);
  const pending=notices.filter(s=>!located(s));
- assert.equal(pending.length,3);
+ assert.equal(pending.length,2);
  for(const s of pending){
   assert.equal(s.lat,null);assert.equal(s.lng,null);
   assert.equal(located(s),false);assert.equal(gps(s),'座標待確認');
   assert.match(s.source_url,/^https:\/\/(www\.)?pikminbloom\.com\//);
  }
- assert.equal([...out.EVENT_SPOT_SEED,...notices].filter(located).length,58);
+ assert.equal([...out.EVENT_SPOT_SEED,...notices].filter(located).length,59);
  assert.equal(located({lat:0,lng:null}),false);
  assert.equal(located({lat:'37.5',lng:'127.1'}),false);
 });
@@ -63,6 +63,24 @@ test('pending periods preserve published CET boundaries and unpublished Singapor
  for(const s of notices.filter(s=>s.country==='新加坡')){assert.equal(s.start_at,null);assert.match(s.eligibility_note,/未公布/);}
  const zone=new Function('return '+html.match(/const zone=(.*?);const fmt=/)[1])();
  assert.equal(zone({country:'韓國'}),'Asia/Seoul');assert.equal(zone({country:'法國'}),'Europe/Paris');assert.equal(zone({country:'荷蘭'}),'Europe/Amsterdam');assert.equal(zone({country:'新加坡'}),'Asia/Singapore');
+});
+
+test('Paris fills its existing card without duplicating venues or shifting the CET closing instant',()=>{
+ const paris=notices.find(s=>s.id==='fr-lafayette-champs-elysees-2026');
+ assert.deepEqual([paris.lat,paris.lng],[48.87056,2.30641]);
+ assert.equal(gps(paris),'48.870560,2.306410');
+ assert.equal(notices.filter(s=>s.id===paris.id).length,1);
+ assert.match(paris.name,/老佛爺/);
+ assert.equal(paris.verification_status,'community');
+ assert.match(paris.coordinate_note,/使用者分享/);
+ assert.match(paris.coordinate_note,/尚未由本站進遊戲複核/);
+ assert.equal(paris.start_at,Date.parse('2026-11-13T10:00:00+01:00')/1000);
+ assert.equal(paris.end_at,Date.parse('2027-01-04T21:00:00+01:00')/1000);
+ assert.match(paris.period_note,/巴黎時間2026\/11\/13 10:00–2027\/01\/04 21:00（CET）/);
+ assert.match(paris.period_note,/台灣時間2026\/11\/13 17:00–2027\/01\/05 04:00/);
+ assert.match(paris.eligibility_note,/完成2000步後另得/);
+ assert.match(paris.eligibility_note,/活動布章1，官方公告未明列/);
+ assert.ok(CATALOGUE_REVISION>2026111301);
 });
 
 test('updated inline event script has exact CSP hashes without broader script permissions',()=>{
