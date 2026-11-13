@@ -32,6 +32,7 @@ jobs:
           bash -n phone_agent/agent.sh
           python3 phone_agent/tests/emulator-access-test.py
           python3 phone_agent/tests/scoped-pending-telemetry-test.py
+          python3 phone_agent/tests/scoped-empty-recovery-test.py
           bash -n phone_agent/power-guard.sh
           bash -n phone_agent/control.sh
           bash -n phone_agent/allow-control-app-root.sh
