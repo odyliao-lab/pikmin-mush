@@ -10,7 +10,8 @@ const values={recovery_version:1,evidence_version:1,refresh_source:'object',ok:1
 const params=(patch={})=>new URLSearchParams({...values,...patch});
 test('fresh authenticated lease ACK can attest an actual object-empty prefix',()=>{
  const e=emptyRecoveryEvidence(params());assert.ok(e);
- assert.equal(scanEvidence(params()).recovery.object_token,values.object_token);
+ assert.equal(scanEvidence(params(),0).recovery.object_token,values.object_token);
+ for(const pending of [undefined,null,1,-1,'0'])assert.equal(scanEvidence(params(),pending).recovery,null);
  const target={id:123,job_id:4,completed_agent_id:'a',leased_at:1794500000000,completed_at:1794500021000};
  const event={agent_id:'a',target_id:123,job_id:4,at:target.completed_at,rows:0,bytes:0};
  assert.equal(validEmptyRecovery(e,target,event,event.at+1000),true);

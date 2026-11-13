@@ -23,6 +23,9 @@ The authenticated Agent attests these conditions together:
   covered by the accepted uploader offset. Two existing pending-byte samples
   must be exactly zero; a final coherent snapshot must match the prefix. No
   previous pending ACK is permitted. Partial/unknown/racing samples omit proof.
+- The existing request-time `X-Agent-Pending-Bytes` header must independently be
+  exactly zero. A positive/missing header rejects a previously frozen witness,
+  including a late append before the ACK request or a delayed retry with new data.
 - Device scan/marker/sample order must be coherent within ten minutes. The
   successful server ACK must be within two minutes of its sample, and proof must
   still be within two minutes of the close check. Unknown clocks fail closed.
