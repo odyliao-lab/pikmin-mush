@@ -54,6 +54,7 @@ jobs:
           bash phone_agent/tests/scan-accounting-test.sh
           bash phone_agent/tests/scan-late-object-test.sh
           bash phone_agent/tests/scan-ack-upload-boundary-test.sh
+          bash phone_agent/tests/empty-recovery-test.sh
           bash phone_agent/tests/teleport-file-test.sh
           bash phone_agent/tests/gps-provider-test.sh
           bash phone_agent/tests/gps-live-recovery-test.sh

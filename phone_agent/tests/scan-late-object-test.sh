@@ -6,7 +6,9 @@ trap 'rm -rf "$TMP"' EXIT
 for fn in number_or_zero scan_snapshot execute_scan_task retry_scan_ack; do
   eval "$(sed -n "/^$fn() {/,/^}/p" "$ROOT/agent.sh")"
 done
-MODDIR=$TMP TSV=$TMP/data SCAN_PENDING=$TMP/scan.pending
+MODDIR=$TMP TSV=$TMP/data SCAN_PENDING=$TMP/scan.pending APP_FILES=$TMP
+game_process_identity() { return 1; }
+empty_recovery_query() { return 1; } # This fixture exercises the nonzero path.
 TELEPORT=$TMP/teleport SCAN_READY=$TMP/ready QUERY_READY=$TMP/query
 MAP_REFRESH_EXPERIMENT=1 MAP_REFRESH_TIMEOUT_SECONDS=18 QUERY_ONLY_RESTART_STREAK=12
 QUERY_ONLY_STREAK=0 VISUAL_RECOVERY_ENABLED=0 OFFSET=0 FAIL_UPLOAD=0

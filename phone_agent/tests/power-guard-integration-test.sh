@@ -30,6 +30,9 @@ if guarded_startup_wait 25; then echo 'startup bypassed guard' >&2; exit 1; fi
 # either startup or fallback must not count as a completed/failed scan attempt.
 TELEPORT="$TMP/teleport" SCAN_READY="$TMP/scan.ready" QUERY_READY="$TMP/query.ready"
 SCAN_PENDING="$TMP/scan.pending"
+APP_FILES=$TMP
+game_process_identity() { return 1; }
+empty_recovery_query() { return 1; } # Guard behavior is independent of attestation.
 MAP_REFRESH_EXPERIMENT=1 MAP_REFRESH_TIMEOUT_SECONDS=18 QUERY_ONLY_RESTART_STREAK=12
 QUERY_ONLY_STREAK=0 SPEED_WARNING_TAP_X=0 SPEED_WARNING_TAP_Y=0 MAP_VIEW_TAP_X=0 MAP_VIEW_TAP_Y=0
 set_system_gps() { return 0; }

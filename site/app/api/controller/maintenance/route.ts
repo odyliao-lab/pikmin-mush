@@ -16,11 +16,13 @@ async function snapshot() {
   const now = Date.now();
   const retention = await readMushroomRetentionStatus();
   const agents = await runtime().DB.prepare(`SELECT id, display_name, enabled, paused,
-      last_seen, last_data_at, current_job_id, current_target_id, created_at
-    FROM scan_agents ORDER BY id`).all<{
+      last_seen, last_data_at, current_job_id, current_target_id, created_at,
+      COALESCE((SELECT verification_kind FROM scan_targets t WHERE t.id=a.current_target_id),'') AS verification_kind,
+      EXISTS(SELECT 1 FROM agent_power_pauses p WHERE p.agent_id=a.id AND p.resumed_at IS NULL) AS power_hold
+    FROM scan_agents a ORDER BY id`).all<{
     id: string; display_name: string; enabled: number; paused: number;
     last_seen: number; last_data_at: number; created_at: number; current_job_id: number | null;
-    current_target_id: number | null;
+    current_target_id: number | null; power_hold: number; verification_kind: string;
   }>();
   const uploads = await runtime().DB.prepare(`SELECT agent_id, MAX(at) AS last_upload_at
     FROM scan_agent_events WHERE event_type='upload' AND at>=? GROUP BY agent_id`)
@@ -38,7 +40,8 @@ async function snapshot() {
     const pendingState=pendingUploadState(pending,now,uploadedAt.get(agent.id)??0);
     return {
     id: agent.id, name: agent.display_name, enabled: !!agent.enabled,
-    paused: !!agent.paused, lastSeen: agent.last_seen, lastAcceptedDataAt: agent.last_data_at,
+    paused: !!agent.paused, powerHold: !!agent.power_hold, verificationKind: agent.verification_kind,
+    lastSeen: agent.last_seen, lastAcceptedDataAt: agent.last_data_at,
     lastAcceptedUploadAt: uploadedAt.get(agent.id) ?? 0,
     currentJobId: agent.current_job_id, currentTargetId: agent.current_target_id,
     uploadSilent: !!agent.enabled && !agent.paused && !!agent.current_job_id &&

@@ -1,5 +1,9 @@
 # Pikmin Scanner Agent
 
+Generic2.2.18 is a candidate for the [empty recovery contract](../docs/EMPTY_RECOVERY_CONTRACT.md),
+not a scoped-device rollout. Installed2.2.17 pending telemetry and its protected
+upload/auth functions remain the deployment baseline until separate device gates pass.
+
 Root Android常駐掃描Agent，接受雲端逐點派工、等待遊戲native刷新、增量上傳TSV並回報ACK。實體手機與MuMu共用協定，部署配置與上傳實作仍逐台保留。
 
 文件審視：2026-11-12。這是開發與操作入口，並非即時裝置健康報告。

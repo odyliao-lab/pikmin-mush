@@ -1,3 +1,4 @@
+import {findEmptyRecovery} from './empty-recovery.mjs';
 // Sticky, durable admission. No expiry-based stealing of an unknown batch.
 export const DISPATCH_SCHEMA = [
  `CREATE TABLE IF NOT EXISTS controller_dispatches (
@@ -27,7 +28,7 @@ const TARGETS = `WITH targets AS (
  h.leased_at,h.completed_at,h.completed_agent_id FROM scan_target_history h
  WHERE NOT EXISTS(SELECT 1 FROM scan_targets t WHERE t.id=h.id)) `;
 
-export async function dispatchProof(db,batch) {
+export async function dispatchProof(db,batch,now=Date.now()) {
  const claim=await db.prepare('SELECT * FROM controller_dispatches WHERE batch=?').bind(batch).first();
  if(!claim)return null;
  const rows=await db.prepare(TARGETS+`SELECT * FROM targets WHERE verification_batch=?`).bind(batch).all();
@@ -51,6 +52,8 @@ export async function dispatchProof(db,batch) {
  .bind(returnJob,claim.agent_id,claim.agent_id,r.completed_at).first();
  const candidatesTerminal=candidates.length===claim.candidate_count&&candidates.length>0&&
   candidates.every(t=>['completed','failed','cancelled'].includes(t.status));
+ const empty=returnAck&&!resumed&&candidatesTerminal?
+  await findEmptyRecovery(db,TARGETS,claim.agent_id,returnJob,r.completed_at,now):null;
  return {batch,owner:claim.owner,state:claim.state,parallel:claim.parallel_mode===1,agent_id:claim.agent_id,original_job_id:claim.job_id,
   return_scheduled:effectiveReturns.length===1,
   return_recovery:recovery?{id:recovery.recovery_id,original_job_id:recovery.original_job_id,
@@ -58,9 +61,12 @@ export async function dispatchProof(db,batch) {
   return_targets:returns.map(t=>({target_id:t.id,status:t.status,leased_at:t.leased_at,
    completed_at:t.completed_at,ack:!!r&&t.id===r.id&&returnAck})),
   return_ack:returnAck,resumed_object_accepted:!!resumed,
-  resumed_target_id:resumed?.id??null,resumed_received_at:resumed?.received_at??null,
+  resumed_empty_proven:!!empty,recovery_contract:1,
+  resumed_target_id:resumed?.id??empty?.id??null,resumed_received_at:resumed?.received_at??null,
+  recovery_stage:!candidatesTerminal?'candidate-recheck':!returnAck?'waiting-return':
+   resumed||empty?'restored':'waiting-recovery-evidence',
   candidates_terminal:candidatesTerminal,
-  can_close:candidatesTerminal&&returnAck&&!!resumed};
+  can_close:candidatesTerminal&&returnAck&&!!(resumed||empty)};
 }
 
 // Operator-authorized continuation, never an admission replay or a fabricated ACK.
@@ -74,7 +80,7 @@ export async function recoverCancelledReturn(db,batch,owner,recoveryId,agent,job
  const old=await db.prepare('SELECT * FROM controller_return_recoveries WHERE batch=?').bind(batch).first();
  if(old)return old.recovery_id===recoveryId?{http:200,ok:true,existing:true,coordination:await dispatchProof(db,batch)}:
   {http:409,error:'recovery_identity_conflict'};
- const proof=await dispatchProof(db,batch);
+ const proof=await dispatchProof(db,batch,now);
  if(claim.state!=='active'||!proof.candidates_terminal||proof.return_targets.length!==1||
    proof.return_targets[0].status!=='cancelled')return {http:409,error:'cancelled_return_not_proven'};
  if(!agent||agent.id!==claim.agent_id||!agent.enabled||agent.paused||now-agent.last_seen>15000||
@@ -197,7 +203,7 @@ export async function admitDispatch(db,input,agent,job,now,admission=crypto.rand
 }
 
 export async function closeDispatch(db,batch,owner,now) {
- const proof=await dispatchProof(db,batch);
+ const proof=await dispatchProof(db,batch,now);
  if(!proof||proof.owner!==owner)return {http:409,error:'ownership_mismatch'};
  if(proof.state==='closed')return {http:200,ok:true,already_closed:true};
  if(!proof.can_close)return {http:409,error:'return_or_resumed_object_unconfirmed',coordination:proof};
