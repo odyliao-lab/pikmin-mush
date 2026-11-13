@@ -993,7 +993,12 @@ retry_scan_ack() {
   PENDING_END="${7:-0}"
   case "$PENDING_END" in ''|*[!0-9]*) return 1 ;; esac
   if [ "$OFFSET" -lt "$PENDING_END" ]; then upload_new || true; fi
-  if [ "$OFFSET" -ge "$PENDING_END" ] && send_scan_ack "$1" "$2" "$3" "$4" "$5" 1 "${6:-}"; then
+  # Frozen ACK accounting is still authoritative, but its optional empty-point
+  # witness belongs to the original process sample. Never replay that witness
+  # after a network failure/restart; a subsequent ordinary point can prove recovery.
+  # Do not rewrite the durable pending record, prefix, lease, rows or bytes.
+  RETRY_EVIDENCE="$(printf '%s' "${6:-}" | sed 's/&recovery_version=.*$//')"
+  if [ "$OFFSET" -ge "$PENDING_END" ] && send_scan_ack "$1" "$2" "$3" "$4" "$5" 1 "$RETRY_EVIDENCE"; then
     rm -f "$SCAN_PENDING"
     echo "[scan] pending ACK completed job=$1 target=$2"
     return 0

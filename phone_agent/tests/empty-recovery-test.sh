@@ -29,3 +29,26 @@ printf '123\t157.0\n' >"$APP_FILES/native.ready";reject
 printf '%s\n' "$RECOVERY_NATIVE_BEFORE" >"$APP_FILES/native.ready"
 printf 'old\tobject\t1\t2\t%s\n' "$TASK_STARTED_AT" >"$SCAN_READY";reject
 printf 'PASS empty recovery rejects query, PID reuse, pending/unknown, prefix race and old native/target\n'
+
+# Real retry path must preserve frozen accounting while dropping stale process proof.
+eval "$(sed -n '/^retry_scan_ack() {/,/^}/p' "$ROOT/agent.sh")"
+BASE='&evidence_version=1&refresh_source=object&scan_ms=1000'
+FROZEN="$BASE&recovery_version=1&game_pid=456&process_start=77"
+printf '4\t123\tsynthetic-lease\t0\t0\t%s\t100\n' "$FROZEN" >"$SCAN_PENDING"
+cp "$SCAN_PENDING" "$TMP/original"
+PID_STATE='999 88';OFFSET=100;ACK_FAIL=1
+upload_new() { return 0; }
+scan_control() { printf run; }
+send_scan_ack() {
+  printf '%s\n' "$*" >"$TMP/resent"
+  [ "${7:-}" = "$BASE" ] || exit 1
+  [ "$ACK_FAIL" = 0 ]
+}
+if retry_scan_ack; then exit 1; fi
+cmp "$SCAN_PENDING" "$TMP/original"
+grep -q '^4 123 synthetic-lease 0 0 1 ' "$TMP/resent"
+# Same-process retry also omits proof, rather than pretending revalidation occurred.
+PID_STATE='456 77';ACK_FAIL=0
+retry_scan_ack
+test ! -e "$SCAN_PENDING"
+printf 'PASS retry keeps accounting and never replays the frozen empty witness\n'

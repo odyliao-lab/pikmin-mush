@@ -82,3 +82,15 @@ Validation uses local SQLite, fake requests and shell fixtures; it does not prov
 production D1 timing, Android process/clock behavior, long-running stability or
 real Discord delivery. See PR CI and the private operational handoff for exact
 test commands, source hashes and rollout limits.
+
+## Independent-review correction
+
+A persisted ACK retry always removes the trailing `recovery_version` extension
+from the outgoing request. It does not modify the saved pending record, lease,
+rows/bytes, accepted cursor, or existing scan diagnostics. The original game may
+have exited or restarted after sampling, so a zero pending-byte header alone is
+not sufficient to replay that witness. A later fresh ordinary target must supply
+new empty evidence (or the original nonzero path); retries do not mint new proof.
+If the first ACK already committed, duplicate handling preserves that original
+event rather than inventing a new completion time. This is still a bounded
+Agent attestation at the initial request, not a promise of later uptime.
