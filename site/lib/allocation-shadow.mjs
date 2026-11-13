@@ -1,6 +1,6 @@
 // Conservative opportunity scoring: learning must not silently alter live routes.
-export function scoreRegions(regions, observedHours) {
-  const ready = observedHours >= 24;
+export function scoreRegions(regions, observedHours, policyWindowVerified = false) {
+  const ready = observedHours >= 48 && policyWindowVerified === true;
   const scores = regions.map(row => {
     const hours = Math.max(0, Number(row.scan_ms || 0) / 3600000);
     const samples = Math.max(0, Number(row.targets || 0));

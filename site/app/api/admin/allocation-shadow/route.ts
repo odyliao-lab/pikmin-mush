@@ -49,6 +49,7 @@ export async function GET(request: Request) {
   return noStoreJson({mode:"shadow",live_routes_changed:false,observed_hours:hours,
     measurement_version:2,window_start:since,window_end:now,integrity,
     exploration_floor:0.2, canary_ready:!integrity?.orphan_observations && !integrity?.orphan_events && regions.filter(r=>r.enough_evidence).length>=2,
-    note:"歷史歸屬修復後重新累積24小時；樣本達標且無遺失目標才評估單機實驗。舊失聯資料不猜測補回；未自動改區。canary_ready只是資料門檻，非實驗設定已完成。",
+    policy_window_verified:false,
+    note:"大／巨菇口徑須至少48小時，且逐台切換時間需驗證涵蓋整段窗口；目前站端尚無完整切換證據，保持未達資料門檻。舊資料不混比，未自動改區。",
     regions});
 }

@@ -5,8 +5,7 @@ export const REQUIRED_GAME_VERSION = "157.0";
 export const MIN_AGENT_VERSION = "2.0.0";
 export const EXPECTED_MODULE_VERSION = "157.0";
 export const HEARTBEAT_SAMPLE_MS = 5 * 60_000;
-export const NO_DATA_WARN_STREAK = 12;
-export const NO_DATA_CRITICAL_STREAK = 30;
+export const NO_DATA_OBSERVATION_STREAK = 12;
 
 type AgentHealthRow = {
   enabled: number;
@@ -90,6 +89,8 @@ export function agentHealth(row: AgentHealthRow, now = Date.now()) {
   const lastTargetAt = Number(row.last_target_at ?? 0);
   const lastDataAt = Number(row.last_data_at ?? 0);
   const dataAgeMs = lastDataAt ? now - lastDataAt : null;
+  const lastSeenAt = Number(row.last_seen ?? 0);
+  const heartbeatAgeMs = lastSeenAt > 0 ? Math.max(0, now - lastSeenAt) : null;
   let status: "healthy" | "warning" | "critical" | "offline" | "paused" |
     "version_mismatch" | "collecting" = "healthy";
   let message = "掃描與資料流正常";
@@ -108,12 +109,9 @@ export function agentHealth(row: AgentHealthRow, now = Date.now()) {
   } else if (row.current_target_id && now - lastTargetAt >= 30 * 60_000) {
     status = now - lastTargetAt >= 60 * 60_000 ? "critical" : "warning";
     message = `仍在線且有掃描任務，但已 ${Math.floor((now - lastTargetAt) / 60_000)} 分鐘未完成掃描點；請檢查 ACK／遊戲狀態`;
-  } else if (streak >= NO_DATA_CRITICAL_STREAK) {
-    status = "critical";
-    message = `連續 ${streak} 個掃描點沒有新資料`;
-  } else if (streak >= NO_DATA_WARN_STREAK) {
-    status = "warning";
-    message = `連續 ${streak} 個掃描點沒有新資料`;
+  } else if (streak >= NO_DATA_OBSERVATION_STREAK) {
+    status = "collecting";
+    message = `連續 ${streak} 個掃描點沒有新資料；擷取狀態待佐證`;
   } else if (compatibility.status === "unknown") {
     status = "collecting";
     message = compatibility.reasons[0];
@@ -125,6 +123,7 @@ export function agentHealth(row: AgentHealthRow, now = Date.now()) {
     last_data_at: lastDataAt,
     last_target_at: lastTargetAt,
     data_age_ms: dataAgeMs,
+    heartbeat_age_ms: heartbeatAgeMs,
     compatibility,
   };
 }
@@ -176,6 +175,10 @@ type SoakEventRow = {
   first_event_at: number;
   last_event_at: number;
 };
+
+export function soakVerdict(complete: boolean, critical: number, warning: number, unconfirmed: number) {
+  return !complete ? "collecting" : critical ? "fail" : warning ? "warn" : unconfirmed ? "collecting" : "pass";
+}
 
 export async function buildSoakReport(hours = 24) {
   const boundedHours = Math.max(1, Math.min(168, Math.round(hours)));
@@ -256,6 +259,7 @@ export async function buildSoakReport(hours = 24) {
     ["critical", "version_mismatch"].includes(row.health.status)).length;
   const warning = reports.filter((row) =>
     ["warning", "offline"].includes(row.health.status)).length;
+  const unconfirmed = reports.filter((row) => row.health.status === "collecting").length;
   const completeWindow = observedHours >= boundedHours - 0.1;
   return {
     generated_at: now,
@@ -263,7 +267,7 @@ export async function buildSoakReport(hours = 24) {
     requested_hours: boundedHours,
     observed_hours: Math.round(observedHours * 10) / 10,
     complete_window: completeWindow,
-    verdict: !completeWindow ? "collecting" : critical ? "fail" : warning ? "warn" : "pass",
+    verdict: soakVerdict(completeWindow, critical, warning, unconfirmed),
     fleet: {
       agents: reports.length,
       online: reports.filter((row) => row.health.status !== "offline").length,

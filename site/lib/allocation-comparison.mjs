@@ -85,6 +85,7 @@ export function comparisonRates(row,hours) {
   return {...row,scan_hours:scanHours,
     eligible_per_wall_hour:Number(row.eligible_unique)/hours,
     eligible_per_scan_hour:scanHours?Number(row.eligible_unique)/scanHours:null,
+    eligible_per_100_targets:targets?100*Number(row.eligible_unique)/targets:null,
     success_rate:targets?Number(row.completed_targets)/targets:null,
     zero_row_rate:targets?Number(row.zero_row_targets)/targets:null,
     diagnostic_coverage:targets?Number(row.measured_targets??0)/targets:null};
@@ -96,7 +97,7 @@ export async function buildAllocationComparison(db,window) {
     return result.results.map(row=>comparisonRates(row,window.hours));
   }));
   return {measurement_version:1,window_start:window.from,window_end:window.to,
-    window_hours:window.hours,complete_24h:window.hours>=24,agents,regions,
+    window_hours:window.hours,complete_24h:window.hours>=24,complete_48h:window.hours>=48,agents,regions,
     activation_ready:false,
-    note:'Historical eligible-at-receipt opportunities, not current availability or exclusive fleet discoveries. Resolved challenge identities only; unresolved counted separately. Normal completed/failed targets only; rechecks excluded. Zero rows remain unknown. Window is [from,to). Rates alone do not establish comparability or authorize canary activation.'};
+    note:'Historical eligible-at-receipt opportunities, not current availability or exclusive fleet discoveries. Resolved challenge identities only; unresolved counted separately. Normal completed/failed targets only; rechecks excluded. Zero rows remain unknown. Window is [from,to). A 48h window alone does not prove it is entirely after each device cutover. Rates alone do not establish comparability or authorize canary activation.'};
 }

@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import {readFileSync} from 'node:fs';
 import {Script} from 'node:vm';
 import ts from 'typescript';
+import {pendingUploadState} from '../lib/upload-pending.mjs';
 
 const NOW = 1_800_000_000_000;
 const code = ts.transpileModule(readFileSync(new URL('../app/api/controller/maintenance/route.ts', import.meta.url), 'utf8'),
@@ -29,6 +30,7 @@ function routeFixture(options = {}) {
         runHistoryRetention: async () => { fail('history_run'); return history; },
         readHistoryRetention: async () => history,
       };
+      if (path.endsWith('/upload-pending.mjs')) return {pendingUploadState};
       if (path.endsWith('/cloud')) return {
         maintenanceAuthorized: () => options.authorized !== false, controllerAuthorized: () => false,
         ensureSchema: async () => { fail('schema'); }, runtime: () => ({DB: db}),

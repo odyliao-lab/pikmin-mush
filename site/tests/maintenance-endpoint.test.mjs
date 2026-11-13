@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import {readFileSync} from 'node:fs';
 import {Script} from 'node:vm';
 import ts from 'typescript';
+import {pendingUploadState} from '../lib/upload-pending.mjs';
 
 test('independent source is bound to its own key, not a forged header',()=>{
  const source=readFileSync(new URL('../lib/cloud.ts',import.meta.url),'utf8');
@@ -27,7 +28,9 @@ test('maintenance writes require the dedicated secret and report bounded health'
     {id:'held',display_name:'Cancer',enabled:1,paused:1,last_seen:now-86400000,
       last_data_at:0,current_job_id:2,current_target_id:3,created_at:now-86400000},
   ];
+  const pendingSamples=[];
   const db={prepare(sql){return {bind(){return this},async run(){scheduledWrites++;return {meta:{changes:1}}},async all(){
+    if(sql.includes("event_type='heartbeat'"))return {results:pendingSamples};
     if(sql.includes('scan_agent_events'))return {results:[]};
     if(sql.includes('scan_agents'))return {results:records};
     throw Error(sql);
@@ -38,6 +41,7 @@ test('maintenance writes require the dedicated secret and report bounded health'
   const code=ts.transpileModule(readFileSync(new URL('../app/api/controller/maintenance/route.ts',import.meta.url),'utf8'),
     {compilerOptions:{module:ts.ModuleKind.CommonJS,target:ts.ScriptTarget.ES2022}}).outputText;
   new Script(code).runInNewContext({exports,Date,require(p){
+    if(p.endsWith('/upload-pending.mjs'))return {pendingUploadState};
     if(p.endsWith('/history-retention.mjs')) return {
       readHistoryRetention:async()=>({mode:'dry_run',tables:[]}),
       runHistoryRetention:async()=>({mode:'dry_run',busy:historyBusy,lastRunAt:historyBusy?now+1:now,lastSucceededAt:now,consecutiveFailures:0,tables:historyFailed?[{last_error:'archive_and_delete'}]:[]}),
@@ -61,7 +65,11 @@ test('maintenance writes require the dedicated secret and report bounded health'
   const read=await exports.GET(request('GET'));
   assert.equal(read.status,200);
   assert.equal(read.headers.get('cache-control'),'no-store');
-  assert.equal((await read.json()).alerts.maintenanceStale,true);
+  const first=await read.json();
+  assert.equal(first.alerts.maintenanceStale,true);
+  assert.deepEqual(Array.from(first.alerts.uploadSilentAgents),[]);
+  assert.deepEqual(Array.from(first.alerts.uploadPendingUnknownAgents),['active']);
+  for(let i=0;i<=25;i++)pendingSamples.push({agent_id:'active',at:now-7500000+i*300000,detail:JSON.stringify({pendingBytes:100})});
   assert.equal((await exports.POST(request('POST'))).status,401);
   dedicated=true;
   const post=await exports.POST(request('POST'));

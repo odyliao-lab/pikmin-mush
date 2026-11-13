@@ -142,10 +142,13 @@ export function issueAgentToken() {
 export function agentRequestVersions(request: Request) {
   const clean = (name: string) => String(request.headers.get(name) ?? "")
     .trim().replace(/[^a-zA-Z0-9._+-]/g, "").slice(0, 40);
+  const pending = request.headers.get("x-agent-pending-bytes") ?? "";
+  const pendingBytes = /^\d{1,15}$/.test(pending) && Number.isSafeInteger(Number(pending)) ? Number(pending) : undefined;
   return {
     version: clean("x-agent-version"),
     gameVersion: clean("x-game-version"),
     moduleVersion: clean("x-module-version"),
+    pendingBytes,
   };
 }
 
@@ -159,6 +162,7 @@ export async function touchAgent(
     version?: string;
     gameVersion?: string;
     moduleVersion?: string;
+    pendingBytes?: number;
   } = {},
 ) {
   const db = runtime().DB;
@@ -192,6 +196,7 @@ export async function touchAgent(
   await recordAgentEvent({
     agentId, type: "heartbeat", at: now, throttleMs: HEARTBEAT_SAMPLE_MS,
     jobId: values.jobId, targetId: values.targetId,
+    detail: values.pendingBytes === undefined ? "" : JSON.stringify({pendingBytes:values.pendingBytes}),
   });
 }
 
@@ -484,7 +489,7 @@ export async function renewLease(
   jobId: number,
   targetId: number,
   leaseToken: string,
-  versions: ReturnType<typeof agentRequestVersions> = { version: "", gameVersion: "", moduleVersion: "" },
+  versions: ReturnType<typeof agentRequestVersions> = { version: "", gameVersion: "", moduleVersion: "", pendingBytes: undefined },
 ) {
   const db = runtime().DB;
   const now = Date.now();

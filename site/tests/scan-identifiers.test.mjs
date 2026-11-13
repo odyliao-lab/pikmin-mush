@@ -58,4 +58,26 @@ test('online heartbeats do not hide prolonged unfinished targets; paused/idle re
   assert.equal(agentHealth({...row, paused: 1}, now).status, 'paused');
   assert.equal(agentHealth({...row, current_target_id: null}, now).status, 'healthy');
   assert.equal(agentHealth({...row, last_target_at: now}, now).status, 'healthy');
+  assert.equal(agentHealth({...row, last_target_at: now, last_data_at: 1, no_data_streak: 100}, now).status, 'collecting');
+  assert.equal(agentHealth({...row, last_target_at: now - 61 * 60000, no_data_streak: 100}, now).status, 'critical');
+  assert.equal(agentHealth({...row, last_seen: now - 48000}, now).heartbeat_age_ms, 48000);
+  assert.equal(agentHealth({...row, last_seen: 0}, now).heartbeat_age_ms, null);
+});
+
+test('an unconfirmed scan cannot make the fleet soak verdict pass', () => {
+  const {soakVerdict} = load('../lib/metrics.ts', {'/cloud': {}});
+  assert.equal(soakVerdict(true, 0, 0, 1), 'collecting');
+  assert.equal(soakVerdict(true, 1, 0, 1), 'fail');
+  assert.equal(soakVerdict(true, 0, 1, 1), 'warn');
+  assert.equal(soakVerdict(true, 0, 0, 0), 'pass');
+});
+
+test('Agent pending byte telemetry rejects malformed and unsafe numbers', () => {
+  const source=readFileSync(new URL('../lib/fleet.ts',import.meta.url),'utf8');
+  const section=source.slice(source.indexOf('export function agentRequestVersions'),source.indexOf('export async function touchAgent'));
+  const exports={};
+  new Script(ts.transpileModule(section,{compilerOptions:{module:ts.ModuleKind.CommonJS}}).outputText).runInNewContext({exports});
+  const read=value=>exports.agentRequestVersions(new Request('https://example.test',{headers:value===null?{}:{'x-agent-pending-bytes':value}})).pendingBytes;
+  assert.equal(read('0'),0);assert.equal(read('12345'),12345);
+  for(const value of [null,'','-1','1e9','9007199254740992'])assert.equal(read(value),undefined);
 });

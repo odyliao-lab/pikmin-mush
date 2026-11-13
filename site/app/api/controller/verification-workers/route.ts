@@ -19,27 +19,30 @@ export async function GET(request: Request) {
  a.agent_version,a.game_version,a.module_version,a.capabilities_json,a.region_tags_json,
  EXISTS(SELECT 1 FROM agent_power_pauses p WHERE p.agent_id=a.id AND p.resumed_at IS NULL) AS power_hold
  FROM scan_agents a ORDER BY a.id`).all<WorkerRow>();
- const timings=await db.prepare(`SELECT agent_id,AVG(duration_ms) AS average_ms
+ const timings=await db.prepare(`SELECT agent_id,AVG(duration_ms) AS average_ms,
+ MAX(CASE WHEN json_extract(CASE WHEN json_valid(detail) THEN detail ELSE '{}' END,'$.evidence.refresh_source')='object' THEN at ELSE 0 END) AS object_at
  FROM scan_agent_events WHERE at>=? AND event_type='target_completed' AND duration_ms>0 GROUP BY agent_id`)
- .bind(now-3600000).all<{agent_id:string;average_ms:number}>();
+ .bind(now-3600000).all<{agent_id:string;average_ms:number;object_at:number}>();
  const slot=rotationWindow(now).slot;
  const workers=rows.results.map(row=>{
   const health=agentHealth(row,now);
   let tags:unknown=[];try{tags=JSON.parse(row.region_tags_json);}catch{}
   const assigned=Array.isArray(tags)&&tags.length>0&&tags.every(t=>typeof t==='string'&&t.length>0);
   // ACK clears current_job_id while the Agent waits for its next point.
-  // An idle Agent still needs recent accepted data and an assigned route.
+  // A completed ACK alone does not establish object refresh; require recent object evidence.
+  const timing=timings.results.find(t=>t.agent_id===row.id);
   const reasons=[
    !job||!['queued','running'].includes(job.status)?'job_not_active':null,
    job&&row.current_job_id!==null&&row.current_job_id!==job.id?'other_job':null,
-   health.status!=='healthy'?'health':null,row.power_hold?'power_guard':null,
-   now-row.last_data_at>=10*60000?'stale_data':null,
+   !(health.status==='healthy'||(health.status==='collecting'&&health.compatibility.status==='compatible'&&row.no_data_streak>=12))?'health':null,row.power_hold?'power_guard':null,
+   !row.last_target_at||now-row.last_target_at>=10*60000?'stale_target':null,
+   !timing?.object_at||now-Number(timing.object_at)>=10*60000?'stale_object':null,
    !qualifiedForSlot(row.capabilities_json,slot)?'unqualified_slot':null,
    !assigned?'unassigned_route':null,
   ].filter((reason):reason is string=>reason!==null);
   return {id:row.id,name:row.display_name,health:health.status,
    eligible:reasons.length===0,reasons,
-   average_target_ms:Number(timings.results.find(t=>t.agent_id===row.id)?.average_ms??20000)};
+   average_target_ms:Number(timing?.average_ms??20000)};
  });
  return noStoreJson({contract:2,parallel_contract:1,max_parallel:3,checked_at:now,workers});
 }
