@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import {readFileSync} from 'node:fs';
 import {createHash} from 'node:crypto';
 import ts from 'typescript';
+import {CATALOGUE_REVISION} from '../lib/catalogue-seed.mjs';
 
 const html=readFileSync(new URL('../public/event-spots.html',import.meta.url),'utf8');
 const notices=JSON.parse(readFileSync(new URL('../public/event-spot-notices.json',import.meta.url),'utf8'));
@@ -15,20 +16,41 @@ test('pending venues remain searchable records without fake map or GPS coordinat
  assert.equal(notices.length,4);
  assert.equal(out.EVENT_SPOT_SEED.length,57);
  assert.equal(new Set([...out.EVENT_SPOT_SEED,...notices].map(s=>s.id)).size,61);
- for(const s of notices){
+ const pending=notices.filter(s=>!located(s));
+ assert.equal(pending.length,3);
+ for(const s of pending){
   assert.equal(s.lat,null);assert.equal(s.lng,null);
   assert.equal(located(s),false);assert.equal(gps(s),'座標待確認');
   assert.match(s.source_url,/^https:\/\/(www\.)?pikminbloom\.com\//);
  }
- assert.equal([...out.EVENT_SPOT_SEED,...notices].filter(located).length,57);
+ assert.equal([...out.EVENT_SPOT_SEED,...notices].filter(located).length,58);
  assert.equal(located({lat:0,lng:null}),false);
  assert.equal(located({lat:'37.5',lng:'127.1'}),false);
 });
 
 test('reference venues cannot masquerade as verified in-game special spots',()=>{
- const rows=out.EVENT_SPOT_SEED.filter(s=>s.id.startsWith('kr-lotte-2026-'));
- assert.equal(rows.length,2);
- for(const s of rows){assert.equal(s.verificationStatus,'community');assert.match(s.name,/場館參考點/);assert.match(s.coordinateNote,/非遊戲金盆精確GPS/);}
+ const busan=out.EVENT_SPOT_SEED.find(s=>s.id==='kr-lotte-2026-busan-main');
+ assert.equal(busan.verificationStatus,'community');assert.match(busan.name,/場館參考點/);assert.match(busan.coordinateNote,/非遊戲金盆精確GPS/);
+});
+
+test('shared GPS updates preserve IDs, official periods and separate Nintendo popup without claiming game verification',()=>{
+ const jamsil=out.EVENT_SPOT_SEED.find(s=>s.id==='kr-lotte-2026-jamsil');
+ const outdoor=notices.find(s=>s.id==='sg-vivocity-2026-outdoor-plaza');
+ const popup=notices.find(s=>s.id==='sg-vivocity-2026-nintendo-popup');
+ assert.deepEqual([jamsil.lat,jamsil.lng],[37.513180,127.101810]);
+ assert.deepEqual([outdoor.lat,outdoor.lng],[1.265306,103.821615]);
+ assert.equal(gps(outdoor),'1.265306,103.821615');
+ assert.equal(jamsil.startAt,Date.parse('2026-11-13T10:30:00+09:00')/1000);
+ assert.equal(jamsil.endAt,Date.parse('2026-11-22T20:30:00+09:00')/1000);
+ assert.equal(outdoor.start_at,null);assert.match(outdoor.period_note,/2026\/11\/13–12\/27/);
+ assert.equal(popup.lat,null);assert.equal(popup.lng,null);assert.match(popup.period_note,/2026\/12\/01–12\/27/);
+ for(const s of [jamsil,outdoor]){
+  assert.equal(s.verificationStatus??s.verification_status,'community');
+  assert.match(s.coordinateNote??s.coordinate_note,/water0129/);
+  assert.match(s.coordinateNote??s.coordinate_note,/尚未由本站進遊戲複核/);
+  assert.match(s.eligibilityNote??s.eligibility_note,/活動布章，官方公告未明列/);
+ }
+ assert.ok(CATALOGUE_REVISION>2026111202);
 });
 
 test('pending periods preserve published CET boundaries and unpublished Singapore activation time',()=>{
