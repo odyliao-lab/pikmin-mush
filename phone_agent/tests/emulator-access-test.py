@@ -34,6 +34,7 @@ class Fake:
         self.root_android_mismatch = False
         self.agent_id_mismatch = False
         self.root_id = '0'
+        self.metadata_exit_code = 0
         self.__dict__.update(changes)
 
     def __call__(self, argv, *, input=None, **kwargs):
@@ -41,6 +42,7 @@ class Fake:
         code, out, err = 0, '', ''
         if argv[0] == 'manager' and argv[1] == 'info':
             out = json.dumps(self.info)
+            code = self.metadata_exit_code
         elif 'get-state' in argv:
             out = self.state
             if self.state != 'device': code, err = 1, self.state
@@ -100,6 +102,61 @@ class Safeguards(unittest.TestCase):
         fake = Fake(); fake.info['is_android_started'] = False
         self.assertEqual(self.audit(fake)['channel_status'], 'instance_stopped')
         self.assertEqual(len(fake.calls), 1)
+
+    def metadata902(self, **changes):
+        fake = Fake(**changes)
+        fake.info.update(error_code=902, is_android_started=True, is_process_started=True)
+        return fake
+
+    def test_running_902_metadata_still_requires_full_guest_identity(self):
+        result = self.audit(self.metadata902(su=False))
+        self.assertEqual(result['channel_status'], 'ready')
+        self.assertEqual(result['manager_metadata_code'], 902)
+        self.assertEqual(result['root_mode'], 'manager')
+        self.assertEqual(result['scan_health'], 'requires_existing_target_upload_ack_checks')
+
+    def test_902_incomplete_or_false_running_flags_stop_before_adb(self):
+        for field in ('is_android_started', 'is_process_started'):
+            for value in (None, False, 1, 'true'):
+                with self.subTest(field=field, value=value):
+                    fake = self.metadata902(); fake.info[field] = value
+                    self.assertEqual(self.audit(fake)['channel_status'], 'instance_metadata_unavailable')
+                    self.assertEqual(len(fake.calls), 1)
+            fake = self.metadata902(); del fake.info[field]
+            self.assertEqual(self.audit(fake)['channel_status'], 'instance_metadata_unavailable')
+            self.assertEqual(len(fake.calls), 1)
+
+    def test_unknown_metadata_status_or_host_failure_is_not_identity_mismatch(self):
+        for code in (901, 903, '902', True, None):
+            fake = self.metadata902(); fake.info['error_code'] = code
+            self.assertEqual(self.audit(fake)['channel_status'], 'instance_metadata_unavailable')
+            self.assertEqual(len(fake.calls), 1)
+        fake = self.metadata902(metadata_exit_code=1)
+        self.assertEqual(self.audit(fake)['channel_status'], 'instance_metadata_unavailable')
+        self.assertEqual(len(fake.calls), 1)
+
+    def test_902_wrong_creation_or_name_still_stops_before_adb(self):
+        for field, value in [('name', 'Other'), ('created_timestamp', 999)]:
+            fake = self.metadata902(); fake.info[field] = value
+            self.assertEqual(self.audit(fake)['channel_status'], 'instance_identity_mismatch')
+            self.assertEqual(len(fake.calls), 1)
+
+    def test_902_does_not_bypass_endpoint_or_guest_guards(self):
+        fake = self.metadata902(); fake.info['adb_host_ip'] = '192.0.2.1'
+        self.assertEqual(self.audit(fake)['channel_status'], 'endpoint_not_loopback')
+        self.assertEqual(len(fake.calls), 1)
+        fake = self.metadata902()
+        self.assertEqual(self.audit(fake, bindings=lambda port: ['0.0.0.0'])['channel_status'], 'endpoint_exposed')
+        self.assertEqual(len(fake.calls), 1)
+        for changes, expected in [({'android_id':'bad'}, 'android_identity_mismatch'),
+                                  ({'state':'unauthorized'}, 'adb_unauthorized'),
+                                  ({'agent_id_mismatch':True}, 'agent_identity_mismatch'),
+                                  ({'su':False,'root_android_mismatch':True}, 'android_identity_mismatch'),
+                                  ({'su':False,'marker':False}, 'root_read_failed')]:
+            fake = self.metadata902(**changes)
+            self.assertEqual(self.audit(fake)['channel_status'], expected)
+            for argv, _ in fake.calls:
+                self.assertFalse(set(argv) & {'root', 'unroot', 'reboot', 'kill-server', 'disconnect', 'tcpip'})
 
     def test_non_loopback_metadata_or_binding_stops_before_adb(self):
         fake = Fake(); fake.info['adb_host_ip'] = '192.0.2.1'
