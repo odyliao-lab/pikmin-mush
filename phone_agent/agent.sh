@@ -156,19 +156,25 @@ case "$OFFSET" in ''|*[!0-9]*) OFFSET=0 ;; esac
 case "$LAST_SEQ" in ''|*[!0-9]*) LAST_SEQ=0 ;; esac
 
 pending_upload_bytes() {
-  case "$OFFSET" in ''|*[!0-9]*) return ;; esac
-  case "$OFFSET" in 0?*) return ;; esac
-  PENDING_SIZE="$(stat -c %s "$TSV" 2>/dev/null)"
-  case "$PENDING_SIZE" in ''|*[!0-9]*) return ;; esac
-  case "$PENDING_SIZE" in 0?*) return ;; esac
-  [ "${#PENDING_SIZE}" -le 15 ] && [ "${#OFFSET}" -le 15 ] || return
-  [ "$PENDING_SIZE" -ge "$OFFSET" ] || return
-  if [ "$PENDING_SIZE" -gt "$OFFSET" ]; then
-    # A partial final record is not an uploadable prefix. Keep telemetry
-    # unknown until it is complete rather than reporting a false stall.
-    PENDING_TAIL="$(tail -c 1 "$TSV" 2>/dev/null; printf x)"
-    [ "$PENDING_TAIL" = "$(printf '\nx')" ] || return
+  case "$OFFSET" in ''|*[!0-9]*|0?*) return 0 ;; esac
+  [ -f "$TSV" ] && [ -r "$TSV" ] || return 0
+  PENDING_SIZE="$(stat -c %s "$TSV" 2>/dev/null)" || return 0
+  case "$PENDING_SIZE" in ''|*[!0-9]*|0?*) return 0 ;; esac
+  [ "${#PENDING_SIZE}" -le 15 ] && [ "${#OFFSET}" -le 15 ] || return 0
+  [ "$PENDING_SIZE" -ge "$OFFSET" ] || return 0
+  # Startup historically normalizes an unreadable/invalid cursor to zero.
+  # Keep that uploader behavior, but never advertise the normalized value as
+  # reliable telemetry when the durable cursor is missing or disagrees.
+  if [ -n "${OFFSET_FILE:-}" ]; then
+    PENDING_DISK_OFFSET="$(cat "$OFFSET_FILE" 2>/dev/null)" || return 0
+    [ "$PENDING_DISK_OFFSET" = "$OFFSET" ] || return 0
   fi
+  if [ "$PENDING_SIZE" -gt 0 ]; then
+    # Even offset==size is unknown if the last record is incomplete.
+    PENDING_TAIL="$(tail -c 1 "$TSV" 2>/dev/null && printf x)" || return 0
+    [ "$PENDING_TAIL" = "$(printf '\nx')" ] || return 0
+  fi
+  [ "$(stat -c %s "$TSV" 2>/dev/null)" = "$PENDING_SIZE" ] || return 0
   printf '%s' "$((PENDING_SIZE - OFFSET))"
 }
 

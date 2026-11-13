@@ -29,17 +29,27 @@ OFFSET=100; [ -z "$(pending_upload_bytes)" ]
 OFFSET=0
 for CURL_DNS_SERVERS in '' '1.1.1.1'; do
   for fn in auth_curl scan_control; do
+   for expected in 10 0 unknown; do
+    printf '123456789\n' >"$TSV"; OFFSET=0
+    case "$expected" in 0) OFFSET=10 ;; unknown) printf 'partial' >>"$TSV" ;; esac
     "$fn" --data-binary "@$TMP/body" https://fixture.invalid
     [ "$(cat "$TMP/stdin")" = "Authorization: Bearer $TOKEN" ]
     if grep -F "$TOKEN" "$TMP/argv"; then echo token-in-argv; exit 1; fi
     grep -Fx '@-' "$TMP/argv" >/dev/null
-    grep -Fx 'X-Agent-Pending-Bytes: 10' "$TMP/argv" >/dev/null
+    value=$expected; [ "$expected" != unknown ] || value=''
+    grep -Fx "X-Agent-Pending-Bytes: $value" "$TMP/argv" >/dev/null
     if [ "$fn" = auth_curl ]; then
       grep -Fx "@$TMP/body" "$TMP/argv" >/dev/null
+      grep -A1 -Fx -- '--connect-timeout' "$TMP/argv" | grep -Fx 10 >/dev/null
+      grep -A1 -Fx -- '--max-time' "$TMP/argv" | grep -Fx 45 >/dev/null
+    else
+      grep -A1 -Fx -- '--connect-timeout' "$TMP/argv" | grep -Fx 3 >/dev/null
+      grep -A1 -Fx -- '--max-time' "$TMP/argv" | grep -Fx 5 >/dev/null
     fi
     CURL_RESULT=22; export CURL_RESULT
     if "$fn" https://fixture.invalid; then echo curl-error-lost; exit 1; else [ "$?" = 22 ]; fi
     unset CURL_RESULT
+   done
   done
 done
 echo 'private auth stdin, upload body file, DNS/control variants and curl failure propagation passed'
