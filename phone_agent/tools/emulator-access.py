@@ -78,6 +78,7 @@ class Access:
         self.spec, self.adb_path, self.manager = spec, adb, manager
         self.cloud_ids, self.run, self.bindings = cloud_ids, runner, bindings
         self.endpoint = self.root_mode = None
+        self.manager_metadata_code = None
         if not re.fullmatch(r'[a-zA-Z0-9_-]+', spec['agent_id']):
             raise CheckError('invalid_manifest')
         if not re.fullmatch(r'[a-fA-F0-9]+', spec['android_id']):
@@ -92,17 +93,28 @@ class Access:
         if self.spec['agent_id'] not in self.cloud_ids:
             raise CheckError('cloud_node_unconfirmed')
         result = self.run([self.manager, 'info', '-v', str(self.spec['index'])])
+        if result.returncode:
+            raise CheckError('instance_metadata_unavailable')
         try:
             info = json.loads(text(result))
-            valid = (result.returncode == 0 and info.get('error_code', 0) == 0
-                     and info['name'] == self.spec['vm_name']
+            code = info.get('error_code', 0)
+            if type(code) is not int or code not in (0, 902):
+                raise ValueError('unsupported metadata status')
+            valid = (info['name'] == self.spec['vm_name']
                      and int(info['created_timestamp']) == int(self.spec['created_timestamp']))
-        except (ValueError, KeyError, TypeError):
+        except (ValueError, KeyError, TypeError, AttributeError):
             raise CheckError('instance_metadata_unavailable') from None
         if not valid:
             raise CheckError('instance_identity_mismatch')
-        if not info.get('is_android_started'):
+        # Observed MuMu 902 responses can still describe a running guest. They
+        # are not identity proof: require both explicit running flags, then all
+        # original listener, ADB, Android ID, effective Agent ID and root gates.
+        if code == 902 and (info.get('is_android_started') is not True or
+                            info.get('is_process_started') is not True):
+            raise CheckError('instance_metadata_unavailable')
+        if info.get('is_android_started') is not True:
             raise CheckError('instance_stopped')
+        self.manager_metadata_code = code
         if info.get('adb_host_ip') != '127.0.0.1':
             raise CheckError('endpoint_not_loopback')
         try:
@@ -222,6 +234,7 @@ printf '\\nPS_BEGIN\\n';ps -A -o PID,PPID,ARGS;printf 'PS_END\\n'
                       and ready[1] == fields.get('GAME_VERSION'))
         return {'name': self.spec['name'], 'agent_id': aid, 'instance': self.spec['index'],
                 'endpoint': self.endpoint, 'channel_status': 'ready', 'root_mode': self.root_mode,
+                'manager_metadata_code': self.manager_metadata_code,
                 'agent_state': state, 'agent_pids': agents, 'service_pids': services,
                 'pidfile_matches_main': fields.get('AGENT_PIDFILE') in agents,
                 'cgroups': groups, 'detach_setting': fields.get('DETACH'),

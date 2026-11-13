@@ -24,6 +24,12 @@
 
 同一次執行的 root 子通道也重新核對 Android ID，避免入口辨識後換到別的實例。
 完整程序命令列只在記憶體內供比對，報告僅保留白名單欄位和數字 PID。
+MuMu `info` 在已運行的 instance 上可能回傳 `error_code=902`；它本身既不證明
+停止，也不證明身分錯誤。唯讀入口只在 host exit0、名稱／建立識別相符且
+`is_android_started`／`is_process_started` 都是布林 true 時，繼續原本的專屬
+loopback listener、ADB、Android ID、有效 AGENT_ID、root 與程序檢查。
+報告保留 `manager_metadata_code`；其他錯誤碼或不完整旗標仍停止並標為
+`instance_metadata_unavailable`。不依 902 自動啟動／重啟或切換 adbd 權限。
 裝置仍須由原完整巡檢驗證新 target→native object→非零 TSV→上傳→站台接受→ACK；
 此工具不取代該驗收，也不會把 native.ready／心跳直接當作掃描正常。
 
