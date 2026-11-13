@@ -13,7 +13,8 @@ function count(value: string | null) {
 export async function POST(request: Request) {
   const agent = await authorizeFleetAgent(request);
   if (!agent) return plain("unauthorized\n", 401);
-  await touchAgent(agent.id, agentRequestVersions(request));
+  const versions = agentRequestVersions(request);
+  await touchAgent(agent.id, versions);
   const url = new URL(request.url);
   const jobId = scanInteger(url.searchParams.get("job_id"));
   const targetId = scanInteger(url.searchParams.get("target_id"));
@@ -27,7 +28,7 @@ export async function POST(request: Request) {
     bytes: count(url.searchParams.get("bytes")),
     message: (url.searchParams.get("message") ?? "").slice(0, 400),
     outcome: (url.searchParams.get("outcome") ?? "").slice(0, 32),
-    evidence: scanEvidence(url.searchParams),
+    evidence: scanEvidence(url.searchParams, versions.pendingBytes),
   });
   const status = result === "missing" ? 404 :
     result === "stale" || result === "stop" ? 409 : 200;

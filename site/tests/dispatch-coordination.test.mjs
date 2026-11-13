@@ -16,6 +16,8 @@ function fixture(){
  created_at INTEGER,updated_at INTEGER,leased_at INTEGER DEFAULT 0,completed_at INTEGER DEFAULT 0,completed_agent_id TEXT DEFAULT '');
  CREATE TABLE scan_target_history AS SELECT * FROM scan_targets WHERE 0;
  CREATE TABLE mushroom_observations(key TEXT PRIMARY KEY,target_id INTEGER,agent_id TEXT,received_at INTEGER);
+ CREATE TABLE scan_agent_events(id INTEGER PRIMARY KEY,agent_id TEXT,event_type TEXT,at INTEGER,
+  job_id INTEGER,target_id INTEGER,rows INTEGER,bytes INTEGER,detail TEXT);
  INSERT INTO scan_jobs VALUES(1,0,'running');INSERT INTO scan_agents VALUES('leo',1,0,100000,1,2);`);
  const db={prepare(text){let args=[];return {bind(...v){args=v;return this;},
   async first(){return sql.prepare(text).get(...args)??null;},async all(){return {results:sql.prepare(text).all(...args)};},
@@ -252,4 +254,32 @@ test('recovery target insertion failure rolls back the audit reservation; ambigu
  await recoverCancelledReturn(f.db,f.input.batch,f.input.owner,'recovery-one',f.agent,f.job,130000);
  await recoverCancelledReturn(f.db,f.input.batch,f.input.owner,'recovery-one',f.agent,f.job,130000);
  assert.equal(f.sql.prepare("SELECT COUNT(*) n FROM scan_targets WHERE verification_kind='return-recovery'").get().n,1);f.sql.close();
+});
+
+
+test('empty recovery closes only a fresh post-return ordinary lease with complete object evidence',async()=>{
+ const now=1794500021000;
+ for(const bad of ['valid','query','pid','job','old-target','pending','stale','wrong-agent','verification','wrong-event-time','owner']){
+  const f=fixture();await ensureDispatchSchema(f.db);await admitDispatch(f.db,f.input,f.agent,f.job,100000);
+  f.sql.exec("UPDATE scan_targets SET status='completed',leased_at=101000,completed_at=110000,completed_agent_id='leo'");
+  f.sql.prepare("INSERT INTO scan_targets(id,job_id,verification_kind,status,leased_at,completed_at,completed_agent_id) VALUES(123,1,'','completed',?,?,'leo')").run(now-21000,now);
+  let e={version:1,job_id:1,target_id:123,game_pid:456,native_pid:456,pid_before:456,process_start:77,start_before:77,
+   scan_started_s:1794500000,object_at_s:1794500010,sampled_at_s:1794500020,
+   object_token:'179450000100000123',prefix_start:100,prefix_end:100,accepted_offset:100,pending_bytes:0,pending_acks:0};
+  if(bad==='pid')e.native_pid=1;
+  if(bad==='job')e.job_id=2;
+  if(bad==='old-target')f.sql.exec("UPDATE scan_targets SET leased_at=109000 WHERE id=123");
+  if(bad==='pending')e.pending_bytes=1;
+  if(bad==='wrong-agent')f.sql.exec("UPDATE scan_targets SET completed_agent_id='other' WHERE id=123");
+  if(bad==='verification')f.sql.exec("UPDATE scan_targets SET verification_kind='return' WHERE id=123");
+  f.sql.prepare("INSERT INTO scan_agent_events(agent_id,event_type,at,job_id,target_id,rows,bytes,detail) VALUES('leo','target_completed',?,1,123,0,0,?)")
+   .run(bad==='wrong-event-time'?now-1:now,JSON.stringify({evidence:{version:1,refresh_source:bad==='query'?'query':'object',recovery:e}}));
+  const clock=bad==='stale'?now+120001:now+1000;
+  const proof=await dispatchProof(f.db,f.input.batch,clock);
+  assert.equal(proof.resumed_object_accepted,false,bad);
+  assert.equal(proof.can_close,['valid','owner'].includes(bad),bad);
+  const result=await closeDispatch(f.db,f.input.batch,bad==='owner'?'other':f.input.owner,clock);
+  assert.equal(result.http,bad==='valid'?200:409,bad);
+  f.sql.close();
+ }
 });

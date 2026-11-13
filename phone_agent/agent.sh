@@ -117,7 +117,7 @@ if [ ! -x "$MAGISK_SU" ]; then
   MAGISK_SU="$(command -v su 2>/dev/null)"
 fi
 AGENT_ID="${AGENT_ID:-primary}"
-AGENT_VERSION="${AGENT_VERSION:-2.2.17}"
+AGENT_VERSION="${AGENT_VERSION:-2.2.18}"
 [ -r "$MODDIR/runtime-version.sh" ] || { echo '[version] runtime probe missing'; exit 1; }
 . "$MODDIR/runtime-version.sh"
 refresh_game_version
@@ -993,7 +993,12 @@ retry_scan_ack() {
   PENDING_END="${7:-0}"
   case "$PENDING_END" in ''|*[!0-9]*) return 1 ;; esac
   if [ "$OFFSET" -lt "$PENDING_END" ]; then upload_new || true; fi
-  if [ "$OFFSET" -ge "$PENDING_END" ] && send_scan_ack "$1" "$2" "$3" "$4" "$5" 1 "${6:-}"; then
+  # Frozen ACK accounting is still authoritative, but its optional empty-point
+  # witness belongs to the original process sample. Never replay that witness
+  # after a network failure/restart; a subsequent ordinary point can prove recovery.
+  # Do not rewrite the durable pending record, prefix, lease, rows or bytes.
+  RETRY_EVIDENCE="$(printf '%s' "${6:-}" | sed 's/&recovery_version=.*$//')"
+  if [ "$OFFSET" -ge "$PENDING_END" ] && send_scan_ack "$1" "$2" "$3" "$4" "$5" 1 "$RETRY_EVIDENCE"; then
     rm -f "$SCAN_PENDING"
     echo "[scan] pending ACK completed job=$1 target=$2"
     return 0
@@ -1007,6 +1012,46 @@ retry_scan_ack() {
     return 0
   fi
   return 1
+}
+
+game_process_identity() {
+  PROOF_PID="$(pidof "$PKG" 2>/dev/null)"
+  case "$PROOF_PID" in ''|*[!0-9]*) return 1 ;; esac
+  PROOF_START="$(sed 's/.*) //' "/proc/$PROOF_PID/stat" 2>/dev/null | awk '{print $20}')"
+  case "$PROOF_START" in ''|*[!0-9]*) return 1 ;; esac
+  printf '%s %s\n' "$PROOF_PID" "$PROOF_START"
+}
+
+empty_recovery_query() {
+  # Only direct, stable-process object refreshes can attest an empty point.
+  # A restart or any race/partial/pending evidence simply omits the extension.
+  [ "$DIAG_SOURCE" = object ] && [ "$NEW_ROWS" = 0 ] && [ "$NEW_BYTES" = 0 ] || return 1
+  [ ! -e "$SCAN_PENDING" ] && [ -n "$RECOVERY_BEFORE" ] || return 1
+  RECOVERY_AFTER="$(game_process_identity)" || return 1
+  [ "$RECOVERY_BEFORE" = "$RECOVERY_AFTER" ] || return 1
+  set -- $RECOVERY_AFTER
+  RECOVERY_PID=$1; RECOVERY_START=$2
+  NATIVE_PROOF="$(cat "$APP_FILES/native.ready" 2>/dev/null)"
+  [ "$NATIVE_PROOF" = "$RECOVERY_NATIVE_BEFORE" ] || return 1
+  [ "$(printf '%s' "$NATIVE_PROOF" | cut -f1)" = "$RECOVERY_PID" ] || return 1
+  MARKER_PROOF="$(cat "$SCAN_READY" 2>/dev/null)"
+  [ "$(printf '%s' "$MARKER_PROOF" | cut -f1)" = "$REFRESH_TOKEN" ] || return 1
+  [ "$(printf '%s' "$MARKER_PROOF" | cut -f2)" = object ] || return 1
+  OBJECT_AT="$(printf '%s' "$MARKER_PROOF" | cut -f5)"
+  case "$OBJECT_AT" in ''|*[!0-9]*) return 1 ;; esac
+  [ "$OBJECT_AT" -ge "$TASK_STARTED_AT" ] || return 1
+  [ "$BEFORE_SIZE" = "$AFTER_SIZE" ] && [ "$OFFSET" = "$AFTER_SIZE" ] || return 1
+  [ "$(pending_upload_bytes)" = 0 ] || return 1
+  FINAL_SNAPSHOT="$(scan_snapshot)" || return 1
+  set -- $FINAL_SNAPSHOT
+  [ "$1" = "$AFTER_SIZE" ] || return 1
+  [ "$NATIVE_PROOF" = "$(cat "$APP_FILES/native.ready" 2>/dev/null)" ] || return 1
+  [ "$MARKER_PROOF" = "$(cat "$SCAN_READY" 2>/dev/null)" ] || return 1
+  [ "$RECOVERY_AFTER" = "$(game_process_identity)" ] || return 1
+  [ "$(pending_upload_bytes)" = 0 ] || return 1
+  printf '&recovery_version=1&game_pid=%s&native_pid=%s&pid_before=%s&process_start=%s&start_before=%s&scan_started_s=%s&object_at_s=%s&sampled_at_s=%s&object_token=%s&prefix_start=%s&prefix_end=%s&accepted_offset=%s&pending_bytes=0&pending_acks=0' \
+    "$RECOVERY_PID" "$RECOVERY_PID" "$RECOVERY_PID" "$RECOVERY_START" "$RECOVERY_START" \
+    "$TASK_STARTED_AT" "$OBJECT_AT" "$(date +%s)" "$REFRESH_TOKEN" "$BEFORE_SIZE" "$AFTER_SIZE" "$OFFSET"
 }
 
 execute_scan_task() {
@@ -1055,6 +1100,8 @@ execute_scan_task() {
   SAMPLE="$(scan_snapshot)" || return
   set -- $SAMPLE
   BEFORE_SIZE="$1"; BEFORE_LINES="$2"
+  RECOVERY_BEFORE="$(game_process_identity)" || RECOVERY_BEFORE=""
+  RECOVERY_NATIVE_BEFORE="$(cat "$APP_FILES/native.ready" 2>/dev/null)" || RECOVERY_NATIVE_BEFORE=""
   if [ "$MAP_REFRESH_EXPERIMENT" = "1" ] && [ "$TASK_COOLDOWN" -gt 0 ]; then
     echo "[scan] cross-city cooldown ${TASK_COOLDOWN}s before direct refresh"
     interruptible_wait "$TASK_COOLDOWN" "$JOB_ID" || return
@@ -1064,7 +1111,13 @@ execute_scan_task() {
   if [ "$MAP_REFRESH_EXPERIMENT" = "1" ]; then
     # A lease retry may receive the same target and coordinates. Use a fresh
     # per-attempt token so the native watcher reapplies GPS and emits new markers.
-    REFRESH_TOKEN="$(date +%s)$(printf '%05d' $((TASK_TARGET_ID % 100000)))"
+    if [ "$TASK_TARGET_ID" -le 99999999 ]; then
+      REFRESH_TOKEN="$(date +%s)$(printf '%08d' "$TASK_TARGET_ID")"
+    else
+      # Preserve the existing numeric native-token range for larger future IDs.
+      # Such IDs omit empty-recovery proof until a wider contract is reviewed.
+      REFRESH_TOKEN="$(date +%s)$(printf '%05d' $((TASK_TARGET_ID % 100000)))"
+    fi
     TELEPORT_VALUE="$TASK_LAT,$TASK_LNG,$REFRESH_TOKEN"
   fi
   if [ "$MAP_REFRESH_EXPERIMENT" = "1" ]; then
@@ -1208,6 +1261,8 @@ execute_scan_task() {
   DIAG_SCAN_MS=$(( ($(date +%s) - TASK_STARTED_AT) * 1000 ))
   DIAG_QUERY="&evidence_version=1&refresh_source=$DIAG_SOURCE&scan_ms=$DIAG_SCAN_MS&refresh_ms=$DIAG_REFRESH_MS&restarts=$DIAG_RESTARTS&upload_failures=$DIAG_UPLOAD_FAILURES"
   upload_new || true
+  RECOVERY_QUERY="$(empty_recovery_query)" || RECOVERY_QUERY=""
+  DIAG_QUERY="$DIAG_QUERY$RECOVERY_QUERY"
   printf '%s\t%s\t%s\t%s\t%s\t%s\t%s\n' \
     "$JOB_ID" "$TASK_TARGET_ID" "$TASK_LEASE" "$NEW_ROWS" "$NEW_BYTES" "$DIAG_QUERY" "$AFTER_SIZE" >"$SCAN_PENDING"
   if [ "$OFFSET" -ge "$AFTER_SIZE" ] && send_scan_ack "$JOB_ID" "$TASK_TARGET_ID" "$TASK_LEASE" "$NEW_ROWS" "$NEW_BYTES" 1 "$DIAG_QUERY"; then

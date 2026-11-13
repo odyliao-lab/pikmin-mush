@@ -4,6 +4,7 @@ import {readFileSync} from 'node:fs';
 import {Script} from 'node:vm';
 import ts from 'typescript';
 import * as ids from '../lib/scan-identifiers.mjs';
+import {scanEvidence} from '../lib/scan-evidence.mjs';
 
 function load(path, dependencies) {
   const exports = {};
@@ -15,6 +16,26 @@ function load(path, dependencies) {
   }});
   return exports;
 }
+
+test('real ACK handler binds the empty witness to request-time pending telemetry', async () => {
+  let pendingBytes, payload;
+  const route=load('../app/api/agent/v2/ack/route.ts',{
+    '/cloud':{plain:(body,status=200)=>new Response(body,{status})},
+    '/scan-identifiers.mjs':ids,'/scan-evidence.mjs':{scanEvidence},
+    '/fleet':{authorizeFleetAgent:async()=>({id:'test'}),touchAgent:async()=>{},
+      agentRequestVersions:()=>({pendingBytes}),completeTask:async(_,input)=>{payload=input;return 'ok';}},
+  });
+  const params=new URLSearchParams({job_id:4,target_id:123,ok:1,rows:0,bytes:0,evidence_version:1,
+    recovery_version:1,refresh_source:'object',game_pid:456,native_pid:456,pid_before:456,
+    process_start:77,start_before:77,scan_started_s:1794500000,object_at_s:1794500010,
+    sampled_at_s:1794500020,object_token:'179450000100000123',prefix_start:100,prefix_end:100,
+    accepted_offset:100,pending_bytes:0,pending_acks:0});
+  for(const value of [0,137,undefined]){
+    pendingBytes=value;
+    assert.equal((await route.POST(new Request('https://example.test/ack?'+params))).status,200);
+    assert.equal(!!payload.evidence.recovery,value===0);
+  }
+});
 
 test('IDs retain exact values beyond one million and 32 bits; malformed/unsafe IDs fail closed', () => {
   for (const n of [1, 999999, 1000000, 1000001, 1000003, 1000395, 1000456, 2147483648, Number.MAX_SAFE_INTEGER])
