@@ -1,6 +1,6 @@
 # Empty-point recovery after coordinated verification
 
-This is candidate code, not a website release or a fleet rollout. Generic Agent
+The contract alone does not prove a website release or a fleet rollout. Generic Agent
 2.2.18 adds an optional `recovery_version=1` extension to the existing lease ACK.
 Installed scoped 2.2.17 Agents do not produce this extension. The existing
 nonzero, same-agent/job/ordinary-target observation path remains available.
@@ -94,3 +94,26 @@ new empty evidence (or the original nonzero path); retries do not mint new proof
 If the first ACK already committed, duplicate handling preserves that original
 event rather than inventing a new completion time. This is still a bounded
 Agent attestation at the initial request, not a promise of later uptime.
+
+## Scoped deployment preparation
+
+`phone_agent/tools/scoped-empty-recovery.py` prepares an offline 2.2.17 to
+2.2.18 patch from the exact reviewed generic reference and the actual installed
+Agent source. It has no device or network access. It refuses unknown versions,
+already patched sources, ambiguous anchors and locally divergent ACK retries.
+The proof records original/candidate hashes and verifies unchanged bytes outside
+the allowed edits, including local authentication, uploader, control, snapshot
+and pending-byte functions. It does not copy a config, credential or instance.
+
+Run `python3 phone_agent/tests/scoped-empty-recovery-test.py` and the existing
+empty-recovery, late-object, ACK-upload-boundary and pending-upload-bytes shell
+regressions against each generated scoped candidate. This is preparation only:
+follow the local identity, maintenance exclusion, verified guest backup, sync,
+safe drain and single original service procedure for installation. Preserve
+pending/TSV/cursor state and local guards. Do not restart the game merely to
+change the shell Agent, and do not bypass the original service start buffer.
+
+Keep per-member cutover times, actual loaded runtime hashes and acceptance
+evidence outside Git. Verify three different new nonzero ordinary targets;
+successful empty acknowledgements do not substitute for that acceptance. The
+new empty extension remains an Agent attestation and does not establish uptime.
