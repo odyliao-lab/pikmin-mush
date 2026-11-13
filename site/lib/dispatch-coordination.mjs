@@ -63,7 +63,8 @@ export async function dispatchProof(db,batch,now=Date.now()) {
   return_ack:returnAck,resumed_object_accepted:!!resumed,
   resumed_empty_proven:!!empty,recovery_contract:1,
   resumed_target_id:resumed?.id??empty?.id??null,resumed_received_at:resumed?.received_at??null,
-  recovery_stage:!candidatesTerminal?'candidate-recheck':!returnAck?'waiting-return':
+  recovery_stage:!candidatesTerminal?'candidate-recheck':!returnAck?
+   r&&['queued','leased'].includes(r.status)?'waiting-return':'insufficient-evidence':
    resumed||empty?'restored':'waiting-recovery-evidence',
   candidates_terminal:candidatesTerminal,
   can_close:candidatesTerminal&&returnAck&&!!(resumed||empty)};
