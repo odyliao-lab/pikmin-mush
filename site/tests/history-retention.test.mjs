@@ -160,3 +160,53 @@ test('inventory endpoint authenticates before reads and never exposes backup JSO
  assert.equal(exports.POST,undefined);assert.equal(reads,1);
  admin=true;controller=false;assert.equal((await exports.GET(req)).status,200);
 });
+
+
+test('job archive walks finished index and deletion probes only backed-up primary keys',async()=>{
+ const f=fixture(),old=now-100*DAY;
+ for(let id=1;id<=20;id++)job(f,id,'completed',old+id);
+ const batch=f.db.batch.bind(f.db);let checked=false;
+ f.db.batch=async statements=>{
+  const archivePlan=f.sql.prepare('EXPLAIN QUERY PLAN '+statements[0].q).all(...statements[0].args);
+  assert.ok(archivePlan.some(r=>r.detail.includes('scan_jobs_finished_idx')),JSON.stringify(archivePlan));
+  assert.ok(!archivePlan.some(r=>r.detail.includes('scan_jobs_status_idx')),JSON.stringify(archivePlan));
+  const deletePlan=f.sql.prepare('EXPLAIN QUERY PLAN '+statements[1].q).all(...statements[1].args);
+  assert.ok(deletePlan.some(r=>r.detail.startsWith('SEARCH scan_jobs USING ')&&r.detail.includes('rowid=?')),JSON.stringify(deletePlan));
+  assert.ok(!deletePlan.some(r=>r.detail.includes('scan_jobs_status_idx (status=?)')),JSON.stringify(deletePlan));
+  checked=true;return batch(statements);
+ };
+ assert.equal(await archiveAndPrune(f.db,RULES.find(r=>r.table==='scan_jobs'),now,5),5);
+ assert.equal(checked,true);
+ assert.deepEqual(f.sql.prepare('SELECT id FROM scan_jobs ORDER BY id LIMIT 2').all().map(r=>r.id),[6,7]);
+ assert.equal(f.count('retention_backups'),5);
+});
+
+test('oversized-only jobs are attempted once while events drain, retaining backup safeguards',async()=>{
+ const f=fixture();f.active();const old=now-100*DAY;
+ job(f,1,'completed',old);job(f,2,'completed',old);
+ f.sql.prepare('UPDATE scan_jobs SET plan_json=? WHERE id=1').run(JSON.stringify(['x'.repeat(500001)]));
+ const put=event(f);for(let i=0;i<1600;i++)put.run(now-20*DAY);
+ const batch=f.db.batch.bind(f.db);let jobAttempts=0;
+ f.db.batch=async statements=>{if(statements[0].args[0]==='scan_jobs')jobAttempts++;return batch(statements);};
+ const report=await runHistoryRetention(f.db,now);
+ assert.equal(report.run.deleted,1600);
+ assert.equal(jobAttempts,1,'unrelated event deletion cannot unblock oversized jobs');
+ assert.equal(f.count('scan_jobs'),2);
+ assert.equal(report.tables.find(r=>r.table==='scan_jobs').eligible_count,1,'age eligibility still includes safely retained oversized rows');
+ assert.equal(f.sql.prepare("SELECT COUNT(*) n FROM retention_backups WHERE table_name='scan_jobs'").get().n,0);
+});
+
+test('job retry resumes when a child blocker was removed later in the same round',async()=>{
+ const f=fixture();f.active();const old=now-100*DAY;
+ job(f,1,'completed',old);job(f,2,'completed',old);
+ f.sql.prepare("INSERT INTO scan_logs(job_id,at,level,message) VALUES(1,?,'info','fixture')").run(old);
+ // Start with jobs, then rotate through their child tables.
+ const runAt=now+(8-Math.floor(now/900000)%RULES.length+RULES.length)%RULES.length*900000;
+ const batch=f.db.batch.bind(f.db);let jobAttempts=0;
+ f.db.batch=async statements=>{if(statements[0].args[0]==='scan_jobs')jobAttempts++;return batch(statements);};
+ const report=await runHistoryRetention(f.db,runAt);
+ assert.equal(report.run.deleted,2);
+ assert.ok(jobAttempts>=2);
+ assert.deepEqual(f.sql.prepare('SELECT id FROM scan_jobs').all().map(r=>r.id),[2]);
+ assert.equal(f.count('retention_backups'),2);
+});
