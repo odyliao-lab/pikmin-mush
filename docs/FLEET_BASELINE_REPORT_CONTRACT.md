@@ -1,9 +1,36 @@
 # Bounded fleet baseline report proposal
 
-Status: design proposal. Implementation, deployment and production verification
-remain pending. This document defines a read-only measurement supplement to
+Status: offline reference core implemented; database adapter, authenticated API,
+deployment and production verification remain pending. This document defines a read-only measurement supplement to
 [allocation comparisons](../site/lib/allocation-comparison.mjs). It does not
 enable allocation, add a collector or certify a baseline.
+
+## Offline reference core
+
+[`fleet-baseline-core.mjs`](../site/lib/fleet-baseline-core.mjs) provides pure
+`baselineWindow` and `buildFleetBaseline` functions over an explicitly complete
+retained-history snapshot. It has no database, network or device access. A total
+input-row cap bounds this reference calculation; truncated, missing, ambiguous
+or oversized input returns unknown aggregates, while a validated complete empty
+snapshot can report zero. The cap is not a validated Worker query/memory budget.
+
+Unknown count/capacity/finish metadata is recorded separately from known
+ineligible observations; completeness of eligible counts is explicit. The
+reference calculation leaves caller-owned snapshot and pending/cursor data
+unchanged and emits no raw observation, challenge, Agent or lease identifiers.
+
+The core computes fleet unions, retained-history first/repeat, reconciled receipt
+partitions, terminal retry accounting and persisted job/cycle event spans. It
+keeps full-cycle hours, active-qualified wall time, verified-empty witnesses,
+spare budget and rollout readiness unknown/false. It uses the earliest retained
+completion attempt for receipt alignment so a later ACK retry cannot absorb a
+late row. Current targets take precedence over an archived duplicate.
+
+[`fleet-baseline-core.test.mjs`](../site/tests/fleet-baseline-core.test.mjs)
+exercises these semantics with synthetic complete/incomplete snapshots. This is
+a reference for a future bounded SELECT implementation, not a request to export
+unbounded production history into memory. Query-plan profiling, route/auth/no-DB-
+mutation fixtures and live private readback are still required before a release.
 
 ## Missing measurements
 
