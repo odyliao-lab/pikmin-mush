@@ -85,7 +85,8 @@ export async function archiveAndPrune(db, rule, now, limit, context={}) {
   if(!columns.length) throw Error('retention table schema unavailable');
   const json=`json_object(${columns.map(c=>`'${c.name.replaceAll("'","''")}',${identifier(c.name)}`).join(',')})`;
   const p=predicate(rule,now), key=identifier(rule.key), table=identifier(rule.table);
-  const orderedSource=rule.table==='scan_targets'?`${table} INDEXED BY scan_targets_retention_idx`:table;
+  const orderedIndex={scan_targets:'scan_targets_retention_idx',scan_jobs:'scan_jobs_finished_idx'}[rule.table];
+  const orderedSource=orderedIndex?`${table} INDEXED BY ${orderedIndex}`:table;
   const guard=context.owner?` AND EXISTS(SELECT 1 FROM history_retention_lock WHERE id=1 AND owner=? AND expires_at>?)`:'';
   const guardArgs=context.owner?[context.owner,context.clock?context.clock():Date.now()]:[];
   // Bound BOTH row count and aggregate recovery JSON. A large row can never
@@ -96,6 +97,9 @@ export async function archiveAndPrune(db, rule, now, limit, context={}) {
         length(CAST(${json} AS BLOB)) AS row_bytes FROM ${orderedSource} WHERE ${p.sql}
         AND length(CAST(${json} AS BLOB))<=500000${guard}
         ORDER BY ${identifier(rule.time)},${key} LIMIT ?)) WHERE total_bytes<=${ARCHIVE_BATCH_BYTES}`;
+  // Keep the live key bare so SQLite can delete only the backed-up keys by
+  // primary-key lookup, rather than rescan every old row for each small batch.
+  const backupKey=rule.key==='id'?'CAST(row_key AS INTEGER)':'row_key';
   const token=crypto.randomUUID();
   const result=await db.batch([
     db.prepare(`INSERT INTO retention_backups(table_name,row_key,row_json,archived_at,expires_at,batch_id)
@@ -103,8 +107,8 @@ export async function archiveAndPrune(db, rule, now, limit, context={}) {
       ON CONFLICT(table_name,row_key) DO UPDATE SET row_json=excluded.row_json,
         archived_at=excluded.archived_at,expires_at=excluded.expires_at,batch_id=excluded.batch_id`)
       .bind(rule.table,now,now+BACKUP_MS,token,...p.args,...guardArgs,limit),
-    db.prepare(`DELETE FROM ${table} WHERE ${p.sql}${guard} AND CAST(${key} AS TEXT) IN
-      (SELECT row_key FROM retention_backups WHERE table_name=? AND batch_id=? AND expires_at>?)`)
+    db.prepare(`DELETE FROM ${table} WHERE ${p.sql}${guard} AND ${key} IN
+      (SELECT ${backupKey} FROM retention_backups WHERE table_name=? AND batch_id=? AND expires_at>?)`)
       .bind(...p.args,...guardArgs,rule.table,token,now),
   ]);
   return Number(result[1].meta.changes||0);
@@ -173,7 +177,10 @@ export async function runHistoryRetention(db, now=Date.now(), options={}) {
           const n=await archiveAndPrune(db,rule,now,Math.min(catchUp?ARCHIVE_BATCH_ROWS:rule.batch,maxRows-totalDeleted),
             {owner,clock,columns:columns.get(rule.table)});
           totalDeleted+=n;progress+=n;deleted.set(rule.table,(deleted.get(rule.table)||0)+n);
-          if(n===0&&rule.table!=='scan_jobs')depleted.add(rule.table); // byte-limited partial batches may still have work
+          if(n===0)depleted.add(rule.table); // byte-limited partial batches may still have work
+          // Empty/oversize-only jobs need not be rescanned every events round.
+          // Retry them only when this pass actually removes a parent blocker.
+          if(n>0&&['scan_logs','scan_targets','scan_rotation_runs'].includes(rule.table))depleted.delete('scan_jobs');
         }catch {
           failed=true;depleted.add(rule.table);tableErrors.set(rule.table,'archive_and_delete');
           await db.prepare(`INSERT INTO retention_table_stats(table_name,checked_at,last_error) VALUES (?,?,'archive_and_delete')

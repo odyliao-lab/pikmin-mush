@@ -173,18 +173,48 @@ jobs:
                   raise SystemExit('Fleet alert webhook missing')
               request = urllib.request.Request(webhook,
                   data=json.dumps({'content': message, 'allowed_mentions': {'parse': []}}).encode(),
-                  headers={'Content-Type': 'application/json'}, method='POST')
+                  headers={'Content-Type': 'application/json',
+                      'User-Agent': 'DiscordBot (https://mush.odyliao.cc, 1.0)'}, method='POST')
+              # Never forward the credential-bearing webhook URL or payload on redirect.
+              class NoRedirect(urllib.request.HTTPRedirectHandler):
+                  def redirect_request(self, req, fp, code, msg, headers, newurl):
+                      return None
+              def response_diagnostic(reply):
+                  diagnostic = {'contentType': 'unknown', 'discordCode': None}
+                  try:
+                      media = reply.headers.get('Content-Type', '').split(';', 1)[0].strip().lower()
+                      diagnostic['contentType'] = {'application/json': 'json', 'text/html': 'html',
+                          'text/plain': 'text'}.get(media, 'other' if media else 'unknown')
+                      if media == 'application/json':
+                          # Read at most 4 KiB plus a truncation sentinel. Never log body/headers.
+                          raw = reply.read(4097)
+                          if len(raw) <= 4096:
+                              body = json.loads(raw)
+                              code = body.get('code') if isinstance(body, dict) else None
+                              if type(code) is int and 0 <= code <= 1_000_000_000:
+                                  diagnostic['discordCode'] = code
+                  except Exception:
+                      pass
+                  return diagnostic
               delivery_status = None
+              diagnostic = {'contentType': 'unknown', 'discordCode': None}
               try:
-                  with urllib.request.urlopen(request, timeout=20) as reply:
+                  opener = urllib.request.build_opener(NoRedirect())
+                  with opener.open(request, timeout=20) as reply:
                       delivery_status = http_status(reply.status)
                       if reply.status not in (200, 204):
+                          diagnostic = response_diagnostic(reply)
                           raise RuntimeError('delivery rejected')
+                      print('fleetAlertSuccess', json.dumps({'httpStatus': delivery_status,
+                          'stage': 'http'}, sort_keys=True))
               except Exception as error:
                   if isinstance(error, urllib.error.HTTPError):
                       delivery_status = http_status(error.code)
+                      diagnostic = response_diagnostic(error)
+                      error.close()
                   print('fleetAlertFailure', json.dumps({'httpStatus': delivery_status,
-                      'stage': 'http' if delivery_status is not None else 'request'}, sort_keys=True))
+                      'stage': 'http' if delivery_status is not None else 'request',
+                      **diagnostic}, sort_keys=True))
                   print('::warning::Fleet alert delivery failed; cleanup result is separate')
           raise SystemExit(1 if failed else 0)
           PY
