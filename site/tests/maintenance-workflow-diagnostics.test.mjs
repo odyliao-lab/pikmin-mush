@@ -73,7 +73,7 @@ function runFailure({body = {}, requestFailed = '1', status = '503', delivery = 
     `    if os.environ['TEST_DELIVERY'] == 'request':\n` +
     `        raise RuntimeError('PRIVATE_EXCEPTION https://PRIVATE.invalid')\n` +
     `    raise AssertionError('NETWORK_FORBIDDEN')\n` +
-    `urllib.request.urlopen = send\nexec(compile(os.environ['TEST_PARSER'], '<workflow>', 'exec'))`;
+    `urllib.request.build_opener = lambda *args: type('Opener', (), {'open': staticmethod(send)})()\nexec(compile(os.environ['TEST_PARSER'], '<workflow>', 'exec'))`;
   const interpreter = process.env.PYTHON || (process.platform === 'win32' ? 'python' : 'python3');
   const result = spawnSync(interpreter, ['-c', harness], {
     encoding: 'utf8', timeout: 10_000, env: {...process.env, PYTHONIOENCODING: 'utf-8', TEST_PARSER: python,
@@ -130,10 +130,10 @@ test('malformed, legacy and untrusted failure fields stay unknown, and all reque
 test('fleet delivery status remains distinct from maintenance HTTP failure', () => {
   const http = runFailure({delivery: 'http'});
   assert.equal(http.failure.httpStatus, 503);
-  assert.deepEqual(http.fleet, {httpStatus: 404, stage: 'http'});
+  assert.deepEqual(http.fleet, {httpStatus: 404, stage: 'http', contentType: 'unknown', discordCode: null});
   const transport = runFailure({delivery: 'request'});
   assert.equal(transport.failure.httpStatus, 503);
-  assert.deepEqual(transport.fleet, {httpStatus: null, stage: 'request'});
+  assert.deepEqual(transport.fleet, {httpStatus: null, stage: 'request', contentType: 'unknown', discordCode: null});
 });
 
 test('successful cleanup remains successful when its separate hourly fleet warning gets HTTP 404', () => {
@@ -141,7 +141,7 @@ test('successful cleanup remains successful when its separate hourly fleet warni
     body: {now: now * 1000, retention: {lastSucceededAt: now, consecutiveFailures: 0, pending: 0},
       alerts: {uploadSilentAgents: ['fixture-agent']}, maintenanceHealth: {severity: 'healthy'}}});
   assert.equal(output.failure, null);
-  assert.deepEqual(output.fleet, {httpStatus: 404, stage: 'http'});
+  assert.deepEqual(output.fleet, {httpStatus: 404, stage: 'http', contentType: 'unknown', discordCode: null});
 });
 
 function successBody(lastSucceededAt = now) {
