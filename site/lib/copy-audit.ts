@@ -36,8 +36,20 @@ async function sourceHash(request: Request) {
     .join("").slice(0, 16);
 }
 
+function requestCf(request: Request): RequestCf | undefined {
+  try {
+    return (request as Request & { cf?: RequestCf }).cf;
+  } catch (error) {
+    // Some runtime request proxies invoke the native cf getter with the proxy
+    // as its receiver. Optional enrichment must not prevent the audit write.
+    // Keep unrelated errors visible and never substitute client-supplied ASN.
+    if (error instanceof TypeError && /illegal invocation/i.test(error.message)) return undefined;
+    throw error;
+  }
+}
+
 function requestContext(request: Request) {
-  const cf = (request as Request & { cf?: RequestCf }).cf;
+  const cf = requestCf(request);
   const asn = Number(cf?.asn);
   const country = String(cf?.country ?? request.headers.get("cf-ipcountry") ?? "")
     .toUpperCase().replace(/[^A-Z]/g, "").slice(0, 2);
