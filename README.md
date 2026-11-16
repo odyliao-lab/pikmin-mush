@@ -232,7 +232,7 @@ Discord 通知服務是獨立 repo／獨立排程，使用控制器認證查詢�
 5. `SPEC_ON_DEVICE_DISPLAY.md`、`SPEC_GLOBAL_FLEET.md`：顯示與 fleet 設計。
 6. `docs/RELEASE_GATES.md`、`docs/EMULATOR_ACCESS_RUNBOOK.md`：現行發布及通道維護入口；`CLAUDE_HANDOFF.md`、`CLAUDE_SITES_DEPLOY_HANDOFF_2026-08-20.md` 是歷史交接，須重新核對版本、路徑與權限。
 7. `WORKLOG.md`、`DEV_HISTORY.md`、`DESIGN_autoscan.md`、`HOOK_TARGETS.md`：歷史決策與除錯。
-8. [有界產能基線報表契約與離線核心](docs/FLEET_BASELINE_REPORT_CONTRACT.md)：去重、晚到資料、輪次與wall-time的唯讀補充報表；離線reference核心已有fixture測試，尚無API／正式發布，不啟用擴區或取樣預算。
+8. [有界產能基線報表候選](docs/FLEET_BASELINE_REPORT_CONTRACT.md)：去重、晚到資料、輪次與wall-time的唯讀補充報表；離線核心及預設停用的SELECT／API候選已有本機測試，正式查詢成本與站端驗收待補，未發布或啟用擴區／取樣預算。
 
 後續待驗：157長時間耐久與自然冷啟恢復、逐機提示覆蓋、receipt-v1實機canary及配置推廣。allocation shadow與dispatcher協調的未啟用功能，須各自完成文件規定的觀測與核准；活動金盆持續依可追溯來源補充，場館參考與精確遊戲GPS分開標示。
 

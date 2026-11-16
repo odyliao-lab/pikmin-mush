@@ -1,7 +1,8 @@
 # Bounded fleet baseline report proposal
 
-Status: offline reference core implemented; database adapter, authenticated API,
-deployment and production verification remain pending. This document defines a read-only measurement supplement to
+Status: offline core, conservative SELECT adapter and default-disabled authenticated
+API candidate implemented and locally tested; production profiling, deployment
+and private readback remain pending. This document defines a read-only measurement supplement to
 [allocation comparisons](../site/lib/allocation-comparison.mjs). It does not
 enable allocation, add a collector or certify a baseline.
 
@@ -28,9 +29,49 @@ late row. Current targets take precedence over an archived duplicate.
 
 [`fleet-baseline-core.test.mjs`](../site/tests/fleet-baseline-core.test.mjs)
 exercises these semantics with synthetic complete/incomplete snapshots. This is
-a reference for a future bounded SELECT implementation, not a request to export
-unbounded production history into memory. Query-plan profiling, route/auth/no-DB-
-mutation fixtures and live private readback are still required before a release.
+a reference for the bounded SELECT candidate, not a request to export unbounded
+production history into memory. Local migrated-SQLite fixtures exercise the actual
+SELECTs, route authorization and no-write behavior; production cost profiling
+and live private readback are still required before enabling the candidate.
+
+## Conservative read candidate
+
+[`fleet-baseline-read.mjs`](../site/lib/fleet-baseline-read.mjs) reads a capped
+retained-history projection through one D1 SELECT batch. The initial history
+epoch read is checked again inside the batch. Missing schema/index/epoch,
+epoch drift, failed or incomplete reads and limit overflows return503 with
+unknown aggregates. There is no schema initialization, retry, pagination,
+dispatch, cleanup or fallback to separately timed queries.
+
+The authenticated [GET route](../site/app/api/admin/fleet-baseline/route.ts) is
+disabled unless `FLEET_BASELINE_READ_ENABLED=1`. The default is0; this is a
+separate read-only release gate, not canary opt-in. All responses are private
+and no-store. Administrator/controller checks precede the flag and all DB work;
+neither Agent credentials nor anonymous access are accepted.
+
+The effective lookback starts at the later of corrected-history epoch and the
+seven-day physical observation-retention boundary. Candidate limits are20,000
+rows per collection plus an overflow sentinel,4MiB projected snapshot,256 cycle
+groups and128KiB response. The five collections remain within the reference
+core's100,000-row cap. Receipt and event range scans require the existing time
+indexes; target/challenge lookups use primary keys. Oversized identifiers become
+invalid/unknown; event detail is reduced to the diagnostic enum inside SQL.
+
+This intentionally conservative implementation can reject a dense retained
+history even when the requested window is small. A LIMIT bounds returned rows,
+not database rows scanned or query time. Reported D1 reads above1,000,000 reject
+the result **after execution**; this is not a cancellation mechanism or a
+proven safe production allowance. Missing cost metadata is not zero cost.
+Profile real D1 execution/memory and optimize lookback projection as needed
+before authorizing publication/enabling the flag. No production48h baseline,
+active-qualified hours, spare budget or verified-empty witness is established.
+
+[`fleet-baseline-read.test.mjs`](../site/tests/fleet-baseline-read.test.mjs)
+uses the real migrated schema with SQLite query-only mode, validates SQL/core
+equivalence, indexes, sentinel/byte/output limits, epoch drift and route gates.
+These local results do not prove D1 production isolation/performance or native
+device execution. D1 batch behavior follows the
+[official binding contract](https://developers.cloudflare.com/d1/worker-api/d1-database/#batch).
 
 ## Missing measurements
 
@@ -48,8 +89,8 @@ observations form a separate population.
 
 ## Proposed request and read boundary
 
-Proposed endpoint: `GET /api/admin/fleet-baseline?from=<ms>&to=<ms>`.
-The endpoint does not exist as part of this proposal.
+Candidate endpoint: `GET /api/admin/fleet-baseline?from=<ms>&to=<ms>`.
+It exists only in this unshipped, default-disabled candidate.
 
 - Require the existing administrator or controller authorization before DB work.
   Keep private/no-store responses and existing credentials. No public access,
