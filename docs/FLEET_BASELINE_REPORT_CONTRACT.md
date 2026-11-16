@@ -1,7 +1,7 @@
 # Bounded fleet baseline report proposal
 
 Status: offline core, conservative SELECT adapter and default-disabled authenticated
-API candidate implemented and locally tested; production profiling, deployment
+API candidate implemented and locally profiled; production readback, deployment
 and private readback remain pending. This document defines a read-only measurement supplement to
 [allocation comparisons](../site/lib/allocation-comparison.mjs). It does not
 enable allocation, add a collector or certify a baseline.
@@ -37,7 +37,7 @@ and live private readback are still required before enabling the candidate.
 ## Conservative read candidate
 
 [`fleet-baseline-read.mjs`](../site/lib/fleet-baseline-read.mjs) reads a capped
-retained-history projection through one D1 SELECT batch. The initial history
+window projection plus actual retained-history witnesses through one D1 SELECT batch. The initial history
 epoch read is checked again inside the batch. Missing schema/index/epoch,
 epoch drift, failed or incomplete reads and limit overflows return503 with
 unknown aggregates. There is no schema initialization, retry, pagination,
@@ -46,7 +46,9 @@ dispatch, cleanup or fallback to separately timed queries.
 The authenticated [GET route](../site/app/api/admin/fleet-baseline/route.ts) is
 disabled unless `FLEET_BASELINE_READ_ENABLED=1`. The default is0; this is a
 separate read-only release gate, not canary opt-in. All responses are private
-and no-store. Administrator/controller checks precede the flag and all DB work;
+and no-store. At most one report read runs in a Worker isolate; overlapping
+requests return503 busy without queueing, retrying or doing DB work.
+Administrator/controller checks precede the flag and all DB work;
 neither Agent credentials nor anonymous access are accepted.
 
 The effective lookback starts at the later of corrected-history epoch and the
@@ -57,13 +59,24 @@ core's100,000-row cap. Receipt and event range scans require the existing time
 indexes; target/challenge lookups use primary keys. Oversized identifiers become
 invalid/unknown; event detail is reduced to the diagnostic enum inside SQL.
 
-This intentionally conservative implementation can reject a dense retained
-history even when the requested window is small. A LIMIT bounds returned rows,
+An advisory indexed preflight rejects excessive window rows or serialized
+window data before fetching the full projection. Its counts never become
+report denominators: concurrent growth is still checked against the actual
+batched snapshot. Snapshot bytes are checked incrementally rather than by
+allocating a second JSON copy of all collections.
+
+Only window receipts and one actual earliest retained3/4 receipt per relevant
+challenge are projected. Terminal events include all window terminals plus one
+actual earliest prior completion per relevant Agent/target. Unrelated old
+history does not consume the result cap; repeated ACKs and first/repeat semantics
+are checked against the full-history reference. Dense windows or too many
+relevant witnesses can still exceed the cap. A LIMIT bounds returned rows,
 not database rows scanned or query time. Reported D1 reads above1,000,000 reject
 the result **after execution**; this is not a cancellation mechanism or a
 proven safe production allowance. Missing cost metadata is not zero cost.
-Profile real D1 execution/memory and optimize lookback projection as needed
-before authorizing publication/enabling the flag. No production48h baseline,
+Local workerd/D1 profile results and reproducible commands are in the
+[profile report](FLEET_BASELINE_PROFILE_2026-11-16.md). Review real D1 execution
+cost and authorized private readback before enabling the flag. No production48h baseline,
 active-qualified hours, spare budget or verified-empty witness is established.
 
 [`fleet-baseline-read.test.mjs`](../site/tests/fleet-baseline-read.test.mjs)
