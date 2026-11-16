@@ -99,6 +99,27 @@ test('SQL lookback preserves cross-window ACK retry and numeric IDs beyond32bits
   assert.equal(r.body.observations.attribution.ordinary_unaligned_rows,1);
 });
 
+test('irrelevant retained history over the old cap does not invalidate a small current window',async t=>{
+  const old=Array.from({length:20001},(_,i)=>observation('old-'+i,{challenge_key:'old-'+i,
+    target_id:i+2,received_at:(HISTORY+1000)/1000}));
+  const f=seed(t,{observations:[observation(),...old],
+    challenges:[{key:'c',identity_confidence:'challenge_start'},...old.map(o=>({key:o.challenge_key,identity_confidence:'challenge_start'}))]});
+  const r=await readFleetBaseline(f.db,params(),NOW);
+  assert.equal(r.status,200);assert.deepEqual(r.body,reference(f.s));
+});
+
+test('lookback selects the actual earliest3/4 receipt and earliest completed event, not level2 or retry',async t=>{
+  const f=seed(t,{observations:[observation(),observation('prior-normal',{level:2,received_at:(FROM-20000)/1000}),
+    observation('prior',{level:4,received_at:(FROM-10000)/1000}),
+    observation('later-prior',{received_at:(FROM-5000)/1000})],
+    events:[event(20,{at:FROM-1000}),event(2,{at:FROM-10000}),
+      event(1,{at:FROM-15000,event_type:'target_failed'}),event(99)]});
+  const r=await readFleetBaseline(f.db,params(),NOW);
+  assert.equal(r.status,200);assert.deepEqual(r.body,reference(f.s));
+  assert.equal(r.body.observations.repeat_in_retained_history,1);
+  assert.equal(r.body.effort.cross_window_completed_retry_targets,1);
+});
+
 test('SQL diagnostic projection keeps malformed/oversized detail unknown without leaking payloads',async t=>{
   for(const detail of ['broken',JSON.stringify({evidence:{version:'1',refresh_source:'object'}}),
     JSON.stringify({evidence:{version:1,refresh_source:'object'},lease:'x'.repeat(5000)})]){
@@ -176,7 +197,23 @@ test('real sentinel overflow returns unknown instead of a truncated count, witho
   const observations=Array.from({length:BASELINE_READ_LIMITS.rows+1},(_,i)=>observation('o'+i));
   const f=seed(t,{observations});const r=await readFleetBaseline(f.db,params(),NOW);
   assert.equal(r.status,503);assert.equal(r.body.reason,'row_limit');
-  assert.equal(r.body.observations,null);assert.equal(f.hooks.batches,1);
+  assert.equal(r.body.observations,null);assert.equal(f.hooks.batches,0);
+});
+
+test('growth after advisory preflight still fails closed in the actual snapshot',async t=>{
+  const f=seed(t);
+  f.hooks.beforeBatch=()=>f.sql.exec(`WITH RECURSIVE seq(n) AS (SELECT 1 UNION ALL SELECT n+1 FROM seq WHERE n<20001)
+    INSERT INTO mushroom_observations(key,challenge_key,agent_id,target_id,received_at,level,type,
+      challenger_count,challenger_capacity,total_power,finish_ms)
+    SELECT 'grown-'||n,'c','alpha',1,${FROM/1000+5},3,1,2,35,0,0 FROM seq`);
+  const r=await readFleetBaseline(f.db,params(),NOW);
+  assert.equal(r.status,503);assert.equal(r.body.reason,'row_limit');assert.equal(r.body.observations,null);
+});
+
+test('observation text-byte overflow is rejected before materializing the main result',async t=>{
+  const f=seed(t,{observations:Array.from({length:9000},(_,i)=>observation('k'.repeat(480)+i))});
+  const r=await readFleetBaseline(f.db,params(),NOW);
+  assert.equal(r.status,503);assert.equal(r.body.reason,'snapshot_byte_limit');assert.equal(f.hooks.batches,0);
 });
 
 test('snapshot byte and output-cycle caps reject complete-looking overlarge responses',async t=>{
@@ -211,6 +248,8 @@ test('SQLite plan uses existing time indexes and primary-key lookups, with fixed
     if(p.name==='events')assert.match(details,/scan_agent_events_type_at_idx/);
     if(['targets','archivedTargets','challenges'].includes(p.name))assert.match(details,/PRIMARY KEY|sqlite_autoindex/);
     if(p.name!=='epoch')assert.equal(p.args[4],BASELINE_READ_LIMITS.rows+1);
+    assert.equal(p.args.length,Math.max(0,...[...p.sql.matchAll(/\?(\d+)/g)].map(m=>Number(m[1]))),
+      'D1 bind requires the exact largest positional slot, unlike a permissive SQLite named-map fixture');
   }
 });
 
@@ -254,4 +293,20 @@ test('actual admin and controller GETs are private, SELECT-only and never imply 
     assert.equal(body.active_qualified_agent_hours,null);
   }
   assert.equal(f.sql.prepare('SELECT total_changes() AS n').get().n,before);
+});
+
+test('actual route permits only one report read per isolate and releases the guard after failure',async t=>{
+  const f=seed(t),r=route(f,{controller:true});
+  let release,entered;
+  const started=new Promise(resolve=>{entered=resolve;});
+  const original=f.db.batch;
+  f.db.batch=async statements=>{entered();await new Promise(resolve=>{release=resolve;});return original(statements);};
+  const first=r.GET(request());await started;
+  const queries=f.hooks.queries.length;
+  const busy=await r.GET(request());assert.equal(busy.status,503);
+  assert.equal((await busy.json()).error,'baseline read busy');assert.equal(f.hooks.queries.length,queries);
+  release();assert.equal((await first).status,200);
+  f.db.batch=async()=>{throw Error('fixture-only-failure');};
+  assert.equal((await r.GET(request())).status,503);
+  f.db.batch=original;assert.equal((await r.GET(request())).status,200);
 });

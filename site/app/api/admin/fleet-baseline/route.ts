@@ -1,5 +1,6 @@
 import {adminAuthorized,controllerAuthorized,noStoreJson,runtime} from '../../../../lib/cloud';
 import {readFleetBaseline} from '../../../../lib/fleet-baseline-read.mjs';
+let readInFlight=false;
 
 function respond(body:unknown,status:number) {
   const response=noStoreJson(body,status);
@@ -14,6 +15,11 @@ export async function GET(request:Request) {
   // Explicit opt-in after query/memory profiling and release authorization.
   if(env.FLEET_BASELINE_READ_ENABLED!=='1')
     return respond({error:'baseline read candidate disabled',activation_ready:false},503);
-  const {status,body}=await readFleetBaseline(env.DB,new URL(request.url).searchParams,Date.now());
-  return respond(body,status);
+  // Bound this report's transient memory in one isolate; do not queue/retry.
+  if(readInFlight)return respond({error:'baseline read busy',activation_ready:false},503);
+  readInFlight=true;
+  try {
+    const {status,body}=await readFleetBaseline(env.DB,new URL(request.url).searchParams,Date.now());
+    return respond(body,status);
+  } finally {readInFlight=false;}
 }
