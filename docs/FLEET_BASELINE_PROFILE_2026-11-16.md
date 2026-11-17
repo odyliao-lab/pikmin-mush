@@ -122,3 +122,29 @@ these synthetic timings. Apply the existing [release gates](RELEASE_GATES.md).
 Runtime/method references: [Miniflare D1](https://developers.cloudflare.com/workers/testing/miniflare/storage/d1/),
 [Worker memory profiling](https://developers.cloudflare.com/workers/observability/dev-tools/memory-usage/),
 [Worker limits](https://developers.cloudflare.com/workers/platform/limits/).
+
+## Final route recheck on2026-11-17
+
+After the policy inventory route and isolated Next16.4.6 dependency update, the
+full local workerd matrix was repeated (seven timed reads/case, stage checkpoints,
+30 repeated reads and four concurrent requests). All harness assertions passed.
+
+
+| Fixture | Status | Median ms | p95 ms |
+|---|---:|---:|---:|
+| empty | 200 | 13.5 | 24.2 |
+| sparse | 200 | 21.3 | 28.3 |
+| dense | 200 | 342.9 | 365.9 |
+| long-keys | 503 | 54.2 | 59.9 |
+| near-cap | 503 | 96.6 | 101.6 |
+| max-key-bytes | 503 | 208.4 | 227.4 |
+| overflow | 503 | 109.0 | 115.8 |
+| short-window-large-history | 200 | 49.2 | 56.8 |
+
+The baseline adapter SHA256 remains `dd0e01bf11eeadfeb1d62cd430512611a3bff7aaea9d54c207e5fa575cf541aa`.
+Final route SHA256 is `2eebf83c97df15a711f59b3eada433ce921d2ec0f0d82b28ce93b1ae5cd57469`.
+These synthetic reads still do not measure production D1 CPU/cost, whole Worker
+peak memory or device qualification. The earlier draft/unpublished status above
+is the dated2026-11-16 checkpoint; publication provenance is recorded separately.
+Full site regressions now pass319/319, including23 adapter/route/policy tests.
+Production audit passes after the dependency update.
