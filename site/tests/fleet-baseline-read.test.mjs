@@ -6,6 +6,7 @@ import {Script} from 'node:vm';
 import ts from 'typescript';
 import {baselineWindow,buildFleetBaseline} from '../lib/fleet-baseline-core.mjs';
 import {readFleetBaseline,baselineReadStatements,BASELINE_READ_LIMITS} from '../lib/fleet-baseline-read.mjs';
+import {readFleetLevelInventory} from '../lib/fleet-policy-read.mjs';
 
 const DAY=86400000,NOW=20*DAY,FROM=NOW-2*3600000,TO=NOW-3600000,HISTORY=NOW-7*DAY;
 const params=(from=FROM,to=TO)=>new URLSearchParams({from:String(from),to:String(to)});
@@ -264,6 +265,7 @@ function route(f,{admin=false,controller=false,enabled='1'}={}){
         runtime:()=>{envCalls++;return {DB:f.db,FLEET_BASELINE_READ_ENABLED:enabled};},
         noStoreJson:(body,status=200)=>Response.json(body,{status,headers:{'Cache-Control':'no-store'}})};
       if(path.endsWith('/fleet-baseline-read.mjs'))return {readFleetBaseline};
+      if(path.endsWith('/fleet-policy-read.mjs'))return {readFleetLevelInventory};
       throw Error('unexpected import: '+path);
     }});
   return {...exports,envCalls:()=>envCalls};
@@ -309,4 +311,39 @@ test('actual route permits only one report read per isolate and releases the gua
   f.db.batch=async()=>{throw Error('fixture-only-failure');};
   assert.equal((await r.GET(request())).status,503);
   f.db.batch=original;assert.equal((await r.GET(request())).status,200);
+});
+
+test('policy view counts excluded levels in both full live tables without cleanup or private output',async t=>{
+  const f=seed(t,{observations:[observation('small',{level:1}),observation('normal',{level:2}),observation()]});
+  f.sql.exec("INSERT INTO mushrooms(id,lat,lng,level,first_seen,last_seen) VALUES('fixture-private',1,2,2,1,1)");
+  f.sql.exec('PRAGMA query_only=ON');const before=f.sql.prepare('SELECT total_changes() AS n').get().n;
+  const response=await route(f,{controller:true}).GET(new Request('https://example.test/?view=policy'));
+  assert.equal(response.status,200);const body=await response.json();
+  assert.deepEqual(body.tables,{mushrooms:{small_rows:0,normal_rows:1},mushroom_observations:{small_rows:1,normal_rows:1}});
+  assert.equal(body.excluded_rows,3);assert.equal(body.exclusion_consistent,false);
+  assert.equal(body.activation_ready,false);assert.equal(body.qualification_complete,false);
+  assert.doesNotMatch(JSON.stringify(body),/fixture-private|alpha|challenge_key|lat|lng/);
+  assert.equal(f.sql.prepare('SELECT total_changes() AS n').get().n,before);
+});
+
+test('policy inventory complete zero differs from missing, malformed and failed reads',async t=>{
+  const f=seed(t);let r=await readFleetLevelInventory(f.db,NOW);
+  assert.equal(r.status,200);assert.equal(r.body.excluded_rows,0);assert.equal(r.body.exclusion_consistent,true);
+  for(const transform of [r=>r.slice(1),r=>{r[0].results=[];return r;},
+    r=>{r[0].results[0].small_rows=null;return r;},r=>{r[0].meta.rows_written=1;return r;}]){
+    f.hooks.transform=transform;r=await readFleetLevelInventory(f.db,NOW);
+    assert.equal(r.status,503);assert.equal(r.body.excluded_rows,null);
+  }
+  f.hooks.transform=r=>r;f.sql.exec('DROP TABLE mushrooms');
+  r=await readFleetLevelInventory(f.db,NOW);assert.equal(r.status,503);assert.equal(r.body.tables,null);
+});
+
+test('policy view auth, default-off and parameter gates run before DB reads',async t=>{
+  const f=seed(t),request=new Request('https://example.test/?view=policy');
+  assert.equal((await route(f).GET(request)).status,403);
+  assert.equal((await route(f,{admin:true,enabled:'0'}).GET(request)).status,503);
+  const reader=route(f,{admin:true});
+  for(const suffix of ['view=policy&from=1','view=policy&view=policy','view=arbitrary','view=policy&sql=SELECT'])
+    assert.equal((await reader.GET(new Request('https://example.test/?'+suffix))).status,400);
+  assert.equal(f.hooks.queries.length,0);
 });
