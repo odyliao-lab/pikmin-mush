@@ -6,16 +6,16 @@ import { parseTargetAckEvidence, readTargetAckEvidence } from "../../../../lib/t
 
 export async function GET(request: Request) {
   if (!adminAuthorized(request)) return noStoreJson({ error: "forbidden" }, 403);
-  await ensureSchema();
-  const db = runtime().DB;
   const params=new URL(request.url).searchParams;
-  if(params.has('evidence_targets')) {
+  if(params.has('evidence_targets') || params.has('evidence_observations')) {
     let query;
     try {query=parseTargetAckEvidence(params);}
     catch {return noStoreJson({error:'invalid target evidence query'},400);}
-    try {return noStoreJson(await readTargetAckEvidence(db,query));}
+    try {return noStoreJson(await readTargetAckEvidence(runtime().DB,query));}
     catch {return noStoreJson({error:'target evidence temporarily unavailable'},503);}
   }
+  await ensureSchema();
+  const db = runtime().DB;
   // Legacy callers still receive logs; the compact UI opts out until expanded.
   const includeLogs=new URL(request.url).searchParams.get('logs')!=='0';
   // A rotation rebuild may temporarily fail while a large target queue is being

@@ -20,7 +20,7 @@ function api(db,authorized=true){
  const exports={};const code=ts.transpileModule(readFileSync(new URL('../app/api/admin/scans/route.ts',import.meta.url),'utf8'),{compilerOptions:{module:ts.ModuleKind.CommonJS,target:ts.ScriptTarget.ES2022}}).outputText;
  const unavailable=()=>{throw Error('evidence query must not materialize rotation or the full fleet')};
  const modules={
-  '../../../../lib/cloud':{adminAuthorized:()=>authorized,ensureSchema:async()=>{},runtime:()=>({DB:db}),noStoreJson:(body,status=200)=>new Response(JSON.stringify(body),{status})},
+  '../../../../lib/cloud':{adminAuthorized:()=>authorized,ensureSchema:unavailable,runtime:()=>({DB:db}),noStoreJson:(body,status=200)=>new Response(JSON.stringify(body),{status})},
   '../../../../lib/scans':{activeOrLatestJob:unavailable,publicJob:unavailable},
   '../../../../lib/fleet':{publicAgent:unavailable},'../../../../lib/rotation':{rotationStatus:unavailable},
   '../../../../lib/target-ack-evidence.mjs':{parseTargetAckEvidence,readTargetAckEvidence},
@@ -52,4 +52,56 @@ test('admin evidence mode does not invoke rotation/fleet writes or expose databa
  const response=await api(f.db).GET(request);assert.equal(response.status,200);assert.equal((await response.json()).target_acknowledgements.length,1);
  const bad=await api({prepare(){throw Error('PRIVATE SQL/token')}}).GET(request);
  assert.equal(bad.status,503);assert.doesNotMatch(await bad.text(),/PRIVATE|SQL|token/);
+});
+
+test('opt-in acceptance requires a nonzero ordinary ACK and a same-target retained observation inside its lease',async()=>{
+ const f=fixture(), at=now-1000, receive=Math.floor(at/1000)-2;
+ f.sql.exec(`CREATE TABLE scan_targets(id INTEGER PRIMARY KEY,job_id INTEGER,verification_kind TEXT,status TEXT,
+  completed_agent_id TEXT,leased_at INTEGER,completed_at INTEGER);
+  CREATE TABLE scan_target_history(id INTEGER PRIMARY KEY,job_id INTEGER,verification_kind TEXT,status TEXT,
+   completed_agent_id TEXT,leased_at INTEGER,completed_at INTEGER);
+  CREATE TABLE mushroom_observations(target_id INTEGER,agent_id TEXT,received_at INTEGER,level INTEGER);
+  CREATE INDEX mushroom_observations_received_idx ON mushroom_observations(received_at);`);
+ const target=f.sql.prepare("INSERT INTO scan_targets VALUES(?,?,?,'completed',?,?,?)");
+ const ack=f.sql.prepare("INSERT INTO scan_agent_events VALUES(?,'agent-a','target_completed',?,450,?,1,100,12000,'PRIVATE')");
+ const observation=f.sql.prepare('INSERT INTO mushroom_observations VALUES(?,?,?,?)');
+ target.run(10,450,'','agent-a',at-9000,at);
+ for(const [id,job,kind,agent,lease,end] of [
+  [20,450,'','agent-a',at-12000,at],
+  [21,450,'return','agent-a',at-12000,at],
+  [22,451,'','agent-a',at-12000,at],
+  [23,450,'','agent-a',at-16*60000,at],
+  [24,450,'','agent-b',at-12000,at],
+  [25,450,'','agent-a',at-12000,at+10],
+ ]) {
+  target.run(id,job,kind,agent,lease,end);
+  ack.run(id,at,id);
+  observation.run(id,'agent-a',receive,3);
+ }
+ observation.run(10,'agent-a',receive,2);
+ observation.run(10,'agent-b',receive,4);
+ observation.run(10,'agent-a',receive-20,4);
+ observation.run(10,'agent-a',receive+5,4);
+ observation.run(13,'agent-a',receive,4);
+ f.sql.exec('INSERT INTO scan_target_history SELECT * FROM scan_targets WHERE id IN(20,24); DELETE FROM scan_targets WHERE id=20;');
+ f.sql.exec("UPDATE scan_target_history SET completed_agent_id='agent-a' WHERE id=24;");
+ const query={agentId:'agent-a',targetIds:[10,13,20,21,22,23,24,25],includeObservations:true};
+ const result=await readTargetAckEvidence(f.db,query,now);
+ assert.deepEqual(result.accepted_observations,[{target_id:20,job_id:450,ack_at:at,received_at:receive,level:3}]);
+ observation.run(10,'agent-a',receive,4);
+ const response=await api(f.db).GET(new Request('https://mush.odyliao.cc/api/admin/scans?evidence_agent=agent-a&evidence_targets=10&evidence_observations=1'));
+ assert.equal(response.status,200);
+ const positive=await response.json();
+ assert.deepEqual(positive.accepted_observations,[{target_id:10,job_id:450,ack_at:at,received_at:receive,level:4}]);
+ assert.doesNotMatch(JSON.stringify(positive),/PRIVATE|SECRET|lease|latitude/);
+});
+
+test('observation evidence flag is bounded and zero ACKs cause no observation-table query',async()=>{
+ const f=fixture();
+ const make=value=>new URLSearchParams('evidence_agent=agent-a&evidence_targets=13&evidence_observations='+value);
+ for(const value of ['0','','true','1&evidence_observations=1'])assert.throws(()=>parseTargetAckEvidence(make(value)));
+ const query=parseTargetAckEvidence(make('1'));
+ const result=await readTargetAckEvidence(f.db,query,now);
+ assert.deepEqual(result.accepted_observations,[]);
+ assert.equal(f.reads,1);
 });
