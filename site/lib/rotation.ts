@@ -86,11 +86,13 @@ function scanConfig(base: unknown, packs: string[], agentCount: number, slot: st
   const previous = base && typeof base === "object" ? base as Record<string, unknown> : {};
   const cities = packs.reduce((count, id) => count +
     (COUNTRY_PACK_CATALOG.find((pack) => pack.id === id)?.cities.length ?? 0), 0);
-  // Keep every city reachable within an eight-hour slot even on a slower
-  // phone. Repeated cycles advance through the full grid instead of always
-  // restarting at the same few positions.
-  const samplesPerCity = Math.max(1, Math.min(8,
-    Math.floor(200 * Math.max(1, agentCount) / Math.max(1, cities))));
+  // Budget up to 600 points per eligible Agent in the first pass. Keep at
+  // least one point per city even when only one Agent is available.
+  // Noon limits each city to 21 so threefold Berlin fits the 4 km footprint
+  // in every 1 km grid phase.
+  const perCityLimit = slot === "emea" ? 21 : 32;
+  const samplesPerCity = Math.max(1, Math.min(perCityLimit,
+    Math.floor(600 * Math.max(1, agentCount) / Math.max(1, cities))));
   return normalizeScanConfig({
     ...previous,
     mode: "auto",
@@ -99,9 +101,9 @@ function scanConfig(base: unknown, packs: string[], agentCount: number, slot: st
     // Do not inherit a one-off 500m precision run into a scheduled rotation
     // rotation, otherwise the queue can unexpectedly grow fourfold.
     scanProfile: "global",
-    // A saved tiny one-off radius must not silently make 24 Berlin points
-    // impossible. Keep larger footprints; the sparse queue budget is unchanged.
-    radiusKm: Math.max(3, Number(previous.radiusKm ?? 8)),
+    // Keep larger configured footprints and reserve enough space at noon
+    // for Berlin's threefold weighting without exceeding its route budget.
+    radiusKm: Math.max(slot === "emea" ? 4 : 3, Number(previous.radiusKm ?? 8)),
     rotationSamplesPerCity: samplesPerCity,
     rotationCoverageTrial: slot === 'americas' && coverageTrial ? 'kansas-city-4km' : undefined,
     // Explicitly clear inherited weighting outside noon's EMEA window.

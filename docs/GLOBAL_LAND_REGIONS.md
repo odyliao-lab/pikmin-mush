@@ -70,6 +70,44 @@ southern geographic expansion, not labelled UN Southern Africa.
 Source: [UN M49](https://unstats.un.org/unsd/methodology/m49/).
 Coordinates are city centres, not evidence of game acceptance or mushroom yield.
 
+## Three-slot expansion
+
+The catalogue adds 262 populated places and 14 country or region packs in a
+single source change. Scheduled coverage rises from 77 packs and 443 cities
+to 91 packs and 705 cities. Taiwan and Japan remain outside scheduled rotation.
+The new locations complement existing coverage. Chosen centres are at least
+31 km from every other centre, including the original catalogue.
+
+| Taipei start | Packs | Cities | New packs |
+| --- | ---: | ---: | --- |
+| 04:00 Asia and Oceania | 15 | 165 (was 79) | Cambodia, Laos, Sri Lanka, Bangladesh, Nepal |
+| 12:00 Europe, Middle East, and Africa | 51 | 293 (was 211) | Lithuania, Latvia, Estonia, Luxembourg, Malta, Cyprus |
+| 20:00 Americas | 25 | 247 (was 153) | Dominican Republic, Jamaica, Puerto Rico |
+
+GeoNames cities15000 supplied the added centres. The 2026-11-18 archive has SHA-256
+`8a91bb932bb4561796cdd0b5b97506e821493acae970c7db9d888a4e518d18b1`.
+For the added centres, generate the subset with the same per-city catalogue
+format as the exporter and run the mask builder with `--snapshot 2026-11-18`
+and `--base` pointing to the original mask. The builder refuses to overwrite
+any original city mask. The checked-in database records both OSM archives,
+their checksums and the added city keys. Coastline coverage and city centres
+do not establish game acceptance, observation yield or in-game accessibility.
+
+The scheduled queue budgets up to 600 first-pass points per eligible Agent.
+The 1 km grid uses at most 32 samples per city, or 21 in the noon slot to
+preserve Berlin's threefold weight within its assigned route. The noon
+footprint is at least 4 km. Existing larger radii, explicit manual jobs,
+land filtering, slot qualification, and verification and return safeguards
+are preserved.
+
+A local ten-Agent plan with each slot's minimum footprint builds 5,125,
+5,860 and 5,867 first-pass points, respectively. These are queue sizes, not
+observed completion times. Larger first passes reduce the need to start
+another round. The existing phase-shifted rollover remains available when
+a fleet does finish early. The live review should compare first-pass
+completion, additional rounds, verified 3/4 observations and D1 errors
+through comparable slots.
+
 ## Safe activation
 
 Deploy tested GitHub main through the existing public Sites project. Existing

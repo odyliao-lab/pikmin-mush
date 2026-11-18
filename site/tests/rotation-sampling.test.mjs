@@ -21,18 +21,35 @@ test("curated route city counts match the catalogue", () => {
   }
 });
 
-test("three online Agents still materialize every city below the queue cap", () => {
-  for (const time of ["04:00", "12:00", "20:00"]) {
-    const plan = planDailyRotation(["a", "b", "c"], Date.parse(`2026-09-25T${time}:00+08:00`));
-    const ids = [...new Set(plan.assignments.flatMap((route) => route.packs))];
-    const cityCount = ids.reduce((count, id) => count +
-      COUNTRY_PACK_CATALOG.find((pack) => pack.id === id).cities.length, 0);
-    const sampleLimit = Math.max(1, Math.min(8, Math.floor(200 * 3 / cityCount)));
-    const result = buildScanPlan(normalizeScanConfig({ mode: "auto", scanProfile: "global",
-      countryPacks: ids, rotationSamplesPerCity: sampleLimit }), null);
-    assert.equal(result.regions.length, cityCount);
-    assert.equal(result.targets.length, cityCount * sampleLimit);
-    assert.ok(result.targets.length < 30_000);
+test("expanded rotation builds a larger land-only first pass within the fleet budget", () => {
+  const rotation = readFileSync(new URL('../lib/rotation.ts', import.meta.url), 'utf8');
+  const section = rotation.slice(rotation.indexOf('function scanConfig('), rotation.indexOf('async function stopActiveJobs'));
+  const context = { COUNTRY_PACK_CATALOG, normalizeScanConfig, packNames: ids =>
+    ids.map(id => COUNTRY_PACK_CATALOG.find(p => p.id === id).name) };
+  new Script(ts.transpileModule(section, {
+    compilerOptions: { target: ts.ScriptTarget.ES2022 },
+  }).outputText).runInNewContext(context);
+  for (const [time, cityCount, previousPoints] of [
+    ["04:00", 165, 632], ["12:00", 293, 1688], ["20:00", 247, 1224],
+  ]) {
+    for (const agentCount of [1, 3, 10, 12]) {
+      const roster = Array.from({ length: agentCount }, (_, index) => String(index));
+      const plan = planDailyRotation(roster, Date.parse('2026-11-19T' + time + ':00+08:00'));
+      const packs = [...new Set(plan.assignments.flatMap(route => route.packs))];
+      const config = context.scanConfig({ radiusKm: 1 }, packs, agentCount, plan.slot, plan.assignments);
+      const result = buildScanPlan(config, null);
+      assert.equal(result.regions.length, cityCount);
+      assert.equal(new Set(result.targets.map(target => target.country + '/' + target.city)).size, cityCount);
+      assert.ok(result.targets.length <= 600 * agentCount);
+      assert.ok(Buffer.byteLength(JSON.stringify(result.targets)) < 1_500_000);
+      if (agentCount === 10) assert.ok(result.targets.length >= previousPoints * 2);
+      if (plan.slot === 'emea' && config.rotationSamplesPerCity > 1) {
+        for (let cycle = 0; cycle < 4; cycle++) {
+          const targets = buildScanPlan(config, null, { cycle }).targets;
+          assert.equal(targets.filter(t => t.city === '柏林 Berlin').length, 3 * config.rotationSamplesPerCity);
+        }
+      }
+    }
   }
 });
 
@@ -126,7 +143,7 @@ test('scheduled tiny saved radius cannot disable Berlin weighting or expand the 
   const plan=planDailyRotation(Array.from({length:9},(_,i)=>`a${i}`),Date.parse('2026-11-03T14:00:00+08:00'));
   const packs=[...new Set(plan.assignments.flatMap(r=>r.packs))];
   const cfg=context.scanConfig({radiusKm:1.5},packs,9,'emea',plan.assignments);
-  assert.equal(cfg.radiusKm,3);
+  assert.equal(cfg.radiusKm,4);
   for(let cycle=0;cycle<4;cycle++){
     const result=buildScanPlan(cfg,null,{cycle});
     assert.equal(result.targets.filter(t=>t.city==='柏林 Berlin').length,3*cfg.rotationSamplesPerCity);
