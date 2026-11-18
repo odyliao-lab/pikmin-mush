@@ -1,4 +1,5 @@
 import {findEmptyRecovery} from './empty-recovery.mjs';
+import {dispatchCancellation,OPERATOR_CANCELLED} from './dispatch-cancellation.mjs';
 // Sticky, durable admission. No expiry-based stealing of an unknown batch.
 export const DISPATCH_SCHEMA = [
  `CREATE TABLE IF NOT EXISTS controller_dispatches (
@@ -63,11 +64,12 @@ export async function dispatchProof(db,batch,now=Date.now()) {
   return_ack:returnAck,resumed_object_accepted:!!resumed,
   resumed_empty_proven:!!empty,recovery_contract:1,
   resumed_target_id:resumed?.id??empty?.id??null,resumed_received_at:resumed?.received_at??null,
-  recovery_stage:!candidatesTerminal?'candidate-recheck':!returnAck?
+  recovery_stage:claim.state===OPERATOR_CANCELLED?OPERATOR_CANCELLED:!candidatesTerminal?'candidate-recheck':!returnAck?
    r&&['queued','leased'].includes(r.status)?'waiting-return':'insufficient-evidence':
    resumed||empty?'restored':'waiting-recovery-evidence',
   candidates_terminal:candidatesTerminal,
-  can_close:candidatesTerminal&&returnAck&&!!(resumed||empty)};
+  can_close:claim.state!==OPERATOR_CANCELLED&&candidatesTerminal&&returnAck&&!!(resumed||empty),
+  ...(claim.state===OPERATOR_CANCELLED?{cancellation:await dispatchCancellation(db,batch)}:{})};
 }
 
 // Operator-authorized continuation, never an admission replay or a fabricated ACK.
@@ -157,6 +159,7 @@ export async function admitDispatch(db,input,agent,job,now,admission=crypto.rand
  if(old){
   if(old.owner!==input.owner||old.payload_sha!==payloadSha)
    return {http:409,error:'batch_identity_conflict'};
+  if(old.state===OPERATOR_CANCELLED)return {http:409,error:'dispatch_operator_cancelled'};
   return {http:200,ok:true,contract:2,batch:input.batch,existing:true,return_scheduled:true,
    coordination:await dispatchProof(db,input.batch)};
  }
@@ -207,8 +210,14 @@ export async function closeDispatch(db,batch,owner,now) {
  const proof=await dispatchProof(db,batch,now);
  if(!proof||proof.owner!==owner)return {http:409,error:'ownership_mismatch'};
  if(proof.state==='closed')return {http:200,ok:true,already_closed:true};
+ if(proof.state===OPERATOR_CANCELLED)return {http:409,error:'dispatch_operator_cancelled'};
  if(!proof.can_close)return {http:409,error:'return_or_resumed_object_unconfirmed',coordination:proof};
- await db.prepare(`UPDATE controller_dispatches SET state='closed',closed_at=?
+ const result=await db.prepare(`UPDATE controller_dispatches SET state='closed',closed_at=?
  WHERE batch=? AND owner=? AND state='active'`).bind(now,batch,owner).run();
+ if(!result.meta.changes){
+  const current=await db.prepare('SELECT state FROM controller_dispatches WHERE batch=? AND owner=?').bind(batch,owner).first();
+  if(current?.state==='closed')return {http:200,ok:true,already_closed:true};
+  return {http:409,error:'dispatch_state_changed'};
+ }
  return {http:200,ok:true,coordination:proof};
 }

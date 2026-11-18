@@ -5,6 +5,7 @@ import {readFileSync} from 'node:fs';
 import {Script} from 'node:vm';
 import ts from 'typescript';
 import {ensureDispatchSchema,admitDispatch,dispatchProof,dispatchInventory,closeDispatch,recoverCancelledReturn} from '../lib/dispatch-coordination.mjs';
+import {cancelStoppedDispatch,OPERATOR_CANCELLED} from '../lib/dispatch-cancellation.mjs';
 
 function fixture(){
  const sql=new DatabaseSync(':memory:');
@@ -19,6 +20,9 @@ function fixture(){
  CREATE TABLE scan_agent_events(id INTEGER PRIMARY KEY,agent_id TEXT,event_type TEXT,at INTEGER,
   job_id INTEGER,target_id INTEGER,rows INTEGER,bytes INTEGER,detail TEXT);
  INSERT INTO scan_jobs VALUES(1,0,'running');INSERT INTO scan_agents VALUES('leo',1,0,100000,1,2);`);
+ sql.exec(`ALTER TABLE scan_agents ADD COLUMN current_target_id INTEGER;
+ ALTER TABLE scan_targets ADD COLUMN lease_expires_at INTEGER NOT NULL DEFAULT 0;
+ ALTER TABLE scan_target_history ADD COLUMN lease_expires_at INTEGER;`);
  const db={prepare(text){let args=[];return {bind(...v){args=v;return this;},
   async first(){return sql.prepare(text).get(...args)??null;},async all(){return {results:sql.prepare(text).all(...args)};},
   async run(){return {meta:sql.prepare(text).run(...args)};},exec(){return sql.prepare(text).run(...args);}};},
@@ -30,7 +34,7 @@ function fixture(){
 }
 
 function second(f,id,batch){
- f.sql.prepare('INSERT INTO scan_agents VALUES(?,1,0,100000,1,2)').run(id);
+ f.sql.prepare('INSERT INTO scan_agents(id,enabled,paused,last_seen,current_lat,current_lng) VALUES(?,1,0,100000,1,2)').run(id);
  return {agent:{...f.agent,id},input:{...f.input,batch,agentId:id,parallel:true,candidates:[{id:batch,lat:3,lng:4}]}};
 }
 test('parallel mode permits three distinct agents under one owner; legacy remains exclusive',async()=>{
@@ -175,6 +179,7 @@ function route(path,bindings){
    if(name.endsWith('/scans'))return {activeJob:async()=>bindings.job};
    if(name.endsWith('/report-evidence.mjs'))return {};
    if(name.endsWith('/dispatch-coordination.mjs'))return {admitDispatch,dispatchProof,dispatchInventory,closeDispatch,recoverCancelledReturn};
+   if(name.endsWith('/dispatch-cancellation.mjs'))return {cancelStoppedDispatch,OPERATOR_CANCELLED};
    throw new Error('unexpected import');
   },Request,Response,URL,Date:class extends Date{static now(){return 100000;}}});
  return exports;
@@ -211,6 +216,82 @@ async function cancelledFixture(){
  f.sql.exec("UPDATE scan_targets SET status='completed',leased_at=101000,completed_at=110000,completed_agent_id='leo' WHERE verification_kind='candidate';UPDATE scan_targets SET status='cancelled' WHERE verification_kind='return';UPDATE scan_jobs SET status='cancelled';INSERT INTO scan_jobs VALUES(2,0,'running');UPDATE scan_agents SET last_seen=130000");
  f.agent.last_seen=130000;f.job={id:2,cycle:0,status:'running'};return f;
 }
+
+test('operator cancellation preserves completed evidence and the replacement scan',async()=>{
+ const f=await cancelledFixture();
+ const input={batch:f.input.batch,owner:f.input.owner,agentId:'leo',jobId:1};
+ f.sql.exec(`
+   UPDATE scan_targets SET status='completed',leased_at=110000,completed_at=120000,completed_agent_id='leo'
+    WHERE verification_kind='return';
+   INSERT INTO scan_targets(id,job_id,verification_batch,verification_kind,required_agent_id,status)
+    VALUES(10,1,'manual-one','candidate','leo','queued'),
+          (11,2,'other-wave','candidate','leo','queued'),
+          (12,2,'','','','leased');
+   UPDATE scan_agents SET current_target_id=12 WHERE id='leo';
+   INSERT INTO mushroom_observations VALUES('old-observation',1,'leo',108);
+   INSERT INTO scan_agent_events VALUES(1,'leo','target_completed',120000,1,2,0,0,'{}');
+ `);
+ assert.equal((await cancelStoppedDispatch(f.db,{...input,jobId:2},130000)).http,409);
+ assert.equal((await cancelStoppedDispatch(f.db,{...input,owner:'foreign'},130000)).http,409);
+ const [one,two]=await Promise.all([130000,131000].map(now=>cancelStoppedDispatch(f.db,input,now)));
+ assert.equal(one.http,200);assert.deepEqual(one,two);
+ assert.deepEqual(one.cancellation.cancelled_targets,[{target_id:10,kind:'candidate',previous_status:'queued'}]);
+ const state=await dispatchProof(f.db,input.batch);
+ assert.equal(state.state,'operator-cancelled');assert.equal(state.return_ack,true);assert.equal(state.can_close,false);
+ assert.equal((await closeDispatch(f.db,input.batch,input.owner,132000)).http,409);
+ assert.equal((await admitDispatch(f.db,f.input,f.agent,f.job,132000)).http,409);
+ assert.ok(!(await dispatchInventory(f.db)).batches.some(x=>x.batch===input.batch));
+ assert.equal(f.sql.prepare('SELECT current_target_id FROM scan_agents').get().current_target_id,12);
+ assert.deepEqual(f.sql.prepare('SELECT status FROM scan_targets ORDER BY id').all().map(r=>r.status),
+  ['completed','completed','cancelled','queued','leased']);
+ assert.equal(f.sql.prepare('SELECT COUNT(*) AS n FROM scan_agent_events').get().n,1);
+ assert.equal(f.sql.prepare('SELECT COUNT(*) AS n FROM mushroom_observations').get().n,1);
+ assert.equal(f.sql.prepare("SELECT COUNT(*) AS n FROM controller_dispatches WHERE state='active'").get().n,0);
+ f.sql.close();
+});
+
+test('stopped-job cancellation fails closed across live leases, foreign targets and closed batches',async()=>{
+ for(const change of [
+  "UPDATE scan_jobs SET status='running' WHERE id=1",
+  "UPDATE scan_targets SET status='leased',lease_expires_at=200000 WHERE id=1",
+  "UPDATE scan_targets SET status='queued',job_id=2 WHERE id=1",
+  "UPDATE scan_targets SET status='queued',required_agent_id='foreign' WHERE id=1",
+  "UPDATE scan_targets SET status='queued' WHERE id=1; UPDATE scan_agents SET current_target_id=1",
+  "UPDATE controller_dispatches SET state='closed'"
+ ]){
+  const f=await cancelledFixture();
+  f.sql.exec(change);
+  assert.equal((await cancelStoppedDispatch(f.db,{batch:f.input.batch,owner:f.input.owner,agentId:'leo',jobId:1},130000)).http,409,change);
+  assert.equal(f.sql.prepare("SELECT COUNT(*) AS n FROM controller_dispatches WHERE state='operator-cancelled'").get().n,0);
+  f.sql.close();
+ }
+});
+
+test('cancellation needs both the controller credential and separate dispatcher secret',async()=>{
+ const f=await cancelledFixture();
+ let authorized=false;
+ const secret='a'.repeat(32),controller='b'.repeat(32);
+ const env={DB:f.db,VERIFICATION_DISPATCHER_ID:f.input.owner,
+  CONTROLLER_TOKEN:controller,VERIFICATION_DISPATCH_CANCEL_TOKEN:secret};
+ const bindings={controllerAuthorized:()=>authorized,runtime:()=>env,
+  safeEqual:(a,b)=>a===b,noStoreJson:(v,status=200)=>Response.json(v,{status}),
+  readBoundedUtf8:async request=>({text:await request.text()})};
+ const d=route('../app/api/controller/dispatches/route.ts',bindings);
+ const post=(token,owner=f.input.owner)=>new Request('https://test/api/controller/dispatches',{
+  method:'POST',headers:token?{'x-dispatch-cancel-token':token}:{},
+  body:JSON.stringify({action:'cancel',batch:f.input.batch,owner,agent_id:'leo',job_id:1})
+ });
+ assert.equal((await d.POST(post(secret))).status,401);authorized=true;
+ assert.equal((await d.POST(post())).status,403);
+ assert.equal((await d.POST(post(secret,'foreign'))).status,409);
+ env.VERIFICATION_DISPATCH_CANCEL_TOKEN=controller;
+ assert.equal((await d.POST(post(controller))).status,403);
+ env.VERIFICATION_DISPATCH_CANCEL_TOKEN=secret;
+ assert.equal((await d.POST(post(secret))).status,200);
+ const proof=await d.GET(new Request('https://test/api/controller/dispatches?batch='+f.input.batch));
+ assert.equal((await proof.json()).coordination.cancellation.state,'operator-cancelled');
+ f.sql.close();
+});
 
 test('cancelled return recovery preserves the original and still requires fresh return ACK plus ordinary accepted data',async()=>{
  const f=await cancelledFixture();

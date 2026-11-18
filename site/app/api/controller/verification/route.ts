@@ -4,6 +4,7 @@ import {
 import { activeJob, type ScanJobRow } from "../../../../lib/scans";
 import { REPORT_EVIDENCE_SQL, reportEvidence } from '../../../../lib/report-evidence.mjs';
 import {admitDispatch,dispatchProof} from '../../../../lib/dispatch-coordination.mjs';
+import {OPERATOR_CANCELLED} from '../../../../lib/dispatch-cancellation.mjs';
 
 type Candidate = {
   id: string;
@@ -208,9 +209,11 @@ export async function GET(request: Request) {
     const rows = await runtime().DB.prepare(REPORT_EVIDENCE_SQL).bind(batch,batch).all();
     if (!rows.results.length) return noStoreJson({error:'batch not found'},404);
     const candidates = rows.results.map(row => reportEvidence(row));
+    const coordination=await dispatchProof(runtime().DB,batch);
     return noStoreJson({ok:true,contract:2,batch,candidates,
-      coordination:await dispatchProof(runtime().DB,batch),
-      complete:candidates.every(row => ['completed','failed','cancelled'].includes(row.status))});
+      coordination,
+      complete:coordination?.state!==OPERATOR_CANCELLED&&
+        candidates.every(row => ['completed','failed','cancelled'].includes(row.status))});
   }
   const rows = await runtime().DB.prepare(`SELECT
       t.verification_mushroom_id AS id, t.status, t.leased_at, t.completed_at,
