@@ -34,6 +34,7 @@ export type ScanConfig = {
   /** Scheduled fleet only: evenly sample this many grid points per city each cycle. */
   rotationSamplesPerCity?: number;
   rotationCitySampling?: { policy: 'berlin-3x-v1'; donorCountries: string[] };
+  rotationCoverageTrial?: 'kansas-city-4km';
   custom?: {
     latMin: number;
     latMax: number;
@@ -659,6 +660,10 @@ export function normalizeScanConfig(input: unknown): ScanConfig {
     config.rotationCitySampling={policy:'berlin-3x-v1',donorCountries:
       sampling.donorCountries.filter((c):c is string=>typeof c==='string').slice(0,100)};
   }
+  if (mode === 'auto' && scanProfile === 'global' && config.radiusKm === 3 &&
+      config.rotationSamplesPerCity && body.rotationCoverageTrial === 'kansas-city-4km') {
+    config.rotationCoverageTrial = 'kansas-city-4km';
+  }
   return config;
 }
 
@@ -751,7 +756,9 @@ export function buildScanPlan(
         pack.id === packValue || pack.name === packValue);
       if (!definition) continue;
       for (const [name, lat, lng] of definition.cities) {
-        regions.push(centerRegion(name, definition.name, lat, lng, config.radiusKm));
+        const radius = definition.id === 'us-central' && name === '堪薩斯城 Kansas City' &&
+          config.rotationCoverageTrial === 'kansas-city-4km' ? 4 : config.radiusKm;
+        regions.push(centerRegion(name, definition.name, lat, lng, radius));
       }
     }
   }

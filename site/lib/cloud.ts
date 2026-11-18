@@ -49,6 +49,7 @@ export type MushroomRetentionStatus = {
 type RuntimeEnv = {
   DB: D1Database;
   FLEET_BASELINE_READ_ENABLED?: string;
+  FLEET_KANSAS_CITY_TRIAL_DATE?: string;
   AGENT_TOKEN?: string;
   CONTROLLER_TOKEN?: string;
   VERIFICATION_DISPATCHER_ID?: string;
