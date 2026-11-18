@@ -29,7 +29,9 @@ export async function materializeTargets(
     statements.push(db.prepare(`INSERT OR IGNORE INTO scan_targets (
         job_id, sequence, cycle, country, city, lat, lng, region_index,
         point_index, base_cooldown_s, status, created_at, updated_at, completed_at
-      ) VALUES ${placeholders}`).bind(...values));
+      ) SELECT * FROM (VALUES ${placeholders})
+      WHERE EXISTS (SELECT 1 FROM scan_jobs WHERE id=? AND cycle=?
+        AND status IN ('queued','running','paused'))`).bind(...values, jobId, cycle));
     if (statements.length >= statementsPerBatch) {
       await db.batch(statements);
       statements = [];
