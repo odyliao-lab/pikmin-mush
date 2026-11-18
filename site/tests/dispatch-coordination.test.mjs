@@ -9,17 +9,19 @@ import {cancelStoppedDispatch,OPERATOR_CANCELLED} from '../lib/dispatch-cancella
 
 function fixture(){
  const sql=new DatabaseSync(':memory:');
- sql.exec(`CREATE TABLE scan_jobs(id INTEGER PRIMARY KEY,cycle INTEGER,status TEXT);
+ sql.exec(`CREATE TABLE scan_jobs(id INTEGER PRIMARY KEY,cycle INTEGER,status TEXT,
+ created_at INTEGER NOT NULL DEFAULT 0, finished_at INTEGER NOT NULL DEFAULT 0);
  CREATE TABLE scan_agents(id TEXT PRIMARY KEY,enabled INTEGER,paused INTEGER,last_seen INTEGER,current_lat REAL,current_lng REAL);
  CREATE TABLE scan_targets(id INTEGER PRIMARY KEY,job_id INTEGER,sequence INTEGER,cycle INTEGER,country TEXT,city TEXT,
  lat REAL,lng REAL,region_index INTEGER,point_index INTEGER,base_cooldown_s INTEGER,status TEXT,priority INTEGER,
  required_agent_id TEXT,verification_batch TEXT,verification_mushroom_id TEXT,verification_kind TEXT,
  created_at INTEGER,updated_at INTEGER,leased_at INTEGER DEFAULT 0,completed_at INTEGER DEFAULT 0,completed_agent_id TEXT DEFAULT '');
  CREATE TABLE scan_target_history AS SELECT * FROM scan_targets WHERE 0;
- CREATE TABLE mushroom_observations(key TEXT PRIMARY KEY,target_id INTEGER,agent_id TEXT,received_at INTEGER);
+ CREATE TABLE mushroom_observations(key TEXT PRIMARY KEY,target_id INTEGER,agent_id TEXT,received_at INTEGER,level INTEGER DEFAULT 3);
+ CREATE INDEX mushroom_observations_received_idx ON mushroom_observations(received_at);
  CREATE TABLE scan_agent_events(id INTEGER PRIMARY KEY,agent_id TEXT,event_type TEXT,at INTEGER,
   job_id INTEGER,target_id INTEGER,rows INTEGER,bytes INTEGER,detail TEXT);
- INSERT INTO scan_jobs VALUES(1,0,'running');INSERT INTO scan_agents VALUES('leo',1,0,100000,1,2);`);
+ INSERT INTO scan_jobs(id,cycle,status) VALUES(1,0,'running');INSERT INTO scan_agents VALUES('leo',1,0,100000,1,2);`);
  sql.exec(`ALTER TABLE scan_agents ADD COLUMN current_target_id INTEGER;
  ALTER TABLE scan_targets ADD COLUMN lease_expires_at INTEGER NOT NULL DEFAULT 0;
  ALTER TABLE scan_target_history ADD COLUMN lease_expires_at INTEGER;`);
@@ -76,7 +78,7 @@ test('closing one parallel Agent requires its own proof and preserves the other 
  await admitDispatch(f.db,{...f.input,parallel:true},f.agent,f.job,100000);
  const two=second(f,'aries','parallel-two');await admitDispatch(f.db,two.input,two.agent,f.job,100000);
  f.sql.exec("UPDATE scan_targets SET status='completed',leased_at=101000,completed_at=110000,completed_agent_id='leo' WHERE required_agent_id='leo'");
- f.sql.exec("INSERT INTO scan_targets(id,job_id,verification_kind,status,leased_at,completed_at,completed_agent_id) VALUES(9,1,'','completed',111000,120000,'leo');INSERT INTO mushroom_observations VALUES('resume',9,'leo',115)");
+ f.sql.exec("INSERT INTO scan_targets(id,job_id,verification_kind,status,leased_at,completed_at,completed_agent_id) VALUES(9,1,'','completed',111000,120000,'leo');INSERT INTO mushroom_observations(key,target_id,agent_id,received_at) VALUES('resume',9,'leo',115)");
  assert.equal((await closeDispatch(f.db,f.input.batch,f.input.owner,121000)).http,200);
  assert.equal((await dispatchProof(f.db,two.input.batch)).state,'active');
  assert.equal((await dispatchProof(f.db,two.input.batch)).can_close,false);
@@ -120,7 +122,7 @@ test('candidate ACK, return ACK and same-agent original-job resumed object are s
  let p=await dispatchProof(f.db,f.input.batch);assert.equal(p.candidates_terminal,true);assert.equal(p.return_ack,false);assert.equal(p.can_close,false);
  f.sql.exec("UPDATE scan_targets SET status='completed',leased_at=111000,completed_at=120000,completed_agent_id='leo' WHERE verification_kind='return'");
  assert.equal((await dispatchProof(f.db,f.input.batch)).can_close,false);
- f.sql.exec("INSERT INTO scan_targets(id,job_id,verification_kind,status,leased_at,completed_at,completed_agent_id) VALUES(3,1,'','completed',121000,130000,'leo');INSERT INTO mushroom_observations VALUES('o',3,'other',125)");
+ f.sql.exec("INSERT INTO scan_targets(id,job_id,verification_kind,status,leased_at,completed_at,completed_agent_id) VALUES(3,1,'','completed',121000,130000,'leo');INSERT INTO mushroom_observations(key,target_id,agent_id,received_at) VALUES('o',3,'other',125)");
  assert.equal((await dispatchProof(f.db,f.input.batch)).can_close,false);
  f.sql.exec("UPDATE mushroom_observations SET agent_id='leo',received_at=119");
  assert.equal((await dispatchProof(f.db,f.input.batch)).can_close,false);
@@ -138,6 +140,69 @@ test('return proof survives atomic queue archive; missing history never becomes 
  let p=await dispatchProof(f.db,f.input.batch);assert.equal(p.return_ack,true);assert.equal(p.can_close,false);
  f.sql.exec("DELETE FROM scan_target_history WHERE verification_kind='return'");
  p=await dispatchProof(f.db,f.input.batch);assert.equal(p.return_scheduled,false);assert.equal(p.can_close,false);f.sql.close();
+});
+
+async function supersedingFixture(){
+ const f=fixture();await ensureDispatchSchema(f.db);await admitDispatch(f.db,f.input,f.agent,f.job,100000);
+ f.sql.exec(`UPDATE scan_targets SET status='completed',leased_at=101000,completed_at=110000,completed_agent_id='leo'
+  WHERE verification_kind='candidate';
+ UPDATE scan_targets SET status='completed',leased_at=111000,completed_at=120000,completed_agent_id='leo'
+  WHERE verification_kind='return';
+ INSERT INTO scan_agent_events VALUES(1,'leo','target_completed',120000,1,2,0,0,'');
+ INSERT INTO scan_target_history SELECT * FROM scan_targets;
+ DELETE FROM scan_targets;
+ UPDATE scan_jobs SET status='cancelled',finished_at=125000 WHERE id=1;
+ INSERT INTO scan_jobs VALUES(2,0,'running',125000,0);
+ INSERT INTO scan_target_history(id,job_id,verification_kind,status,leased_at,completed_at,completed_agent_id)
+  VALUES(3,2,'','completed',126000,130000,'leo');
+ INSERT INTO scan_agent_events VALUES(2,'leo','target_completed',130000,2,3,1,121,'');
+ INSERT INTO mushroom_observations VALUES('successor',3,'leo',129,3);`);
+ return f;
+}
+
+test('original owner can close a stopped job using the next job’s durable ordinary observation',async()=>{
+ const f=await supersedingFixture();
+ const p=await dispatchProof(f.db,f.input.batch,131000);
+ assert.equal(p.can_close,true);
+ assert.deepEqual(p.superseding_ordinary_proof,{target_id:3,job_id:2,ack_at:130000,received_at:129,level:3});
+ assert.equal((await closeDispatch(f.db,f.input.batch,'other',131000)).http,409);
+ assert.equal((await closeDispatch(f.db,f.input.batch,f.input.owner,131000)).http,200);
+ assert.equal((await dispatchProof(f.db,f.input.batch,131000)).state,'closed');
+ assert.equal(f.sql.prepare('SELECT COUNT(*) n FROM scan_target_history').get().n,3);
+ assert.equal((await closeDispatch(f.db,f.input.batch,f.input.owner,132000)).already_closed,true);
+ f.sql.close();
+});
+
+test('successor proof rejects incomplete, misattributed and synthetic completions',async()=>{
+ const guards=[
+  "UPDATE scan_jobs SET status='running' WHERE id=1",
+  "UPDATE scan_jobs SET created_at=124999 WHERE id=2",
+  "UPDATE scan_target_history SET status='queued' WHERE id=1",
+  "UPDATE scan_target_history SET completed_agent_id='other' WHERE id=1",
+  "UPDATE scan_target_history SET status='cancelled' WHERE id=2",
+  "DELETE FROM scan_agent_events WHERE id=1",
+  "UPDATE scan_agent_events SET rows=0 WHERE id=2",
+  "UPDATE scan_agent_events SET bytes=0 WHERE id=2",
+  "UPDATE scan_agent_events SET job_id=9 WHERE id=2",
+  "UPDATE scan_agent_events SET at=130001 WHERE id=2",
+  "UPDATE scan_target_history SET leased_at=124999 WHERE id=3",
+  "UPDATE scan_target_history SET verification_kind='candidate' WHERE id=3",
+  "UPDATE mushroom_observations SET agent_id='other'",
+  "UPDATE mushroom_observations SET level=2",
+  "UPDATE mushroom_observations SET received_at=131",
+  "INSERT INTO controller_return_recoveries VALUES('manual-one','recovery-one','leo',1,2,2,126000)",
+  "UPDATE controller_dispatches SET state='operator-cancelled'",
+ ];
+ for(const change of guards){
+  const f=await supersedingFixture();
+  if(change.includes("state='operator-cancelled'")){
+   f.sql.exec('CREATE TABLE controller_dispatch_cancellations(batch,agent_id,job_id,cancelled_at,pending_targets_json)');
+  }
+  f.sql.exec(change);
+  assert.equal((await dispatchProof(f.db,f.input.batch,131000)).can_close,false,change);
+  assert.equal((await closeDispatch(f.db,f.input.batch,f.input.owner,131000)).http,409,change);
+  f.sql.close();
+ }
 });
 test('global inventory paginates all sources including return-only and sticky unknown',async()=>{
  const f=fixture();await ensureDispatchSchema(f.db);
@@ -213,7 +278,7 @@ test('authenticated route opt-in, old-client refusal, exact owner and inventory 
 
 async function cancelledFixture(){
  const f=fixture();await ensureDispatchSchema(f.db);await admitDispatch(f.db,f.input,f.agent,f.job,100000);
- f.sql.exec("UPDATE scan_targets SET status='completed',leased_at=101000,completed_at=110000,completed_agent_id='leo' WHERE verification_kind='candidate';UPDATE scan_targets SET status='cancelled' WHERE verification_kind='return';UPDATE scan_jobs SET status='cancelled';INSERT INTO scan_jobs VALUES(2,0,'running');UPDATE scan_agents SET last_seen=130000");
+ f.sql.exec("UPDATE scan_targets SET status='completed',leased_at=101000,completed_at=110000,completed_agent_id='leo' WHERE verification_kind='candidate';UPDATE scan_targets SET status='cancelled' WHERE verification_kind='return';UPDATE scan_jobs SET status='cancelled';INSERT INTO scan_jobs(id,cycle,status) VALUES(2,0,'running');UPDATE scan_agents SET last_seen=130000");
  f.agent.last_seen=130000;f.job={id:2,cycle:0,status:'running'};return f;
 }
 
@@ -228,7 +293,7 @@ test('operator cancellation preserves completed evidence and the replacement sca
           (11,2,'other-wave','candidate','leo','queued'),
           (12,2,'','','','leased');
    UPDATE scan_agents SET current_target_id=12 WHERE id='leo';
-   INSERT INTO mushroom_observations VALUES('old-observation',1,'leo',108);
+   INSERT INTO mushroom_observations(key,target_id,agent_id,received_at) VALUES('old-observation',1,'leo',108);
    INSERT INTO scan_agent_events VALUES(1,'leo','target_completed',120000,1,2,0,0,'{}');
  `);
  assert.equal((await cancelStoppedDispatch(f.db,{...input,jobId:2},130000)).http,409);
@@ -305,7 +370,7 @@ test('cancelled return recovery preserves the original and still requires fresh 
  f.sql.exec("UPDATE scan_targets SET status='completed',leased_at=131000,completed_at=140000,completed_agent_id='leo' WHERE verification_kind='return-recovery'");
  assert.equal((await dispatchProof(f.db,f.input.batch)).return_ack,true);
  assert.equal((await dispatchProof(f.db,f.input.batch)).can_close,false);
- f.sql.exec("INSERT INTO scan_targets(id,job_id,verification_kind,status,leased_at,completed_at,completed_agent_id) VALUES(4,2,'','completed',141000,150000,'leo');INSERT INTO mushroom_observations VALUES('after-return',4,'other',145)");
+ f.sql.exec("INSERT INTO scan_targets(id,job_id,verification_kind,status,leased_at,completed_at,completed_agent_id) VALUES(4,2,'','completed',141000,150000,'leo');INSERT INTO mushroom_observations(key,target_id,agent_id,received_at) VALUES('after-return',4,'other',145)");
  assert.equal((await dispatchProof(f.db,f.input.batch)).can_close,false);
  f.sql.exec("UPDATE mushroom_observations SET agent_id='leo'");
  const p=await dispatchProof(f.db,f.input.batch);assert.equal(p.can_close,true);

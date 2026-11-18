@@ -23,9 +23,10 @@ SELECT t.id AS target_id,t.job_id,t.ack_at,
   ORDER BY o.received_at LIMIT 1) AS accepted
 FROM evidence_targets t
 WHERE t.status='completed' AND t.verification_kind='' AND t.completed_agent_id=?
- AND t.completed_at=t.ack_at AND t.leased_at>0 AND t.ack_at-t.leased_at BETWEEN 0 AND ?`;
+ AND t.completed_at=t.ack_at AND t.leased_at>0 AND t.leased_at>=?
+ AND t.ack_at-t.leased_at BETWEEN 0 AND ?`;
 
-async function readObservationEvidence(db,agentId,acks,now) {
+export async function readOrdinaryObservationEvidence(db,agentId,acks,now,earliestLease=0) {
  const matches=new Map();
  for (const ack of acks) {
   if (ack.at<=now && ack.rows>0 && ack.bytes>0 && !matches.has(ack.target_id)) {
@@ -34,7 +35,7 @@ async function readObservationEvidence(db,agentId,acks,now) {
  }
  if (!matches.size) return [];
  const result=await db.prepare(OBSERVATION_EVIDENCE_SQL)
-  .bind(JSON.stringify([...matches.values()]),agentId,MAX_OBSERVATION_WINDOW_MS).all();
+  .bind(JSON.stringify([...matches.values()]),agentId,earliestLease,MAX_OBSERVATION_WINDOW_MS).all();
  return result.results.filter(row=>row.accepted!==null).map(row=>({
   target_id:row.target_id,job_id:row.job_id,ack_at:row.ack_at,...JSON.parse(row.accepted),
  }));
@@ -64,7 +65,7 @@ export async function readTargetAckEvidence(db,query,now=Date.now()) {
   ORDER BY at DESC,id DESC LIMIT 50`).bind(agentId,now-LOOKBACK_DAYS*86400000,...targetIds).all();
  const response={schema:1,generated_at:now,lookback_days:LOOKBACK_DAYS,agent_id:agentId,target_acknowledgements:result.results};
  if(query.includeObservations===true) {
-  return {...response,accepted_observations:await readObservationEvidence(db,agentId,result.results,now)};
+  return {...response,accepted_observations:await readOrdinaryObservationEvidence(db,agentId,result.results,now)};
  }
  return response;
 }

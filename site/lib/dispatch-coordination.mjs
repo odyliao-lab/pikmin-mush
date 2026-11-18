@@ -1,5 +1,6 @@
 import {findEmptyRecovery} from './empty-recovery.mjs';
 import {dispatchCancellation,OPERATOR_CANCELLED} from './dispatch-cancellation.mjs';
+import {readOrdinaryObservationEvidence} from './target-ack-evidence.mjs';
 // Sticky, durable admission. No expiry-based stealing of an unknown batch.
 export const DISPATCH_SCHEMA = [
  `CREATE TABLE IF NOT EXISTS controller_dispatches (
@@ -29,6 +30,35 @@ const TARGETS = `WITH targets AS (
  h.leased_at,h.completed_at,h.completed_agent_id FROM scan_target_history h
  WHERE NOT EXISTS(SELECT 1 FROM scan_targets t WHERE t.id=h.id)) `;
 
+const SUCCESSOR_LOOKBACK_MS=7*24*60*60_000;
+
+async function findSupersedingOrdinaryProof(db,claim,candidates,originalReturn,now) {
+ if(claim.state===OPERATOR_CANCELLED||
+   !candidates.every(t=>t.job_id===claim.job_id&&t.completed_agent_id===claim.agent_id&&
+     ['candidate','candidate-giant'].includes(t.verification_kind)&&
+     ['completed','failed'].includes(t.status)))return null;
+ const stopped=await db.prepare(`SELECT finished_at FROM scan_jobs
+  WHERE id=? AND status='cancelled' AND finished_at>=? AND finished_at<=?`)
+  .bind(claim.job_id,originalReturn.completed_at,now).first();
+ if(!stopped)return null;
+ const successor=await db.prepare(`SELECT id,created_at FROM scan_jobs
+  WHERE id>? AND created_at>=? AND created_at<=? ORDER BY id LIMIT 1`)
+  .bind(claim.job_id,stopped.finished_at,now).first();
+ if(!successor)return null;
+ const minLease=Math.max(stopped.finished_at,successor.created_at);
+ const returned=await db.prepare(`SELECT id FROM scan_agent_events
+  WHERE agent_id=? AND at=? AND job_id=? AND target_id=? AND event_type='target_completed' LIMIT 1`)
+  .bind(claim.agent_id,originalReturn.completed_at,claim.job_id,originalReturn.id).first();
+ if(!returned)return null;
+ const acks=await db.prepare(`SELECT target_id,job_id,at,rows,bytes FROM scan_agent_events
+  WHERE agent_id=? AND job_id=? AND at BETWEEN ? AND ? AND event_type='target_completed'
+   AND rows>0 AND bytes>0
+  ORDER BY at DESC,id DESC LIMIT 20`).bind(claim.agent_id,successor.id,
+   Math.max(minLease,now-SUCCESSOR_LOOKBACK_MS),now).all();
+ const receipts=await readOrdinaryObservationEvidence(db,claim.agent_id,acks.results,now,minLease);
+ return receipts.sort((a,b)=>b.ack_at-a.ack_at)[0]??null;
+}
+
 export async function dispatchProof(db,batch,now=Date.now()) {
  const claim=await db.prepare('SELECT * FROM controller_dispatches WHERE batch=?').bind(batch).first();
  if(!claim)return null;
@@ -53,6 +83,12 @@ export async function dispatchProof(db,batch,now=Date.now()) {
  .bind(returnJob,claim.agent_id,claim.agent_id,r.completed_at).first();
  const candidatesTerminal=candidates.length===claim.candidate_count&&candidates.length>0&&
   candidates.every(t=>['completed','failed','cancelled'].includes(t.status));
+ // A cancelled original job cannot issue the missing ordinary lease. An
+ // already successful original return can be corroborated by its successor.
+ // The owning dispatcher still decides and authenticates the closure.
+ const superseding=returnAck&&!resumed&&candidatesTerminal&&!recovery&&returns.length===1?
+  await findSupersedingOrdinaryProof(db,claim,candidates,r,now):null;
+ if(superseding)resumed={id:superseding.target_id,received_at:superseding.received_at};
  const empty=returnAck&&!resumed&&candidatesTerminal?
   await findEmptyRecovery(db,TARGETS,claim.agent_id,returnJob,r.completed_at,now):null;
  return {batch,owner:claim.owner,state:claim.state,parallel:claim.parallel_mode===1,agent_id:claim.agent_id,original_job_id:claim.job_id,
@@ -64,6 +100,7 @@ export async function dispatchProof(db,batch,now=Date.now()) {
   return_ack:returnAck,resumed_object_accepted:!!resumed,
   resumed_empty_proven:!!empty,recovery_contract:1,
   resumed_target_id:resumed?.id??empty?.id??null,resumed_received_at:resumed?.received_at??null,
+  ...(superseding?{superseding_ordinary_proof:superseding}:{}),
   recovery_stage:claim.state===OPERATOR_CANCELLED?OPERATOR_CANCELLED:!candidatesTerminal?'candidate-recheck':!returnAck?
    r&&['queued','leased'].includes(r.status)?'waiting-return':'insufficient-evidence':
    resumed||empty?'restored':'waiting-recovery-evidence',
