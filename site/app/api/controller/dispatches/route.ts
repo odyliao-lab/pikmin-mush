@@ -1,13 +1,22 @@
-import {controllerAuthorized,ensureSchema,noStoreJson,readBoundedUtf8,runtime} from '../../../../lib/cloud';
-import {dispatchInventory,closeDispatch,recoverCancelledReturn} from '../../../../lib/dispatch-coordination.mjs';
+import {controllerAuthorized,ensureSchema,noStoreJson,readBoundedUtf8,runtime,safeEqual} from '../../../../lib/cloud';
+import {dispatchInventory,dispatchProof,closeDispatch,recoverCancelledReturn} from '../../../../lib/dispatch-coordination.mjs';
+import {cancelStoppedDispatch} from '../../../../lib/dispatch-cancellation.mjs';
 import {activeJob} from '../../../../lib/scans';
 
 export async function GET(request: Request) {
  if(!controllerAuthorized(request))return noStoreJson({error:'unauthorized'},401);
- const cursor=new URL(request.url).searchParams.get('cursor')??'';
+ const params=new URL(request.url).searchParams;
+ const batch=params.get('batch');
+ if(batch!==null){
+  if(!/^[a-zA-Z0-9._:-]{6,100}$/.test(batch))return noStoreJson({error:'invalid batch'},400);
+  const proof=await dispatchProof(runtime().DB,batch);
+  return proof?noStoreJson({coordination:proof}):noStoreJson({error:'batch not found'},404);
+ }
+ const cursor=params.get('cursor')??'';
  if(cursor.length>100)return noStoreJson({error:'invalid cursor'},400);
  await ensureSchema();
  return noStoreJson({...await dispatchInventory(runtime().DB,cursor),parallel_contract:1,max_parallel:3,
+  operator_cancellation_contract:1,
   coordinated_admission_required:!!runtime().VERIFICATION_DISPATCHER_ID,checked_at:Date.now()});
 }
 // Completion is a separate durable transition, not an expiry-based unlock.
@@ -18,9 +27,21 @@ export async function POST(request: Request) {
  let value;
  try{value=JSON.parse(body.text);}catch{return noStoreJson({error:'invalid json'},400);}
  const owner=runtime().VERIFICATION_DISPATCHER_ID;
- if(!value||typeof value!=='object'||!owner||value.owner!==owner||!['complete','recover-return'].includes(value.action)||
+ if(!value||typeof value!=='object'||!owner||value.owner!==owner||!['complete','recover-return','cancel'].includes(value.action)||
   typeof value.batch!=='string'||!/^[a-zA-Z0-9._:-]{6,100}$/.test(value.batch))
   return noStoreJson({error:'coordinated owner required'},409);
+ if(value.action==='cancel') {
+  const env=runtime();
+  const secret=env.VERIFICATION_DISPATCH_CANCEL_TOKEN??'';
+  if(secret.length<32||safeEqual(secret,env.CONTROLLER_TOKEN??'')||
+   !safeEqual(request.headers.get('x-dispatch-cancel-token')??'',secret))
+   return noStoreJson({error:'dispatcher cancellation credential required'},403);
+  if(typeof value.agent_id!=='string'||!/^[a-z0-9][a-z0-9._-]{0,63}$/.test(value.agent_id)||
+   !Number.isSafeInteger(value.job_id)||value.job_id<=0)
+   return noStoreJson({error:'exact agent and job required'},400);
+  const result=await cancelStoppedDispatch(env.DB,{batch:value.batch,owner,agentId:value.agent_id,jobId:value.job_id},Date.now());
+  return noStoreJson(result,result.http);
+ }
  await ensureSchema();
  if(value.action==='recover-return') {
   const db=runtime().DB;
