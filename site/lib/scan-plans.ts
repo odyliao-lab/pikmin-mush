@@ -63,6 +63,10 @@ const AUSTRALIA: Center[] = [
   ["阿德雷德 Adelaide",-34.9285,138.6007],["坎培拉 Canberra",-35.2809,149.1300],
   ["黃金海岸 Gold Coast",-28.0167,153.4000],["紐卡索 Newcastle",-32.9283,151.7817],
   ["荷巴特 Hobart",-42.8821,147.3272],["達爾文 Darwin",-12.4634,130.8456],
+  ["Sunshine Coast",-26.65682,153.07955],["Central Coast",-33.42979,151.37144],
+  ["Geelong",-38.14711,144.36069],["Wollongong",-34.424,150.89345],
+  ["Townsville",-19.26639,146.80569],["Cairns",-16.92366,145.76613],
+  ["Toowoomba",-27.56056,151.95386],["Ballarat",-37.56622,143.84957],
 ];
 
 const NEW_ZEALAND: Center[] = [
@@ -70,6 +74,8 @@ const NEW_ZEALAND: Center[] = [
   ["基督城 Christchurch",-43.5321,172.6362],["漢密爾頓 Hamilton",-37.7870,175.2793],
   ["陶朗加 Tauranga",-37.6878,176.1651],["但尼丁 Dunedin",-45.8788,170.5028],
   ["北帕默斯頓 Palmerston North",-40.3523,175.6082],["皇后鎮 Queenstown",-45.0312,168.6626],
+  ["New Plymouth",-39.06667,174.08333],["Hastings",-39.6381,176.84918],
+  ["Rotorua",-38.13874,176.24516],["Invercargill",-46.4,168.35],
 ];
 
 const INDIA: Center[] = [
@@ -79,6 +85,13 @@ const INDIA: Center[] = [
   ["艾哈邁達巴德 Ahmedabad",23.0225,72.5714],["浦那 Pune",18.5204,73.8567],
   ["斋浦爾 Jaipur",26.9124,75.7873],["蘇拉特 Surat",21.1702,72.8311],
   ["勒克瑙 Lucknow",26.8467,80.9462],["科欽 Kochi",9.9312,76.2673],
+  ["Kanpur",26.46523,80.34975],["Nagpur",21.14631,79.08491],
+  ["Coimbatore",11.00555,76.96612],["Indore",22.71792,75.8333],
+  ["Vadodara",22.29941,73.20812],["Bhopal",23.25469,77.40289],
+  ["Rasapūdipalem",17.73308,83.31622],["Patna",25.59408,85.13563],
+  ["Kallakurichi",11.73379,78.95925],["Ludhiana",30.91204,75.85379],
+  ["Nashik",19.99727,73.79096],["Madurai",9.919,78.11953],
+  ["Tirunelveli",8.72742,77.6838],["Agra",27.18333,78.01667],
 ];
 
 const SOUTH_KOREA: Center[] = [
@@ -86,6 +99,10 @@ const SOUTH_KOREA: Center[] = [
   ["仁川 Incheon",37.4563,126.7052],["大邱 Daegu",35.8714,128.6014],
   ["大田 Daejeon",36.3504,127.3845],["光州 Gwangju",35.1595,126.8526],
   ["蔚山 Ulsan",35.5384,129.3114],["濟州 Jeju",33.4996,126.5312],
+  ["水原 Suwon",37.27818,127.03164],["Changwon",35.22806,128.68111],
+  ["Cheongju-si",36.63722,127.48972],["Cheonan",36.8065,127.1522],
+  ["Jeonju",35.82483,127.14796],["Pohang",36.02917,129.36481],
+  ["Gumi",36.1136,128.336],
 ];
 
 const THAILAND: Center[] = [
@@ -93,6 +110,9 @@ const THAILAND: Center[] = [
   ["芭達雅 Pattaya",12.9236,100.8825],["普吉 Phuket",7.8804,98.3923],
   ["呵叻 Nakhon Ratchasima",14.9799,102.0978],["孔敬 Khon Kaen",16.4419,102.8350],
   ["合艾 Hat Yai",7.0084,100.4747],["烏隆他尼 Udon Thani",17.4138,102.7870],
+  ["Chon Buri",13.3622,100.98345],["Nong Chok",13.85585,100.86216],
+  ["Lampang",18.29232,99.49277],["Kabin Buri",13.95133,101.71739],
+  ["Surat Thani",9.14011,99.33311],["Hua Hin",12.57065,99.95876],
 ];
 
 const MALAYSIA: Center[] = [
@@ -100,6 +120,8 @@ const MALAYSIA: Center[] = [
   ["新山 Johor Bahru",1.4927,103.7414],["怡保 Ipoh",4.5975,101.0901],
   ["馬六甲 Melaka",2.1896,102.2501],["古晉 Kuching",1.5533,110.3592],
   ["亞庇 Kota Kinabalu",5.9804,116.0735],["莎阿南 Shah Alam",3.0738,101.5183],
+  ["Kota Bharu",6.12361,102.24333],["Kuantan",3.8077,103.326],
+  ["Sungai Petani",5.647,100.48772],["Sandakan",5.8402,118.1179],
 ];
 
 const SINGAPORE: Center[] = [
@@ -111,6 +133,11 @@ const INDONESIA: Center[] = [
   ["萬隆 Bandung",-6.9175,107.6191],["棉蘭 Medan",3.5952,98.6722],
   ["三寶壟 Semarang",-6.9667,110.4167],["日惹 Yogyakarta",-7.7956,110.3695],
   ["望加錫 Makassar",-5.1477,119.4327],["登巴薩 Denpasar",-8.6705,115.2126],
+  ["Palembang",-2.91673,104.7458],["Batam",1.14937,104.02491],
+  ["Jepara",-6.5924,110.671],["Pekanbaru",0.51667,101.44167],
+  ["Bandar Lampung",-5.42917,105.26111],["Bogor",-6.59444,106.78917],
+  ["Padang",-0.94924,100.35427],["Malang",-7.9797,112.6304],
+  ["Samarinda",-0.49167,117.14583],
 ];
 
 const PHILIPPINES: Center[] = [
@@ -118,6 +145,9 @@ const PHILIPPINES: Center[] = [
   ["宿霧 Cebu",10.3157,123.8854],["達沃 Davao",7.1907,125.4553],
   ["碧瑤 Baguio",16.4023,120.5960],["伊洛伊洛 Iloilo",10.7202,122.5621],
   ["卡加延德奧羅 Cagayan de Oro",8.4542,124.6319],["巴科洛德 Bacolod",10.6840,122.9563],
+  ["Budta",7.20417,124.43972],["Zamboanga",6.91028,122.07389],
+  ["General Santos",6.11278,125.17167],["Calamba",14.21167,121.16528],
+  ["Angeles City",15.15,120.58333],["Tarlac City",15.48017,120.59794],
 ];
 
 const VIETNAM: Center[] = [
@@ -125,6 +155,9 @@ const VIETNAM: Center[] = [
   ["峴港 Da Nang",16.0544,108.2022],["海防 Hai Phong",20.8449,106.6881],
   ["芹苴 Can Tho",10.0452,105.7469],["芽莊 Nha Trang",12.2388,109.1967],
   ["順化 Hue",16.4637,107.5909],["大叻 Da Lat",11.9404,108.4583],
+  ["Thanh Hóa",19.8,105.76667],["Vinh",18.67337,105.69232],
+  ["Qui Nhon",13.77648,109.22367],["Vũng Tàu",10.34599,107.08426],
+  ["Rạch Giá",10.01245,105.08091],["Bắc Giang",21.27307,106.1946],
 ];
 
 const BRAZIL: Center[] = [
@@ -134,12 +167,18 @@ const BRAZIL: Center[] = [
   ["瑪瑙斯 Manaus",-3.1190,-60.0217],["庫里奇巴 Curitiba",-25.4284,-49.2733],
   ["累西腓 Recife",-8.0476,-34.8770],["阿雷格里港 Porto Alegre",-30.0346,-51.2177],
   ["貝倫 Belem",-1.4558,-48.4902],["戈亞尼亞 Goiania",-16.6869,-49.2648],
+  ["Maceió",-9.66583,-35.73528],["Campinas",-22.90556,-47.06083],
+  ["São Luís",-2.52972,-44.30278],["Campo Grande",-20.44278,-54.64639],
+  ["Natal",-5.795,-35.20944],["Teresina",-5.08917,-42.80194],
+  ["Nova Iguaçu",-22.75917,-43.45111],["João Pessoa",-7.115,-34.86306],
+  ["Sorocaba",-23.50167,-47.45806],["Uberlândia",-18.91861,-48.27722],
 ];
 
 const ECUADOR: Center[] = [
   ["基多 Quito",-0.1807,-78.4678],["瓜亞基爾 Guayaquil",-2.1710,-79.9224],
   ["昆卡 Cuenca",-2.9001,-79.0059],["聖多明各 Santo Domingo",-0.2530,-79.1754],
   ["曼塔 Manta",-0.9677,-80.7089],["洛哈 Loja",-3.9931,-79.2042],
+  ["Ambato",-1.24908,-78.61675],["Machala",-3.25886,-79.95876],
 ];
 
 const ARGENTINA: Center[] = [
@@ -148,6 +187,9 @@ const ARGENTINA: Center[] = [
   ["拉普拉塔 La Plata",-34.9215,-57.9545],["圖庫曼 Tucuman",-26.8083,-65.2176],
   ["馬德普拉塔 Mar del Plata",-38.0055,-57.5426],["薩爾塔 Salta",-24.7821,-65.4232],
   ["聖菲 Santa Fe",-31.6333,-60.7000],["內烏肯 Neuquen",-38.9516,-68.0591],
+  ["Corrientes",-27.46784,-58.8344],["Bahía Blanca",-38.7176,-62.26545],
+  ["Merlo",-34.66536,-58.72744],["San Salvador de Jujuy",-24.1928,-65.29342],
+  ["Santiago del Estero",-27.80047,-64.26285],
 ];
 
 const COLOMBIA: Center[] = [
@@ -155,6 +197,8 @@ const COLOMBIA: Center[] = [
   ["卡利 Cali",3.4516,-76.5320],["巴蘭基亞 Barranquilla",10.9685,-74.7813],
   ["卡塔赫納 Cartagena",10.3910,-75.4794],["布卡拉曼加 Bucaramanga",7.1193,-73.1227],
   ["佩雷拉 Pereira",4.8087,-75.6906],["聖瑪爾塔 Santa Marta",11.2408,-74.1990],
+  ["Cúcuta",7.90745,-72.5049],["Ibagué",4.43573,-75.20289],
+  ["Montería",8.75081,-75.87823],["Valledupar",10.46538,-73.2531],
 ];
 
 const PERU: Center[] = [
@@ -162,6 +206,8 @@ const PERU: Center[] = [
   ["特魯希略 Trujillo",-8.1116,-79.0288],["庫斯科 Cusco",-13.5319,-71.9675],
   ["奇克拉約 Chiclayo",-6.7714,-79.8409],["皮烏拉 Piura",-5.1783,-80.6549],
   ["伊基托斯 Iquitos",-3.7437,-73.2516],["萬卡約 Huancayo",-12.0651,-75.2049],
+  ["Pucallpa",-8.37915,-74.55387],["Chimbote",-9.07508,-78.59373],
+  ["Tacna",-18.01465,-70.25362],
 ];
 
 const CHILE: Center[] = [
@@ -169,6 +215,8 @@ const CHILE: Center[] = [
   ["康塞普西翁 Concepcion",-36.8201,-73.0444],["安托法加斯塔 Antofagasta",-23.6509,-70.3975],
   ["拉塞雷納 La Serena",-29.9027,-71.2519],["特木科 Temuco",-38.7359,-72.5904],
   ["蒙特港 Puerto Montt",-41.4693,-72.9424],["蓬塔阿雷納斯 Punta Arenas",-53.1638,-70.9171],
+  ["Arica",-18.47552,-70.30058],["Rancagua",-34.1691,-70.74053],
+  ["Iquique",-20.21326,-70.15027],["Talca",-35.4232,-71.64974],
 ];
 
 const URUGUAY: Center[] = [
@@ -197,12 +245,15 @@ const SWEDEN: Center[] = [
   ["斯德哥爾摩 Stockholm",59.3293,18.0686],["哥德堡 Gothenburg",57.7089,11.9746],
   ["馬爾默 Malmo",55.6050,13.0038],["烏普薩拉 Uppsala",59.8586,17.6389],
   ["韋斯特羅斯 Vasteras",59.6099,16.5448],["厄勒布魯 Orebro",59.2753,15.2134],
+  ["Linköping",58.41086,15.62157],["Umeå",63.82842,20.25972],
+  ["Jönköping",57.78145,14.15618],
 ];
 
 const NORWAY: Center[] = [
   ["奧斯陸 Oslo",59.9139,10.7522],["卑爾根 Bergen",60.3913,5.3221],
   ["特隆赫姆 Trondheim",63.4305,10.3951],["斯塔萬格 Stavanger",58.9700,5.7331],
   ["特羅姆瑟 Tromso",69.6492,18.9553],["克里斯蒂安桑 Kristiansand",58.1467,7.9956],
+  ["Drammen",59.74389,10.20449],["Fredrikstad",59.2181,10.9298],
 ];
 
 const DENMARK: Center[] = [
@@ -215,6 +266,7 @@ const FINLAND: Center[] = [
   ["赫爾辛基 Helsinki",60.1699,24.9384],["埃斯波 Espoo",60.2055,24.6559],
   ["坦佩雷 Tampere",61.4978,23.7610],["圖爾庫 Turku",60.4518,22.2666],
   ["奧盧 Oulu",65.0121,25.4651],["于韋斯屈萊 Jyvaskyla",62.2426,25.7473],
+  ["Kuopio",62.89238,27.67703],["Lahti",60.98267,25.66151],
 ];
 
 const ICELAND: Center[] = [
@@ -252,6 +304,10 @@ const GERMANY: Center[] = [
   ["柏林 Berlin",52.5200,13.4050],["漢堡 Hamburg",53.5511,9.9937],
   ["慕尼黑 Munich",48.1351,11.5820],["科隆 Cologne",50.9375,6.9603],
   ["法蘭克福 Frankfurt",50.1109,8.6821],["萊比錫 Leipzig",51.3397,12.3731],
+  ["杜塞道夫 Düsseldorf",51.22319,6.77927],["斯圖加特 Stuttgart",48.78232,9.17702],
+  ["Dortmund",51.51494,7.466],["德勒斯登 Dresden",51.05089,13.73832],
+  ["Bremen",53.07582,8.80717],["Nuremberg",49.45421,11.07752],
+  ["Hannover",52.37052,9.73322],["Bielefeld",52.03333,8.53333],
 ];
 
 const AUSTRIA: Center[] = [
@@ -275,6 +331,9 @@ const POLAND: Center[] = [
   ["華沙 Warsaw",52.2297,21.0122],["克拉科夫 Krakow",50.0647,19.9450],
   ["羅茲 Lodz",51.7592,19.4560],["弗羅茨瓦夫 Wroclaw",51.1079,17.0385],
   ["波茲南 Poznan",52.4064,16.9252],["格但斯克 Gdansk",54.3520,18.6466],
+  ["Szczecin",53.42894,14.55302],["Lublin",51.25058,22.57009],
+  ["Bydgoszcz",53.1235,18.00762],["Białystok",53.13333,23.16433],
+  ["Katowice",50.2597,19.02173],
 ];
 
 const HUNGARY: Center[] = [
@@ -288,24 +347,33 @@ const ITALY: Center[] = [
   ["拿坡里 Naples",40.8518,14.2681],["杜林 Turin",45.0703,7.6869],
   ["波隆那 Bologna",44.4949,11.3426],["佛羅倫斯 Florence",43.7696,11.2558],
   ["巴勒摩 Palermo",38.1157,13.3615],
+  ["Genoa",44.40478,8.94439],["Bari",41.12066,16.86982],
+  ["Catania",37.49223,15.07041],["Verona",45.43854,10.9938],
+  ["Messina",38.19394,15.55256],["Padua",45.40797,11.88586],
 ];
 
 const SPAIN: Center[] = [
   ["馬德里 Madrid",40.4168,-3.7038],["巴塞隆納 Barcelona",41.3874,2.1686],
   ["瓦倫西亞 Valencia",39.4699,-0.3763],["塞維亞 Seville",37.3891,-5.9845],
   ["薩拉戈薩 Zaragoza",41.6488,-0.8891],["馬拉加 Malaga",36.7213,-4.4214],
+  ["Murcia",37.98704,-1.13004],["Palma",39.56939,2.65024],
+  ["Las Palmas de Gran Canaria",28.10178,-15.41573],["Alicante",38.34517,-0.48149],
+  ["Bilbao",43.26271,-2.92528],["Córdoba",37.89155,-4.77275],
 ];
 
 const PORTUGAL: Center[] = [
   ["里斯本 Lisbon",38.7223,-9.1393],["波多 Porto",41.1579,-8.6291],
   ["布拉加 Braga",41.5454,-8.4265],["科英布拉 Coimbra",40.2033,-8.4103],
   ["法魯 Faro",37.0194,-7.9304],
+  ["Leiria",39.74362,-8.80705],["Funchal",32.66568,-16.92547],
 ];
 
 const GREECE: Center[] = [
   ["雅典 Athens",37.9838,23.7275],["塞薩洛尼基 Thessaloniki",40.6401,22.9444],
   ["帕特雷 Patras",38.2466,21.7346],["伊拉克利翁 Heraklion",35.3387,25.1442],
   ["拉里薩 Larissa",39.6390,22.4191],
+  ["Volos",39.36923,22.94769],["Ioánnina",39.66341,20.85187],
+  ["Tríkala",39.55493,21.76837],
 ];
 
 const CROATIA: Center[] = [
@@ -320,6 +388,10 @@ const UNITED_KINGDOM: Center[] = [
   ["里茲 Leeds",53.8008,-1.5491],["格拉斯哥 Glasgow",55.8642,-4.2518],
   ["愛丁堡 Edinburgh",55.9533,-3.1883],["布里斯托 Bristol",51.4545,-2.5879],
   ["紐卡索 Newcastle",54.9783,-1.6178],["貝爾法斯特 Belfast",54.5973,-5.9301],
+  ["Sheffield",53.38297,-1.4659],["Cardiff",51.48,-3.18],
+  ["Leicester",52.6386,-1.13169],["Nottingham",52.9536,-1.15047],
+  ["Reading",51.45625,-0.97113],["Kingston upon Hull",53.7446,-0.33525],
+  ["Preston",53.76282,-2.70452],
 ];
 
 const FRANCE: Center[] = [
@@ -328,12 +400,17 @@ const FRANCE: Center[] = [
   ["尼斯 Nice",43.7102,7.2620],["南特 Nantes",47.2184,-1.5536],
   ["史特拉斯堡 Strasbourg",48.5734,7.7521],["蒙彼利埃 Montpellier",43.6108,3.8767],
   ["波爾多 Bordeaux",44.8378,-0.5792],["里爾 Lille",50.6292,3.0573],
+  ["Rennes",48.11109,-1.67431],["Reims",49.26526,4.02853],
+  ["Le Havre",49.49346,0.10785],["Saint-Étienne",45.43389,4.39],
+  ["Toulon",43.12442,5.92836],["Angers",47.47156,-0.55202],
+  ["Dijon",47.31344,5.01391],
 ];
 
 const NETHERLANDS: Center[] = [
   ["阿姆斯特丹 Amsterdam",52.3676,4.9041],["鹿特丹 Rotterdam",51.9244,4.4777],
   ["海牙 The Hague",52.0705,4.3007],["烏特勒支 Utrecht",52.0907,5.1214],
   ["恩荷芬 Eindhoven",51.4416,5.4697],["格羅寧根 Groningen",53.2194,6.5665],
+  ["Breda",51.58656,4.77596],["Nijmegen",51.8425,5.85278],
 ];
 
 const BELGIUM: Center[] = [
@@ -345,12 +422,15 @@ const BELGIUM: Center[] = [
 const IRELAND: Center[] = [
   ["都柏林 Dublin",53.3498,-6.2603],["科克 Cork",51.8985,-8.4756],
   ["利默里克 Limerick",52.6638,-8.6267],["戈爾韋 Galway",53.2707,-9.0568],
+  ["Waterford",52.25833,-7.11194],["Drogheda",53.71889,-6.34778],
 ];
 
 const ROMANIA: Center[] = [
   ["布加勒斯特 Bucharest",44.4268,26.1025],["克盧日 Cluj-Napoca",46.7712,23.6236],
   ["蒂米什瓦拉 Timisoara",45.7489,21.2087],["雅西 Iasi",47.1585,27.6014],
   ["康斯坦察 Constanta",44.1598,28.6348],["布拉索夫 Brasov",45.6427,25.5887],
+  ["Craiova",44.31667,23.8],["Galaţi",45.43687,28.05028],
+  ["Târgu Mureş",46.54245,24.55747],
 ];
 
 const BULGARIA: Center[] = [
@@ -383,6 +463,7 @@ const MOROCCO: Center[] = [
   ["卡薩布蘭卡 Casablanca",33.5731,-7.5898],["拉巴特 Rabat",34.0209,-6.8416],
   ["馬拉喀什 Marrakech",31.6295,-7.9811],["非斯 Fes",34.0181,-5.0078],
   ["丹吉爾 Tangier",35.7595,-5.8340],["阿加迪爾 Agadir",30.4278,-9.5981],
+  ["Meknes",33.89352,-5.54727],["Oujda",34.68139,-1.90858],
 ];
 
 const ALGERIA: Center[] = [
@@ -401,6 +482,7 @@ const GUATEMALA: Center[] = [
   ["瓜地馬拉市 Guatemala City",14.6349,-90.5069],
   ["克薩爾特南戈 Quetzaltenango",14.8347,-91.5181],
   ["埃斯昆特拉 Escuintla",14.3050,-90.7850],["安地瓜 Antigua",14.5586,-90.7295],
+  ["Cobán",15.47025,-90.37455],["Jalapa",14.63542,-89.99112],
 ];
 
 const HONDURAS: Center[] = [
@@ -423,6 +505,7 @@ const COSTA_RICA: Center[] = [
   ["聖荷西 San Jose",9.9281,-84.0907],["阿拉胡埃拉 Alajuela",10.0163,-84.2116],
   ["埃雷迪亞 Heredia",10.0024,-84.1165],["卡塔戈 Cartago",9.8644,-83.9194],
   ["利韋里亞 Liberia",10.6346,-85.4400],
+  ["Limón",9.99074,-83.03596],
 ];
 
 const PANAMA: Center[] = [
@@ -437,6 +520,11 @@ const MEXICO: Center[] = [
   ["提華納 Tijuana",32.5149,-117.0382],["萊昂 Leon",21.1220,-101.6840],
   ["克雷塔羅 Queretaro",20.5888,-100.3899],["梅里達 Merida",20.9674,-89.5926],
   ["坎昆 Cancun",21.1619,-86.8515],["托盧卡 Toluca",19.2826,-99.6557],
+  ["Mexicali",32.62781,-115.45446],["Chihuahua",28.63528,-106.08889],
+  ["Hermosillo",29.08874,-110.96677],["Culiacán",24.80209,-107.39421],
+  ["Morelia",19.70078,-101.18443],["Torreón",25.54389,-103.41898],
+  ["San Luis Potosí",22.15234,-100.97135],["Aguascalientes",21.88262,-102.2843],
+  ["Saltillo",25.42595,-100.97963],
 ];
 
 const BELIZE: Center[] = [
@@ -450,6 +538,12 @@ const USA_EAST: Center[] = [
   ["奧蘭多 Orlando",28.5383,-81.3792],["亞特蘭大 Atlanta",33.7490,-84.3880],
   ["夏洛特 Charlotte",35.2271,-80.8431],["洛利 Raleigh",35.7796,-78.6382],
   ["匹茲堡 Pittsburgh",40.4406,-79.9959],["水牛城 Buffalo",42.8864,-78.8784],
+  ["Jacksonville",30.33218,-81.65565],["Columbus",39.96118,-82.99879],
+  ["Indianapolis",39.76838,-86.15804],["底特律 Detroit",42.33143,-83.04575],
+  ["Louisville",38.25424,-85.75941],["Virginia Beach",36.85293,-75.97799],
+  ["Tampa",27.94752,-82.45843],["克里夫蘭 Cleveland",41.4995,-81.69541],
+  ["Lexington",37.98869,-84.47772],["Cincinnati",39.12711,-84.51439],
+  ["Meads",38.41258,-82.70905],["Greensboro",36.07264,-79.79198],
 ];
 
 const USA_CENTRAL: Center[] = [
@@ -459,6 +553,12 @@ const USA_CENTRAL: Center[] = [
   ["聖路易 St Louis",38.6270,-90.1994],["堪薩斯城 Kansas City",39.0997,-94.5786],
   ["丹佛 Denver",39.7392,-104.9903],["奧克拉荷馬市 Oklahoma City",35.4676,-97.5164],
   ["紐奧良 New Orleans",29.9511,-90.0715],["密爾瓦基 Milwaukee",43.0389,-87.9065],
+  ["Fort Worth",32.72541,-97.32085],["納許維爾 Nashville",36.16589,-86.78444],
+  ["El Paso",31.75872,-106.48693],["Memphis",35.14953,-90.04898],
+  ["Albuquerque",35.08449,-106.65114],["Omaha",41.25626,-95.94043],
+  ["Colorado Springs",38.83388,-104.82136],["Tulsa",36.15398,-95.99277],
+  ["Wichita",37.69224,-97.33754],["Corpus Christi",27.80058,-97.39638],
+  ["Lincoln",40.8,-96.66696],
 ];
 
 const USA_WEST: Center[] = [
@@ -468,6 +568,12 @@ const USA_WEST: Center[] = [
   ["鳳凰城 Phoenix",33.4484,-112.0740],["鹽湖城 Salt Lake City",40.7608,-111.8910],
   ["沙加緬度 Sacramento",38.5816,-121.4944],["聖荷西 San Jose",37.3382,-121.8863],
   ["檀香山 Honolulu",21.3099,-157.8581],["安克拉治 Anchorage",61.2181,-149.9003],
+  ["Tucson",32.22174,-110.92648],["Fresno",36.74773,-119.77237],
+  ["Long Beach",33.76696,-118.18923],["Bakersfield",35.37329,-119.01871],
+  ["Riverside",33.95335,-117.39616],["Stockton",37.9577,-121.29078],
+  ["Reno",39.52963,-119.8138],["Irvine",33.66946,-117.82311],
+  ["Spokane",47.65966,-117.42908],["Tacoma",47.25288,-122.44429],
+  ["Modesto",37.6391,-120.99688],["Oxnard",34.1975,-119.17705],
 ];
 
 const TAIWAN: Center[] = [
@@ -482,18 +588,27 @@ const CANADA: Center[] = [
   ["溫哥華 Vancouver",49.2827,-123.1207],["卡加利 Calgary",51.0447,-114.0719],
   ["渥太華 Ottawa",45.4215,-75.6972],["艾德蒙頓 Edmonton",53.5461,-113.4938],
   ["魁北克市 Quebec City",46.8139,-71.2080],["溫尼伯 Winnipeg",49.8951,-97.1384],
+  ["Hamilton",43.25011,-79.84963],["哈利法克斯 Halifax",44.64269,-63.57688],
+  ["London",42.98339,-81.23304],["維多利亞 Victoria",48.4359,-123.35155],
+  ["Saskatoon",52.13238,-106.66892],["Kitchener",43.42537,-80.5112],
+  ["Regina",50.45008,-104.6178],["Oshawa",43.90012,-78.84957],
 ];
 // Successful local feasibility samples, 2026-10-30. These are city centres,
 // not a claim of nationwide coverage or higher large-mushroom probability.
 const UKRAINE: Center[] = [
   ["基輔 Kyiv",50.4501,30.5234],["利維夫 Lviv",49.8397,24.0297],
 ];
-const KENYA: Center[] = [["奈洛比 Nairobi",-1.2921,36.8219]];
+const KENYA: Center[] = [["奈洛比 Nairobi",-1.2921,36.8219],
+  ["Kakamega",0.28422,34.75229],["Mombasa",-4.05466,39.66359],
+];
 // GeoNames cities15000, WGS84, CC BY 4.0; see docs/GLOBAL_LAND_REGIONS.md.
 const SOUTH_AFRICA: Center[] = [
   ["開普敦 Cape Town",-33.9249,18.4241],["約翰尼斯堡 Johannesburg",-26.2041,28.0473],
   ["普勒托利亞 Pretoria",-25.74486,28.18783],["德班 Durban",-29.8579,31.0292],
   ["吉貝哈 Gqeberha",-33.96109,25.61494],["布隆方丹 Bloemfontein",-29.12107,26.214],
+  ["Soshanguve",-25.47288,28.09919],["Pietermaritzburg",-29.61679,30.39278],
+  ["Evaton",-26.53333,27.85],["East London",-33.01529,27.91162],
+  ["Welkom",-27.97742,26.73506],
 ];
 const NAMIBIA: Center[] = [["溫荷克 Windhoek",-22.55941,17.08323],
   ["鯨灣港 Walvis Bay",-22.9575,14.50528],["斯瓦科普蒙德 Swakopmund",-22.67842,14.52663]];
@@ -588,6 +703,63 @@ export const COUNTRY_PACK_CATALOG = [
   { id: "us-central", name: "美國中部", region: "北美洲", cities: USA_CENTRAL },
   { id: "us-west", name: "美國西部", region: "北美洲", cities: USA_WEST },
   { id: "ca", name: "加拿大", region: "北美洲", cities: CANADA },
+  { id: "kh", name: "柬埔寨", region: "亞洲", cities: [
+  ["金邊 Phnom Penh",11.56245,104.91601],["Takeo",10.99081,104.78498],
+  ["Siem Reap",13.36179,103.86056],["Battambang",13.10271,103.19822],
+  ] as Center[] },
+  { id: "la", name: "寮國", region: "亞洲", cities: [
+  ["永珍 Vientiane",17.96667,102.6],["Savannakhet",16.5703,104.7622],
+  ["Thakhèk",17.41027,104.83068],
+  ] as Center[] },
+  { id: "lk", name: "斯里蘭卡", region: "亞洲", cities: [
+  ["Colombo",6.93548,79.84868],["Jaffna",9.66845,80.00742],
+  ["Kandy",7.2906,80.6336],["Trincomalee",8.5778,81.2289],
+  ["Kalmunai",7.40902,81.83472],
+  ] as Center[] },
+  { id: "bd", name: "孟加拉", region: "亞洲", cities: [
+  ["達卡 Dhaka",23.7104,90.40744],["Chattogram",22.3384,91.83168],
+  ["Gazipur",23.99844,90.42234],["Khulna",22.80979,89.56439],
+  ["Rangpur",25.74664,89.25166],["Rajshahi",24.374,88.60114],
+  ] as Center[] },
+  { id: "np", name: "尼泊爾", region: "亞洲", cities: [
+  ["加德滿都 Kathmandu",27.70169,85.3206],["Pokhara",28.26689,83.96851],
+  ["Bharatpur",27.68027,84.43647],["Birgañj",27.01736,84.88047],
+  ] as Center[] },
+  { id: "lt", name: "立陶宛", region: "東歐", cities: [
+  ["維爾紐斯 Vilnius",54.68916,25.2798],["Kaunas",54.90156,23.90909],
+  ["Klaipėda",55.7068,21.13912],["Šiauliai",55.93333,23.31667],
+  ] as Center[] },
+  { id: "lv", name: "拉脫維亞", region: "東歐", cities: [
+  ["里加 Riga",56.946,24.10589],["Daugavpils",55.88333,26.53333],
+  ["Liepāja",56.50474,21.01085],
+  ] as Center[] },
+  { id: "ee", name: "愛沙尼亞", region: "東歐", cities: [
+  ["塔林 Tallinn",59.43696,24.75353],["Tartu",58.38062,26.72509],
+  ["Narva",59.37722,28.19028],
+  ] as Center[] },
+  { id: "lu", name: "盧森堡", region: "西歐", cities: [
+  ["Luxembourg",49.60982,6.13268],
+  ] as Center[] },
+  { id: "mt", name: "馬爾他", region: "南歐", cities: [
+  ["San Pawl il-Baħar",35.95064,14.41561],
+  ] as Center[] },
+  { id: "cy", name: "賽普勒斯", region: "南歐", cities: [
+  ["Nicosia",35.17284,33.35397],["Limassol",34.68406,33.03794],
+  ["Larnaca",34.9221,33.62794],
+  ] as Center[] },
+  { id: "do", name: "多明尼加", region: "加勒比海", cities: [
+  ["聖多明哥 Santo Domingo",18.47186,-69.89232],["Santiago de los Caballeros",19.45036,-70.69085],
+  ["San Pedro de Macorís",18.4539,-69.30864],["La Romana",18.42332,-68.96635],
+  ["Puerto Plata",19.79344,-70.6884],
+  ] as Center[] },
+  { id: "jm", name: "牙買加", region: "加勒比海", cities: [
+  ["金斯敦 Kingston",17.99702,-76.79358],["Montego Bay",18.47116,-77.91883],
+  ["Mandeville",18.04168,-77.50714],
+  ] as Center[] },
+  { id: "pr", name: "波多黎各", region: "加勒比海", cities: [
+  ["聖胡安 San Juan",18.46633,-66.10572],["Ponce",18.01031,-66.62398],
+  ["Arecibo",18.47245,-66.71573],
+  ] as Center[] },
 ] as const;
 
 export const COUNTRY_PACKS: Record<string, Center[]> = Object.fromEntries(

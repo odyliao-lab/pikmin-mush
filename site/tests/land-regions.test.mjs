@@ -3,6 +3,7 @@ import test from 'node:test';
 import {readFileSync} from 'node:fs';
 import ts from 'typescript';
 import * as land from '../lib/land-mask.mjs';
+import masks from '../lib/geo/city-land.json' with { type:'json' };
 import {planDailyRotation} from '../lib/rotation-plan.mjs';
 
 const catalog = {};
@@ -28,6 +29,30 @@ test('independent offshore fixtures are excluded while inland/island centres sur
   }
   assert.equal(land.cityLandAllows('unknown','unknown',0,0),false);
   assert.equal(land.cityLandAllows('南非','開普敦 Cape Town',NaN,18.4),false);
+});
+
+test('expansion masks cover their exact catalogue coordinates without overlapping city centres', () => {
+  const centres = COUNTRY_PACK_CATALOG.flatMap(pack => pack.cities.map(([city, lat, lng]) =>
+    ({ key: pack.name + '/' + city, lat, lng })));
+  const byKey = new Map(centres.map(centre => [centre.key, centre]));
+  assert.equal(byKey.size, centres.length);
+  assert.equal(Object.keys(masks.cities).length, centres.length);
+  const additions = new Set(masks.additionalSources.at(-1).cityKeys);
+  assert.equal(additions.size, 262);
+  for (const key of additions) {
+    const centre = byKey.get(key);
+    assert.ok(centre, key);
+    assert.deepEqual(masks.cities[key].origin, [centre.lat, centre.lng]);
+    for (const other of centres) {
+      if (other.key === key) continue;
+      const rad = Math.PI / 180;
+      const latitudeTerm = Math.sin((centre.lat - other.lat) * rad / 2) ** 2;
+      const longitudeTerm = Math.sin((centre.lng - other.lng) * rad / 2) ** 2;
+      const haversine = latitudeTerm + Math.cos(centre.lat * rad) * Math.cos(other.lat * rad) * longitudeTerm;
+      assert.ok(12_742.018 * Math.asin(Math.min(1, Math.sqrt(haversine))) >= 31,
+        key + ' and ' + other.key);
+    }
+  }
 });
 
 test('every scheduled city has land targets across all global phases and precision profile',()=>{

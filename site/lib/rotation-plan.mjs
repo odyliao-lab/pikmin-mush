@@ -9,22 +9,22 @@ export const ROTATION_EPOCH_DATE = "2026-07-22";
 // remain intentionally excluded. Target leases prevent duplicate point ownership.
 const ROUTES = {
   asia: [
-    { id: "asia-01", label: "亞洲／大洋洲 01", packs: ["th", "my", "sg"], cityCount: 17 },
-    { id: "asia-02", label: "亞洲／大洋洲 02", packs: ["au", "ph"], cityCount: 18 },
-    { id: "asia-03", label: "亞洲／大洋洲 03", packs: ["in", "vn"], cityCount: 20 },
-    { id: "asia-04", label: "亞洲／大洋洲 04", packs: ["kr", "id", "nz"], cityCount: 24 },
+    { id: "asia-01", label: "亞洲／大洋洲 01", packs: ["th", "my", "sg", "kh"], cityCount: 31 },
+    { id: "asia-02", label: "亞洲／大洋洲 02", packs: ["au", "ph", "la"], cityCount: 35 },
+    { id: "asia-03", label: "亞洲／大洋洲 03", packs: ["in", "vn", "lk", "bd"], cityCount: 51 },
+    { id: "asia-04", label: "亞洲／大洋洲 04", packs: ["kr", "id", "nz", "np"], cityCount: 48 },
   ],
   emea: [
-    { id: "emea-01", label: "歐洲／中東／非洲 01", packs: ["gb", "pl", "ro", "at", "pt", "tn", "il", "rs", "qa", "za", "na", "bw"], cityCount: 59 },
-    { id: "emea-02", label: "歐洲／中東／非洲 02", packs: ["fr", "de", "eg", "sa", "gr", "dz", "jo", "bg", "ke", "ls", "sz"], cityCount: 49 },
-    { id: "emea-03", label: "歐洲／中東／非洲 03", packs: ["se", "no", "es", "ma", "hu", "hr", "ae", "cz", "si", "ua", "zw", "zm"], cityCount: 54 },
-    { id: "emea-04", label: "歐洲／中東／非洲 04", packs: ["it", "fi", "nl", "dk", "ch", "be", "is", "ie", "sk", "mz"], cityCount: 49 },
+    { id: "emea-01", label: "歐洲／中東／非洲 01", packs: ["gb", "pl", "ro", "at", "pt", "tn", "il", "rs", "qa", "za", "na", "bw", "lt", "lu"], cityCount: 86 },
+    { id: "emea-02", label: "歐洲／中東／非洲 02", packs: ["fr", "de", "eg", "sa", "gr", "dz", "jo", "bg", "ke", "ls", "sz", "lv", "mt"], cityCount: 73 },
+    { id: "emea-03", label: "歐洲／中東／非洲 03", packs: ["se", "no", "es", "ma", "hu", "hr", "ae", "cz", "si", "ua", "zw", "zm", "ee"], cityCount: 70 },
+    { id: "emea-04", label: "歐洲／中東／非洲 04", packs: ["it", "fi", "nl", "dk", "ch", "be", "is", "ie", "sk", "mz", "cy"], cityCount: 64 },
   ],
   americas: [
-    { id: "americas-01", label: "美洲 01", packs: ["us-west", "ar", "ve", "bo", "sv", "bz"], cityCount: 39 },
-    { id: "americas-02", label: "美洲 02", packs: ["us-central", "mx", "ec", "cr", "hn"], cityCount: 37 },
-    { id: "americas-03", label: "美洲 03", packs: ["us-east", "co", "ca", "pa", "gt"], cityCount: 37 },
-    { id: "americas-04", label: "美洲 04", packs: ["br", "pe", "cl", "uy", "py", "ni"], cityCount: 40 },
+    { id: "americas-01", label: "美洲 01", packs: ["us-west", "ar", "ve", "bo", "sv", "bz", "do"], cityCount: 61 },
+    { id: "americas-02", label: "美洲 02", packs: ["us-central", "mx", "ec", "cr", "hn", "jm"], cityCount: 63 },
+    { id: "americas-03", label: "美洲 03", packs: ["us-east", "co", "ca", "pa", "gt", "pr"], cityCount: 66 },
+    { id: "americas-04", label: "美洲 04", packs: ["br", "pe", "cl", "uy", "py", "ni"], cityCount: 57 },
   ],
 };
 export const ROTATION_DAYS = Object.values(ROUTES);
@@ -32,15 +32,18 @@ export const ROTATION_DAYS = Object.values(ROUTES);
 // Used for every fleet size, so no country pack is
 // silently dropped just because a phone is paused or temporarily offline.
 const PACK_CITY_COUNTS = {
-  ua: 2, ke: 1, za: 6, na: 3, bw: 2, ls: 1, sz: 2, zw: 2, zm: 4, mz: 3,
-  in: 12, kr: 8, th: 8, my: 8, sg: 1, id: 8, ph: 8, vn: 8, au: 10, nz: 8,
-  br: 12, ec: 6, ar: 10, co: 8, pe: 8, cl: 8, uy: 4, py: 4, bo: 5, ve: 6,
-  se: 6, no: 6, dk: 5, fi: 6, is: 4, ae: 4, sa: 5, il: 4, jo: 4, qa: 3,
-  de: 6, at: 5, ch: 5, cz: 4, pl: 6, hu: 5, it: 7, es: 6, pt: 5, gr: 5,
-  hr: 5, gb: 10, fr: 10, nl: 6, be: 5, ie: 4, ro: 6, bg: 4, rs: 4,
-  sk: 4, si: 4, eg: 6, ma: 6, dz: 5, tn: 5, gt: 4, hn: 4, sv: 4,
-  ni: 4, cr: 5, pa: 5, mx: 10, bz: 2, "us-east": 12, "us-central": 12,
-  "us-west": 12, ca: 8,
+  ua: 2, ke: 3, za: 11, na: 3, bw: 2, ls: 1, sz: 2, zw: 2, zm: 4, mz: 3,
+  in: 26, kr: 15, th: 14, my: 12, sg: 1, id: 17, ph: 14, vn: 14, au: 18, nz: 12,
+  br: 22, ec: 8, ar: 15, co: 12, pe: 11, cl: 12, uy: 4, py: 4, bo: 5, ve: 6,
+  se: 9, no: 8, dk: 5, fi: 8, is: 4, ae: 4, sa: 5, il: 4, jo: 4, qa: 3,
+  de: 14, at: 5, ch: 5, cz: 4, pl: 11, hu: 5, it: 13, es: 12, pt: 7, gr: 8,
+  hr: 5, gb: 17, fr: 17, nl: 8, be: 5, ie: 6, ro: 9, bg: 4, rs: 4,
+  sk: 4, si: 4, eg: 6, ma: 8, dz: 5, tn: 5, gt: 6, hn: 4, sv: 4,
+  ni: 4, cr: 6, pa: 5, mx: 19, bz: 2, "us-east": 24, "us-central": 23,
+  "us-west": 24, ca: 16,
+  kh: 4, la: 3, lk: 5, bd: 6, np: 4,
+  lt: 4, lv: 3, ee: 3, lu: 1, mt: 1, cy: 3,
+  do: 5, jm: 3, pr: 3,
 };
 
 // Multi-zone packs use their westernmost/least advanced representative. The
@@ -68,6 +71,20 @@ const PACK_TIME_ZONES = {
   ni: "America/Managua", cr: "America/Costa_Rica", pa: "America/Panama",
   mx: "America/Tijuana", bz: "America/Belize", "us-east": "America/New_York",
   "us-central": "America/Chicago", "us-west": "America/Los_Angeles", ca: "America/Vancouver",
+  kh: "Asia/Phnom_Penh",
+  la: "Asia/Vientiane",
+  lk: "Asia/Colombo",
+  bd: "Asia/Dhaka",
+  np: "Asia/Kathmandu",
+  lt: "Europe/Vilnius",
+  lv: "Europe/Riga",
+  ee: "Europe/Tallinn",
+  lu: "Europe/Luxembourg",
+  mt: "Europe/Malta",
+  cy: "Asia/Nicosia",
+  do: "America/Santo_Domingo",
+  jm: "America/Jamaica",
+  pr: "America/Puerto_Rico",
 };
 
 const DAY_MS = 86_400_000;
@@ -132,10 +149,10 @@ function assignmentsFor(agentIds, window, cycle, now, workloads = {}) {
       route.cityCount += count;
       route.workload += weight(pack);
     }
-    // Asia has ten country packs. For larger fleets, share the largest packs
+    // If a future smaller slot has fewer packs than eligible Agents, share large packs
     // instead of leaving extra devices without a route. Existing country tags
     // and atomic target leases already allow two devices to consume different
-    // points from one pack; keep all allocations up to ten devices unchanged.
+    // points from one pack.
     for (const empty of selected.filter(route => !route.packs.length)) {
       const donor = selected.filter(route => route.packs.length)
         .reduce((largest, route) => route.cityCount > largest.cityCount ? route : largest);
@@ -220,7 +237,7 @@ export function planManualRedeploy(agentIds, now = Date.now(), workloads = {}) {
 // The operator requested deployment now, but a fleet-wide redistribution only
 // at the next regular switch. This date-bound hold expires at 20:00 Taipei;
 // ordinary roster balancing and explicit manual redeploy remain unchanged later.
-export const REGION_PLAN_REVISION = "20261103-land-balanced-southern-africa";
+export const REGION_PLAN_REVISION = "20261118-three-slot-city-expansion";
 export const REGION_EXPANSION_EFFECTIVE_AT = Date.parse("2026-10-30T20:00:00+08:00");
 export function holdCurrentRegionAssignments(now = Date.now()) {
   return now < REGION_EXPANSION_EFFECTIVE_AT &&

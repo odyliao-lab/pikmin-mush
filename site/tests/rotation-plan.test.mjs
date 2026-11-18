@@ -17,11 +17,11 @@ for (const count of [4, 5, 6, 7, 8, 9, 10, 11, 12]) test(`${count} Agents cover 
         const actual = plan.assignments.flatMap(route => route.packs);
         assert.equal(plan.assignments.length, count);
         assert.equal(new Set(plan.assignments.map(route => route.agentId)).size, count);
-        assert.equal(actual.length-new Set(actual).size, index===0 ? Math.max(0,count-10) : 0);
+        assert.equal(actual.length, new Set(actual).size);
         assert.deepEqual([...new Set(actual)].sort(), [...expected].sort());
         assert.ok(plan.assignments.every(route => route.packs.length && route.cityCount > 0));
         const counts = plan.assignments.map(route => route.cityCount);
-        assert.ok(Math.max(...counts)-Math.min(...counts) <= 12);
+        assert.ok(Math.max(...counts)-Math.min(...counts) <= 26);
         assert.equal(plan.nextSwitchAt, planner(agents, atTaipei(day,time)).nextSwitchAt);
       }
     }
@@ -71,7 +71,7 @@ test("covers every selected regional pack exactly once without Taiwan or Japan",
       }
     }
   }
-  assert.equal(all.size, 77);
+  assert.equal(all.size, 91);
   assert.equal(all.has("tw"), false);
   assert.equal(all.has("jp"), false);
   for (const pack of ["in", "au", "nz", "ae", "gb", "de", "it", "es", "fr",
@@ -80,7 +80,7 @@ test("covers every selected regional pack exactly once without Taiwan or Japan",
 });
 
 test("all three slots pass the local-day guard in summer and winter", () => {
-  for (const day of ["2026-09-25", "2027-01-15"]) {
+  for (const day of ["2026-09-25", "2027-01-15", "2027-03-28", "2027-10-31"]) {
     for (const [time, slot] of [["04:00", "asia"], ["12:00", "emea"], ["20:00", "americas"]]) {
       const plan = planDailyRotation(agents, atTaipei(day, time));
       assert.equal(plan.slot, slot);

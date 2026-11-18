@@ -108,7 +108,7 @@ for(const count of [4,5,6,7,8,9,10,11,12]) test(`${count} eligible devices mater
       assert.equal(assignments.length,count);
       assert.ok(assignments.every(a=>a.agentId!=='scorpio'&&a.packs.length));
       const assignedPacks=assignments.flatMap(a=>a.packs);
-      assert.equal(assignedPacks.length-new Set(assignedPacks).size,index===0?Math.max(0,count-10):0);
+      assert.equal(assignedPacks.length, new Set(assignedPacks).size);
       const packs=[...new Set(assignedPacks)];
       assert.deepEqual([...packs].sort(),plans.ROTATION_DAYS[index].flatMap(r=>r.packs).sort());
       const job=f.sql.prepare('SELECT * FROM scan_jobs WHERE id=?').get(run.job_id);

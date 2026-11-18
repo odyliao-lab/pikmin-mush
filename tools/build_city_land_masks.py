@@ -19,11 +19,17 @@ from shapely.geometry import box, shape
 from shapely.ops import transform, unary_union
 
 
-def generate(archive, catalog, output):
+SNAPSHOTS = {
+    "2026-11-03": "79e88a74ed7276177a331c0b4b2a1ee0859e7da216bcbf98cc6479ccad69078d",
+    "2026-11-18": "bf6e50c2eb1bda49ec6d5e0bdba5bba45a8cac8796ae6b1617fee579c0c79e83",
+}
+
+
+def generate(archive, catalog, output, snapshot, base):
     with archive.open("rb") as source:
         digest = hashlib.file_digest(source, "sha256").hexdigest()
-    if digest != "79e88a74ed7276177a331c0b4b2a1ee0859e7da216bcbf98cc6479ccad69078d":
-        raise ValueError("Archive differs from the pinned 2026-11-03 OSM snapshot")
+    if digest != SNAPSHOTS[snapshot]:
+        raise ValueError(f"Archive differs from the pinned {snapshot} OSM snapshot")
     packs = json.loads(catalog.read_text(encoding="utf-8-sig"))
     cities = [(p["name"] + "/" + name, lat, lng)
               for p in packs for name, lat, lng in p["cities"]]
@@ -86,12 +92,21 @@ def generate(archive, catalog, output):
                 else:
                     polygons.append([row, row, ranges])
         masks[key] = {"origin": [lat, lng], "bands": polygons}
-    payload = {"revision": "osm-land-20261103-v1", "source": {
+    payload = {"revision": f"osm-land-{snapshot.replace('-', '')}-v1", "source": {
         "url": "https://osmdata.openstreetmap.de/download/land-polygons-split-4326.zip",
-        "sha256": digest, "snapshot": "2026-11-03", "license": "ODbL-1.0",
+        "sha256": digest, "snapshot": snapshot, "license": "ODbL-1.0",
         "attribution": "© OpenStreetMap contributors",
         "radiusKm": 10, "cellMetres": 100, "simplifyMetres": 25, "postInsetSimplifyMetres": 10, "insetMetres": 100,
         "catalogSha256": hashlib.sha256(catalog.read_bytes()).hexdigest()}, "cities": masks}
+    if base:
+        previous = json.loads(base.read_text(encoding="utf-8"))
+        overlap = previous["cities"].keys() & masks.keys()
+        if overlap:
+            raise ValueError(f"Extension would overwrite {len(overlap)} city masks")
+        source = {**payload["source"], "cityKeys": sorted(masks)}
+        payload = {**previous, "revision": payload["revision"],
+                   "additionalSources": [*previous.get("additionalSources", []), source],
+                   "cities": {**previous["cities"], **masks}}
     output.parent.mkdir(parents=True, exist_ok=True)
     output.write_text(json.dumps(payload, ensure_ascii=False, separators=(",", ":")) + "\n", encoding="utf-8")
     print("cities", len(masks), "coastal", sum(m["bands"] is not True for m in masks.values()),
@@ -103,5 +118,7 @@ if __name__ == "__main__":
     parser.add_argument("--zip", type=Path, required=True)
     parser.add_argument("--catalog", type=Path, required=True)
     parser.add_argument("--output", type=Path, default=Path("site/lib/geo/city-land.json"))
+    parser.add_argument("--snapshot", choices=SNAPSHOTS, default="2026-11-03")
+    parser.add_argument("--base", type=Path, help="Existing masks to extend without overwriting")
     args = parser.parse_args()
-    generate(args.zip, args.catalog, args.output)
+    generate(args.zip, args.catalog, args.output, args.snapshot, args.base)
