@@ -5,6 +5,7 @@ import { readFileSync, readdirSync } from 'node:fs';
 import {
   archiveAndDeleteTargets, canRollScanCycle, rollScanCycle, TARGET_HISTORY_CTE,
 } from '../lib/target-history.mjs';
+import { closeDispatch, dispatchProof } from '../lib/dispatch-coordination.mjs';
 
 test('loop deletion preserves country attribution without duplicate joins', async () => {
   const sql=new DatabaseSync(':memory:');
@@ -56,6 +57,7 @@ function rotationFixture(t) {
       return { bind(...args) {
         return {
           first: () => sql.prepare(query).get(...args),
+          all: () => ({ results: sql.prepare(query).all(...args) }),
           run: () => ({ meta: { changes: sql.prepare(query).run(...args).changes } }),
         };
       } };
@@ -115,6 +117,62 @@ test('live leases, current queued targets and queued verification keep the curre
       VALUES ('batch','controller','fixture','fixture','agent',9,1,1);`);
   assert.equal(await canRollScanCycle(db, 9, 2), undefined);
   assert.equal(await rollScanCycle(db, 9, 2, next, 1000), false);
+});
+
+test('returned active batches permit one ordinary rollover without closing or losing their proof', async t => {
+  const { sql, db, next } = rotationFixture(t);
+  sql.exec(`INSERT INTO controller_dispatches
+    (batch,owner,payload_sha,admission,agent_id,job_id,candidate_count,created_at)
+    VALUES ('wave-a','controller','fixture-a','fixture-a','agent-a',9,1,1),
+      ('wave-b','controller','fixture-b','fixture-b','agent-b',9,1,1),
+      ('stopped-wave','controller','fixture-c','fixture-c','agent-c',8,1,1);
+    INSERT INTO scan_targets
+      (id,job_id,sequence,cycle,city,status,lat,lng,created_at,updated_at,
+       verification_batch,verification_kind,required_agent_id,completed_agent_id,leased_at,completed_at)
+    VALUES (12,9,-4,2,'candidate-a','completed',1,2,1,1,'wave-a','candidate','agent-a','agent-a',20,30),
+      (13,9,-3,2,'return-a','completed',1,2,1,1,'wave-a','return','agent-a','agent-a',40,50),
+      (14,9,-2,2,'candidate-b','failed',1,2,1,1,'wave-b','candidate-giant','agent-b','agent-b',20,30),
+      (15,9,-1,2,'return-b','completed',1,2,1,1,'wave-b','return','agent-b','agent-b',40,50);`);
+  for (const [column, badValue, validValue] of [
+    ['status', 'failed', 'completed'],
+    ['completed_agent_id', 'agent-a', 'agent-b'],
+    ['required_agent_id', 'agent-a', 'agent-b'],
+    ['leased_at', 0, 40],
+    ['completed_at', 39, 50],
+  ]) {
+    const set = sql.prepare(`UPDATE scan_targets SET ${column}=? WHERE id=15`);
+    set.run(badValue);
+    assert.equal(await rollScanCycle(db, 9, 2, next, 1000), false, column);
+    set.run(validValue);
+  }
+  sql.exec("UPDATE controller_dispatches SET candidate_count=2 WHERE batch='wave-b'");
+  assert.equal(await rollScanCycle(db, 9, 2, next, 1000), false);
+  sql.exec("UPDATE controller_dispatches SET candidate_count=1 WHERE batch='wave-b'");
+  assert.ok(await canRollScanCycle(db, 9, 2));
+  assert.deepEqual(await Promise.all([rollScanCycle(db, 9, 2, next, 1000),
+    rollScanCycle(db, 9, 2, next, 1001)]), [true, false]);
+  const target = sql.prepare('SELECT * FROM scan_targets WHERE job_id=9').get();
+  assert.equal(target.cycle, 3);
+  assert.equal(target.verification_kind, '');
+  assert.equal(target.status, 'queued');
+  const archived = sql.prepare("SELECT id,status,completed_agent_id,completed_at FROM scan_target_history WHERE verification_kind='return' ORDER BY id").all();
+  assert.deepEqual(archived.map(x => [x.id,x.status,x.completed_agent_id,x.completed_at]),
+    [[13,'completed','agent-a',50],[15,'completed','agent-b',50]]);
+  assert.equal(sql.prepare("SELECT count(*) AS n FROM controller_dispatches WHERE state='active'").get().n, 3);
+  const p = await dispatchProof(db, 'wave-a', 3000);
+  assert.equal(p.return_ack, true);
+  assert.equal(p.can_close, false);
+  sql.prepare("UPDATE scan_targets SET status='completed', completed_agent_id='agent-a', leased_at=1100, completed_at=2500 WHERE id=?").run(target.id);
+  assert.equal(await rollScanCycle(db, 9, 3, next, 2600), false);
+  const storeObservation = sql.prepare("INSERT INTO mushroom_observations VALUES(?,?,?,2,3,1,0,5,100,4000,?)");
+  storeObservation.run('wrong-agent','demo','agent-b',target.id);
+  assert.equal((await closeDispatch(db, 'wave-a', 'controller', 3000)).http, 409);
+  storeObservation.run('matching','demo','agent-a',target.id);
+  assert.equal((await closeDispatch(db, 'wave-a', 'controller', 3000)).http, 200);
+  assert.equal((await dispatchProof(db, 'wave-b', 3000)).can_close, false);
+  assert.equal(await rollScanCycle(db, 9, 3, next, 3100), false);
+  sql.exec("UPDATE controller_dispatches SET state='closed' WHERE job_id=9");
+  assert.equal(await rollScanCycle(db, 9, 3, next, 3200), true);
 });
 
 test('a failed next-cycle insert leaves the previous queue, job pointer and archive intact', async t => {

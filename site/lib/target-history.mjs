@@ -24,8 +24,32 @@ export function archiveAndDeleteTargets(db, jobId, now) {
   return db.batch(prepareTargetArchive(db, jobId, now));
 }
 
+// A returned batch still needs an ordinary scan in this job to close. Allow
+// one rollover only when every active batch has its full terminal inventory
+// and verified same-agent return in the live queue. The atomic archive makes
+// the next rollover wait for closure. The cross-job rotation guard stays intact.
 const COMPLETED_CYCLE = `id=? AND cycle=? AND loop=1 AND status IN ('queued','running')
-  AND NOT EXISTS (SELECT 1 FROM controller_dispatches WHERE state='active' AND job_id=scan_jobs.id)
+  AND NOT EXISTS (
+    SELECT 1 FROM controller_dispatches d
+    WHERE d.state='active' AND d.job_id=scan_jobs.id
+      AND (
+        d.candidate_count<=0
+        OR EXISTS (SELECT 1 FROM controller_return_recoveries r WHERE r.batch=d.batch)
+        OR NOT EXISTS (
+          SELECT 1 FROM scan_targets t
+          WHERE t.verification_batch=d.batch
+          GROUP BY t.verification_batch
+          HAVING COUNT(*)=d.candidate_count+1
+            AND SUM(CASE WHEN t.job_id=d.job_id AND t.required_agent_id=d.agent_id
+              AND t.verification_kind IN ('candidate','candidate-giant')
+              AND t.status IN ('completed','failed','cancelled') THEN 1 ELSE 0 END)=d.candidate_count
+            AND SUM(CASE WHEN t.job_id=d.job_id AND t.required_agent_id=d.agent_id
+              AND t.verification_kind='return' AND t.status='completed'
+              AND t.completed_agent_id=d.agent_id AND t.leased_at>0
+              AND t.completed_at>=t.leased_at THEN 1 ELSE 0 END)=1
+        )
+      )
+  )
   AND EXISTS (SELECT 1 FROM scan_targets WHERE job_id=scan_jobs.id)
   AND NOT EXISTS (SELECT 1 FROM scan_targets WHERE job_id=scan_jobs.id AND
     (status='leased' OR (status='queued' AND (cycle>=scan_jobs.cycle OR verification_kind<>''))))`;
