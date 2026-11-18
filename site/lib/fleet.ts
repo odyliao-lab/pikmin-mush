@@ -2,7 +2,7 @@ import { ensureSchema, runtime, safeEqual } from "./cloud";
 import { activeJob, appendScanLog, parseJobConfig, parseJobPlan, type ScanJobRow } from "./scans";
 import { ensureDailyRotation } from "./rotation";
 import { materializeTargets } from "./targets";
-import { archiveAndDeleteTargets } from "./target-history.mjs";
+import { canRollScanCycle, rollScanCycle } from "./target-history.mjs";
 import { buildScanPlan, normalizeScanConfig, COUNTRY_PACK_CATALOG } from "./scan-plans";
 import { rotationSlots, ROTATION_SLOTS, qualifiedForSlot } from "./fleet-policy.mjs";
 import { ROTATION_DAYS, rotationWindow } from "./rotation-plan.mjs";
@@ -239,13 +239,17 @@ async function writeScannerStatus(
 }
 
 async function ensureJobTargets(job: ScanJobRow) {
+  // Loop rollover commits its plan and targets together. Legacy progress
+  // reconstruction applies only to the first cycle, never to an in-flight loop.
+  if (Number(job.cycle) !== 0) return;
   const db = runtime().DB;
   const count = await db.prepare(
-    "SELECT COUNT(*) AS count FROM scan_targets WHERE job_id=?",
+    "SELECT COUNT(*) AS count FROM scan_targets WHERE job_id=? AND cycle=0 AND verification_kind=''",
   ).bind(job.id).first<{ count: number }>();
   if (Number(count?.count ?? 0) >= Number(job.total_points)) return;
-  let completedBefore = Math.max(0, Number(job.current_index));
-  if (!completedBefore) {
+  const hasTargets = Number(count?.count ?? 0) > 0;
+  let completedBefore = hasTargets ? 0 : Math.max(0, Number(job.current_index));
+  if (!hasTargets && !completedBefore) {
     const scanner = await db.prepare(
       "SELECT status_json FROM scanner_status WHERE id=1",
     ).first();
@@ -253,7 +257,8 @@ async function ensureJobTargets(job: ScanJobRow) {
       const status = JSON.parse(String(scanner?.status_json ?? "{}"));
       const point = Number(status.point ?? 0);
       const total = Number(status.total ?? 0);
-      if (total === Number(job.total_points) && point > 0 && point < total) {
+      if (status.source !== 'agent-fleet-v2' &&
+          total === Number(job.total_points) && point > 0 && point < total) {
         completedBefore = point;
       }
     } catch {
@@ -264,10 +269,11 @@ async function ensureJobTargets(job: ScanJobRow) {
     cycle: Number(job.cycle),
     completedBefore,
   });
-  if (completedBefore !== Number(job.current_index)) {
-    await db.prepare("UPDATE scan_jobs SET current_index=?, updated_at=? WHERE id=?")
-      .bind(completedBefore, Date.now(), job.id).run();
-    job.current_index = completedBefore;
+  if (completedBefore > Number(job.current_index)) {
+    const restored = await db.prepare(`UPDATE scan_jobs SET current_index=?, updated_at=?
+      WHERE id=? AND cycle=0 AND current_index=?`)
+      .bind(completedBefore, Date.now(), job.id, job.current_index).run();
+    if (restored.meta.changes) job.current_index = completedBefore;
   }
   await appendScanLog(job.id, "info",
     `既有工作已轉換為多 Agent 佇列，從 ${completedBefore}/${job.total_points} 續跑`);
@@ -300,25 +306,12 @@ async function releaseExpiredLeases(jobId: number, now: number) {
 
 async function resetLoop(job: ScanJobRow) {
   const db = runtime().DB;
-  const now = Date.now();
-  const nextCycle = Number(job.cycle) + 1;
-  const won = await db.prepare(`UPDATE scan_jobs SET cycle=?, current_index=0,
-      updated_at=?, message=? WHERE id=? AND cycle=? AND loop=1
-      AND EXISTS (SELECT 1 FROM scan_targets WHERE job_id=?)
-      AND NOT EXISTS (
-        SELECT 1 FROM scan_targets WHERE job_id=? AND status IN ('queued','leased')
-      )`)
-    .bind(nextCycle, now, `第 ${nextCycle} 輪完成，重新分派掃描點`,
-      job.id, job.cycle, job.id, job.id).run();
-  if (!won.meta.changes) return false;
+  const cycle = Number(job.cycle);
+  if (!await canRollScanCycle(db, job.id, cycle)) return false;
+  const nextCycle = cycle + 1;
   const config = normalizeScanConfig(parseJobConfig(job));
   const { targets } = buildScanPlan(config, null, { cycle: nextCycle });
-  // A shifted global grid can have a different point count.  Rebuild its
-  // ordinary targets rather than relabelling the previous cycle's rows.
-  await archiveAndDeleteTargets(db, job.id, now);
-  await materializeTargets(job.id, targets, { cycle: nextCycle });
-  await db.prepare(`UPDATE scan_jobs SET total_points=?, plan_json=?, updated_at=?
-    WHERE id=? AND cycle=?`).bind(targets.length, JSON.stringify(targets), now, job.id, nextCycle).run();
+  if (!await rollScanCycle(db, job.id, cycle, targets, Date.now())) return false;
   const profile = config.scanProfile === "precision" ? "500m 精細固定網格" : "1km 偏移網格";
   await appendScanLog(job.id, "info", `第 ${nextCycle} 輪開始：${profile}，${targets.length} 點`);
   return true;
@@ -584,11 +577,11 @@ export async function completeTask(
       target.id, agent.id, input.leaseToken).run();
   if (!targetUpdate.meta.changes) return "stale" as const;
   await db.batch([
-    db.prepare(`UPDATE scan_jobs SET current_index=current_index+?,
+    db.prepare(`UPDATE scan_jobs SET current_index=current_index+CASE WHEN cycle=? THEN ? ELSE 0 END,
       captured_rows=captured_rows+?, captured_bytes=captured_bytes+?,
       current_country=?, current_city=?, current_lat=?, current_lng=?,
       message=?, updated_at=? WHERE id=?`)
-      .bind(completedDelta, input.rows, input.bytes, target.country, target.city,
+      .bind(Number(target.cycle), completedDelta, input.rows, input.bytes, target.country, target.city,
         target.lat, target.lng, message, now, job.id),
     db.prepare(`UPDATE scan_agents SET last_seen=?, current_lat=?, current_lng=?,
       current_job_id=NULL, current_target_id=NULL,
