@@ -57,6 +57,12 @@ assert ('announcement', '1080', '2160', '105', '1923', 'p24') in templates
 assert ('network', '1080', '1920', '540', '1150', 'p30') in templates
 assert len(groups['p30_frame']) >= 48 and len(groups['p30_text']) >= 192
 assert len(groups['p30_button']) >= 96
+assert ('speed', '1080', '2400', '540', '1280', 'p34') in templates
+assert ('network', '1080', '1920', '540', '1150', 'p35') in templates
+for prefix in ('p34', 'p35'):
+    assert len(groups[prefix+'_frame']) == 48
+    assert len(groups[prefix+'_text']) >= 88
+    assert len(groups[prefix+'_button']) >= 72
 assert ('announcement', '1080', '2400', '105', '2165', 'p33') in templates
 assert len(groups['p33_frame']) >= 48 and len(groups['p33_text']) >= 192
 assert len(groups['p33_button']) >= 64
@@ -142,6 +148,24 @@ for kind, sw, sh, sx, sy, prefix in templates:
                              for px,py,*_ in groups[prefix+'_text']
                              if 400 <= px <= 440 and 1000 <= py <= 1047])
         check(changed_code,'unknown')
+    if prefix in ('p34', 'p35'):
+        # Every observed text line and the distinct caption must be present.
+        text_lines = ((987, 1057), (1063, 1125)) if prefix == 'p34' else (
+            (672, 756), (788, 841), (866, 918), (945, 982))
+        for top, bottom in text_lines:
+            changed_text = bytearray(data)
+            paint(changed_text, w, [(px, py, 255, 255, 255)
+                                    for px, py, *_ in groups[prefix+'_text'] if top <= py < bottom])
+            check(changed_text, 'unknown')
+        changed_caption = bytearray(data)
+        caption_top = 1253 if prefix == 'p34' else 1120
+        paint(changed_caption, w, [(px, py, 255, 255, 255)
+                                  for px, py, *_ in groups[prefix+'_button'] if py >= caption_top])
+        check(changed_caption, 'unknown')
+        wrong_height = blank(w, 2160)
+        for group in ('frame', 'text', 'button'):
+            paint(wrong_height, w, groups[prefix+'_'+group], (2160-h)//2)
+        check(wrong_height, 'unknown')
     if kind == 'dashboard':
         if prefix == 'p32':
             # Includes water/road colors and any day's calendar highlight.
