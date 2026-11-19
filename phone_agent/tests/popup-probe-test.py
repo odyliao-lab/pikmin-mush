@@ -26,6 +26,10 @@ assert all(545 <= x <= 939 and 64 <= y <= 98 for x,y,*_ in groups['p27_text'])
 # They must not be replaced with a generic confirmation-button template.
 assert ('restricted', '1080', '2400', '540', '1287', 'p20') in templates
 assert ('danger', '1440', '3120', '720', '1730', 'p21') in templates
+assert ('danger', '1080', '2400', '540', '1288', 'p36') in templates
+assert len(groups['p36_text']) == 140
+assert sum(480 <= x < 682 and 1044 <= y < 1100 and max(r, g, b) <= 160
+           for x, y, r, g, b in groups['p36_text']) == 40
 assert ('dashboard', '1080', '2160', '540', '1925', 'p25') in templates
 assert groups['p25_frame'] == groups['p8_frame']
 assert groups['p25_text'] == groups['p8_text']
@@ -135,6 +139,16 @@ for kind, sw, sh, sx, sy, prefix in templates:
     for group in ('frame','text'):
         paint(missing_button,w,groups[prefix+'_'+group])
     check(missing_button, 'unknown')
+    if prefix == 'p36':
+        # A generic confirmation must not match when the hazard wording changes.
+        redacted_hazard = bytearray(data)
+        paint_rect(redacted_hazard, w, (480, 1044, 682, 1100), (255, 255, 255))
+        check(redacted_hazard, 'unknown')
+        for other_h in (1920, 2160):
+            shifted_height = blank(w, other_h)
+            for group in ('frame','text','button'):
+                paint(shifted_height, w, groups[prefix+'_'+group], (other_h-h)//2)
+            check(shifted_height, 'unknown')
     if prefix == 'p30':
         # Only the observed code0 retry, not a generic server/auth error card.
         changed_code = bytearray(data)
