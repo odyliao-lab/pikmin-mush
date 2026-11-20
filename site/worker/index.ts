@@ -20,7 +20,7 @@ interface ExecutionContext {
 }
 
 const MAP_SCRIPT_HASH = "'sha256-9+I/TCVzndK7f8lcrHFzGM92oMKS8o0xxY19s+f/nj8='";
-const EVENT_SPOTS_SCRIPT_HASH = "'sha256-6gpddhje8uQ2roK6VOEXBUps7lXqN71DhYAJmM4PDPo='";
+const EVENT_SPOTS_SCRIPT_HASH = "'sha256-v/t8eATybJKEUyWH6U7xNrAcwQzfpEAZbMxPWytP+Io='";
 
 function withSecurityHeaders(response: Response, strictMap = false) {
   const secured = new Response(response.body, response);
