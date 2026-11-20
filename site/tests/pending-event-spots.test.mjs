@@ -48,7 +48,7 @@ test('Tokaido pairs retain station IDs and show seven-decimal map coordinates fo
   assert.equal(spot.verificationStatus,'official');
   assert.equal(spot.startAt,Date.parse('2026-11-19T23:00:00+08:00')/1000);
   assert.equal(spot.endAt,Date.parse('2027-02-28T22:59:59+08:00')/1000);
-  assert.match(spot.eligibilityNote,/活動布章與 2 張額外限定明信片，領取條件待確認/);
+  assert.match(spot.eligibilityNote,/活動布章與 2 張額外限定明信片，獎勵與領取方式待確認/);
  }
  assert.equal(gps(spots.find(s=>s.id.endsWith('-gifu-hashima'))),'35.3160042,136.6857446');
  assert.equal(gps(spots.find(s=>s.id.endsWith('-gifu-hashima-nearby'))),'35.3160633,136.6856561');
