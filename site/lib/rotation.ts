@@ -44,8 +44,9 @@ type BalancedRotation = {
   assignments: Array<{agentId:string;id:string;label:string;packs:string[];cityCount:number;workload:number}>;
 };
 
-function coverageTrialFor(plan: BalancedRotation) {
-  return plan.slot === 'americas' && runtime().FLEET_KANSAS_CITY_TRIAL_DATE === plan.localDate;
+function coverageTrialFor(plan: BalancedRotation, manual = false): ScanConfig["rotationCoverageTrial"] {
+  if (!manual && plan.slot === "asia" && plan.localDate === "2026-11-21") return "bangkok-outer-20261121";
+  if (plan.slot === "americas" && runtime().FLEET_KANSAS_CITY_TRIAL_DATE === plan.localDate) return "kansas-city-4km";
 }
 async function balancedPlan(agentIds: string[], now: number, manual = false): Promise<BalancedRotation> {
   const planner = manual ? planManualRedeploy : planDailyRotation;
@@ -56,7 +57,7 @@ async function balancedPlan(agentIds: string[], now: number, manual = false): Pr
   try { base = JSON.parse(latest?.config_json ?? "{}"); } catch { /* defaults */ }
   const packs = [...new Set(provisional.assignments.flatMap(a=>a.packs))] as string[];
   const config = scanConfig(base, packs, agentIds.length, provisional.slot, provisional.assignments,
-    coverageTrialFor(provisional));
+    coverageTrialFor(provisional, manual));
   // Berlin redistributes its owner's fixed budget, so base per-pack valid
   // point counts are the balancing cost, before that intra-route transfer.
   const baseline = {...config, rotationCitySampling: undefined};
@@ -82,7 +83,7 @@ function packNames(packIds: string[]) {
 }
 
 function scanConfig(base: unknown, packs: string[], agentCount: number, slot: string,
-  assignments: Array<{packs:string[]}>, coverageTrial = false): ScanConfig {
+  assignments: Array<{packs:string[]}>, coverageTrial?: ScanConfig["rotationCoverageTrial"]): ScanConfig {
   const previous = base && typeof base === "object" ? base as Record<string, unknown> : {};
   const cities = packs.reduce((count, id) => count +
     (COUNTRY_PACK_CATALOG.find((pack) => pack.id === id)?.cities.length ?? 0), 0);
@@ -105,7 +106,10 @@ function scanConfig(base: unknown, packs: string[], agentCount: number, slot: st
     // for Berlin's threefold weighting without exceeding its route budget.
     radiusKm: Math.max(slot === "emea" ? 4 : 3, Number(previous.radiusKm ?? 8)),
     rotationSamplesPerCity: samplesPerCity,
-    rotationCoverageTrial: slot === 'americas' && coverageTrial ? 'kansas-city-4km' : undefined,
+    rotationCoverageTrial: (
+      (slot === "asia" && coverageTrial === "bangkok-outer-20261121") ||
+      (slot === "americas" && coverageTrial === "kansas-city-4km")
+    ) ? coverageTrial : undefined,
     // Explicitly clear inherited weighting outside noon's EMEA window.
     rotationCitySampling: slot==='emea' ? {policy:'berlin-3x-v1',
       donorCountries:packNames(assignments.find(route=>route.packs.includes('de'))?.packs??[])} : undefined,
@@ -352,7 +356,7 @@ export async function redeployDailyRotation(now = Date.now()) {
   }));
   const selectedPacks = [...new Set(assignments.flatMap((item) => item.packs))];
   const config = scanConfig(previousConfig, selectedPacks, assignments.length, planned.slot, assignments,
-    coverageTrialFor(planned));
+    coverageTrialFor(planned, true));
   const { regions, targets } = buildScanPlan(config, null);
 
   await stopActiveJobs(now, "手動重新分配");

@@ -4,7 +4,7 @@ import test from "node:test";
 import { Script } from "node:vm";
 import ts from "typescript";
 import * as landMask from "../lib/land-mask.mjs";
-import { planDailyRotation, ROTATION_DAYS } from "../lib/rotation-plan.mjs";
+import { planDailyRotation, ROTATION_DAYS, rotationWindow } from "../lib/rotation-plan.mjs";
 
 const source = readFileSync(new URL("../lib/scan-plans.ts", import.meta.url), "utf8");
 const exports = {};
@@ -97,6 +97,46 @@ test('Kansas City trial expands one land-filtered footprint without adding targe
   }
 });
 
+test("Bangkok trial is limited to the first pass of one automatic Asia window", () => {
+  const rotation = readFileSync(new URL("../lib/rotation.ts", import.meta.url), "utf8");
+  const trialSource = rotation.slice(rotation.indexOf("function coverageTrialFor("), rotation.indexOf("async function balancedPlan("));
+  const context = { runtime: () => ({ FLEET_KANSAS_CITY_TRIAL_DATE: "2026-11-21" }) };
+  new Script(ts.transpileModule(trialSource, {
+    compilerOptions: { target: ts.ScriptTarget.ES2022 },
+  }).outputText).runInNewContext(context);
+  const trialFor = (localTime, manual = false) => context.coverageTrialFor(
+    rotationWindow(Date.parse(localTime + "+08:00")), manual);
+  const enabled = trialFor("2026-11-21T04:00");
+  assert.equal(enabled, "bangkok-outer-20261121");
+  assert.equal(trialFor("2026-11-21T11:59"), enabled);
+  assert.equal(trialFor("2026-11-21T03:59"), undefined);
+  assert.equal(trialFor("2026-11-21T12:00"), undefined);
+  assert.equal(trialFor("2026-11-21T20:00"), "kansas-city-4km");
+  assert.equal(trialFor("2026-11-22T04:00"), undefined);
+  assert.equal(trialFor("2026-11-21T04:00", true), undefined);
+  assert.equal(trialFor("2026-11-21T20:00", true), "kansas-city-4km");
+
+  const isBangkok = target => (target.city ?? target.name) === "曼谷 Bangkok";
+  for (const radiusKm of [3, 4, 8, 10]) {
+    const base = normalizeScanConfig({ mode: "auto", scanProfile: "global", radiusKm,
+      countryPacks: ["th", "my"], rotationSamplesPerCity: 32 });
+    const trial = normalizeScanConfig({ ...base, rotationCoverageTrial: enabled });
+    const normal = buildScanPlan(base);
+    const variant = buildScanPlan(trial);
+    const city = normal.regions.find(isBangkok);
+    const outer = variant.targets.filter(t => isBangkok(t) &&
+      (t.lat < city.latMin - 1e-7 || t.lat > city.latMax + 1e-7 || t.lng < city.lngMin - 1e-7 || t.lng > city.lngMax + 1e-7));
+    assert.equal(normal.targets.length, variant.targets.length);
+    assert.deepEqual(normal.targets.filter(t => !isBangkok(t)), variant.targets.filter(t => !isBangkok(t)));
+    assert.equal(variant.targets.filter(isBangkok).length, normal.targets.filter(isBangkok).length);
+    assert.equal(outer.length, radiusKm < 10 ? 4 : 0);
+    assert.ok(outer.every(p => landMask.cityLandAllows(p.country, p.city, p.lat, p.lng)));
+    for (const cycle of [1, 2, 3, 4]) {
+      assert.deepEqual(buildScanPlan(trial, null, { cycle }), buildScanPlan(base, null, { cycle }));
+    }
+  }
+});
+
 test('noon Berlin is exactly 3x within its original route budget; other slots clear inherited weighting',()=>{
   const rotation=readFileSync(new URL('../lib/rotation.ts',import.meta.url),'utf8');
   const section=rotation.slice(rotation.indexOf('function scanConfig('),rotation.indexOf('async function stopActiveJobs'));
@@ -107,7 +147,7 @@ test('noon Berlin is exactly 3x within its original route budget; other slots cl
       const plan=planDailyRotation(Array.from({length:count},(_,i)=>`a${i}`),Date.parse(`2026-10-23T${hour}:00+08:00`));
       const packs=[...new Set(plan.assignments.flatMap(r=>r.packs))];
       const cfg=context.scanConfig({rotationCitySampling:{policy:'berlin-3x-v1',donorCountries:['德國']}},packs,count,plan.slot,plan.assignments);
-      const trialCfg=context.scanConfig({radiusKm:3,rotationCoverageTrial:'kansas-city-4km'},packs,count,plan.slot,plan.assignments,true);
+      const trialCfg=context.scanConfig({radiusKm:3,rotationCoverageTrial:'kansas-city-4km'},packs,count,plan.slot,plan.assignments,'kansas-city-4km');
       assert.equal(trialCfg.rotationCoverageTrial,hour==='20:00'?'kansas-city-4km':undefined);
       const base={...cfg,rotationCitySampling:undefined};
       const old=buildScanPlan(normalizeScanConfig(base),null);
