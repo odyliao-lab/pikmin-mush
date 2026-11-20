@@ -14,8 +14,8 @@ const gps=new Function('located','return '+html.match(/const gps=(.*?);const sou
 
 test('pending venues remain searchable records without fake map or GPS coordinates',()=>{
  assert.equal(notices.length,4);
- assert.equal(out.EVENT_SPOT_SEED.length,57);
- assert.equal(new Set([...out.EVENT_SPOT_SEED,...notices].map(s=>s.id)).size,61);
+ assert.equal(out.EVENT_SPOT_SEED.length,74);
+ assert.equal(new Set([...out.EVENT_SPOT_SEED,...notices].map(s=>s.id)).size,78);
  const pending=notices.filter(s=>!located(s));
  assert.equal(pending.length,2);
  for(const s of pending){
@@ -23,7 +23,7 @@ test('pending venues remain searchable records without fake map or GPS coordinat
   assert.equal(located(s),false);assert.equal(gps(s),'座標待確認');
   assert.match(s.source_url,/^https:\/\/(www\.)?pikminbloom\.com\//);
  }
- assert.equal([...out.EVENT_SPOT_SEED,...notices].filter(located).length,59);
+ assert.equal([...out.EVENT_SPOT_SEED,...notices].filter(located).length,76);
  assert.equal(located({lat:0,lng:null}),false);
  assert.equal(located({lat:'37.5',lng:'127.1'}),false);
 });
