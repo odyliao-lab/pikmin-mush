@@ -23,7 +23,11 @@ function api(db,authorized=true){
   '../../../../lib/cloud':{adminAuthorized:()=>authorized,ensureSchema:unavailable,runtime:()=>({DB:db}),noStoreJson:(body,status=200)=>new Response(JSON.stringify(body),{status})},
   '../../../../lib/scans':{activeOrLatestJob:unavailable,publicJob:unavailable},
   '../../../../lib/fleet':{publicAgent:unavailable},'../../../../lib/rotation':{rotationStatus:unavailable},
-  '../../../../lib/target-ack-evidence.mjs':{parseTargetAckEvidence,readTargetAckEvidence},
+  // The helper runs outside the VM, so pass the fixture clock explicitly.
+  '../../../../lib/target-ack-evidence.mjs':{
+   parseTargetAckEvidence,
+   readTargetAckEvidence:(db,query)=>readTargetAckEvidence(db,query,now),
+  },
  };
  new Script(code).runInNewContext({exports,require:key=>{assert.ok(modules[key],key);return modules[key]},URL,Promise,Date});return exports;
 }
