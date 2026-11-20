@@ -14,8 +14,8 @@ const gps=new Function('located','return '+html.match(/const gps=(.*?);const sou
 
 test('pending venues remain searchable records without fake map or GPS coordinates',()=>{
  assert.equal(notices.length,4);
- assert.equal(out.EVENT_SPOT_SEED.length,74);
- assert.equal(new Set([...out.EVENT_SPOT_SEED,...notices].map(s=>s.id)).size,78);
+ assert.equal(out.EVENT_SPOT_SEED.length,91);
+ assert.equal(new Set([...out.EVENT_SPOT_SEED,...notices].map(s=>s.id)).size,95);
  const pending=notices.filter(s=>!located(s));
  assert.equal(pending.length,2);
  for(const s of pending){
@@ -23,7 +23,7 @@ test('pending venues remain searchable records without fake map or GPS coordinat
   assert.equal(located(s),false);assert.equal(gps(s),'座標待確認');
   assert.match(s.source_url,/^https:\/\/(www\.)?pikminbloom\.com\//);
  }
- assert.equal([...out.EVENT_SPOT_SEED,...notices].filter(located).length,76);
+ assert.equal([...out.EVENT_SPOT_SEED,...notices].filter(located).length,93);
  assert.equal(located({lat:0,lng:null}),false);
  assert.equal(located({lat:'37.5',lng:'127.1'}),false);
 });
@@ -31,6 +31,28 @@ test('pending venues remain searchable records without fake map or GPS coordinat
 test('reference venues cannot masquerade as verified in-game special spots',()=>{
  const busan=out.EVENT_SPOT_SEED.find(s=>s.id==='kr-lotte-2026-busan-main');
  assert.equal(busan.verificationStatus,'community');assert.match(busan.name,/場館參考點/);assert.match(busan.coordinateNote,/非遊戲金盆精確GPS/);
+});
+
+test('Tokaido pairs retain station IDs and show seven-decimal map coordinates for all 34 pins',()=>{
+ const spots=out.EVENT_SPOT_SEED.filter(s=>s.id.startsWith('jp-tokaido-shinkansen-2026-'));
+ assert.equal(spots.length,34);
+ assert.equal(new Set(spots.map(gps)).size,34);
+ for(let i=0;i<spots.length;i+=2){
+  const [station,nearby]=spots.slice(i,i+2);
+  assert.equal(nearby.id,station.id+'-nearby');
+  assert.match(station.rewardSummary,/本站專屬新幹線明信片/);
+  assert.match(nearby.rewardSummary,/周邊地點專屬明信片/);
+ }
+ for(const spot of spots){
+  assert.match(gps(spot),/^\d+\.\d{7},\d+\.\d{7}$/);
+  assert.equal(spot.verificationStatus,'official');
+  assert.equal(spot.startAt,Date.parse('2026-11-19T23:00:00+08:00')/1000);
+  assert.equal(spot.endAt,Date.parse('2027-02-28T22:59:59+08:00')/1000);
+  assert.match(spot.eligibilityNote,/活動布章與 2 張額外限定明信片，獎勵與領取方式待確認/);
+ }
+ assert.equal(gps(spots.find(s=>s.id.endsWith('-gifu-hashima'))),'35.3160042,136.6857446');
+ assert.equal(gps(spots.find(s=>s.id.endsWith('-gifu-hashima-nearby'))),'35.3160633,136.6856561');
+ assert.equal(gps(spots.at(-1)),'34.7335110,135.5012965');
 });
 
 test('shared GPS updates preserve IDs, official periods and separate Nintendo popup without claiming game verification',()=>{
