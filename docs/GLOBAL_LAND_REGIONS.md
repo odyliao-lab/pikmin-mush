@@ -108,6 +108,16 @@ a fleet does finish early. The live review should compare first-pass
 completion, additional rounds, verified 3/4 observations and D1 errors
 through comparable slots.
 
+## Bangkok first-pass trial
+
+The 2026-11-21 04:00 Asia/Oceania automatic rotation (Taipei time) tests
+Bangkok's outer footprint for its first pass. Replace up to four of Bangkok's
+existing samples with land-masked points outside its normal bounds and within
+one additional kilometre of the bounds. The city and job target counts stay
+fixed. Later passes and the next day's automatic rotation use the normal plan.
+Compare first-pass time, failures and attributable Lv.3/4 observations before
+considering a permanent change.
+
 ## Safe activation
 
 Deploy tested GitHub main through the existing public Sites project. Existing

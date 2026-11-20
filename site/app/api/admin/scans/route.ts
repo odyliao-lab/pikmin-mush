@@ -4,6 +4,31 @@ import { publicAgent, type ScanAgentRow } from "../../../../lib/fleet";
 import { rotationStatus } from "../../../../lib/rotation";
 import { parseTargetAckEvidence, readTargetAckEvidence } from "../../../../lib/target-ack-evidence.mjs";
 
+type CycleStart = { cycle: number; started_at: number };
+
+async function readLaterCycleStarts(db: D1Database, jobId: number, cycle: number, firstStart: number) {
+  // A rollover archives the previous queue and creates the new queue at the
+  // same instant. An archive batch may also contain older, stale targets.
+  const { results } = await db.prepare(`WITH current_start AS (
+    SELECT cycle, created_at AS started_at FROM scan_targets
+    WHERE job_id=? AND sequence=0 AND cycle=? AND verification_kind=''
+      AND created_at>=? AND created_at>0
+  ), cycle_starts AS (
+    SELECT cycle, started_at FROM current_start
+    UNION ALL
+    SELECT MAX(cycle)+1 AS cycle, archived_at AS started_at
+    FROM scan_target_history
+    WHERE (? > 1 OR NOT EXISTS (SELECT 1 FROM current_start))
+      AND job_id=? AND verification_kind='' AND archived_at>=? AND archived_at>0
+    GROUP BY archived_at
+    HAVING MAX(cycle)>=0 AND MAX(cycle)<?
+  )
+  SELECT cycle, MIN(started_at) AS started_at
+  FROM cycle_starts GROUP BY cycle ORDER BY cycle`)
+    .bind(jobId, cycle, firstStart, cycle, jobId, firstStart, cycle).all<CycleStart>();
+  return results;
+}
+
 export async function GET(request: Request) {
   if (!adminAuthorized(request)) return noStoreJson({ error: "forbidden" }, 403);
   const params=new URL(request.url).searchParams;
@@ -38,7 +63,7 @@ export async function GET(request: Request) {
     };
   }
   const job = await activeOrLatestJob();
-  const [agentsResult, logs, targetCounts] = await Promise.all([
+  const [agentsResult, logs, targetCounts, cycleStarts] = await Promise.all([
     db.prepare(`SELECT a.*, t.country AS target_country, t.city AS target_city
       FROM scan_agents a LEFT JOIN scan_targets t ON t.id=a.current_target_id
         AND t.job_id=a.current_job_id AND t.lease_agent_id=a.id
@@ -51,6 +76,9 @@ export async function GET(request: Request) {
     job ? db.prepare(`SELECT status, COUNT(*) AS count FROM scan_targets
       WHERE job_id=? GROUP BY status`).bind(job.id).all<{ status: string; count: number }>() :
       Promise.resolve({ results: [] }),
+    job && job.cycle > 0
+      ? readLaterCycleStarts(db, job.id, job.cycle, job.started_at).catch(() => null)
+      : Promise.resolve([]),
   ]);
   const now = Date.now();
   const agents = agentsResult.results.map((agent) => ({...publicAgent(agent, now),
@@ -70,6 +98,7 @@ export async function GET(request: Request) {
       uploaded_rows: 0, uploaded_bytes: 0,
     },
     job: publicJob(job ?? null),
+    cycle_starts: cycleStarts,
     target_counts: Object.fromEntries(targetCounts.results.map((row) =>
       [String(row.status), Number(row.count)])),
     logs: logs.results,

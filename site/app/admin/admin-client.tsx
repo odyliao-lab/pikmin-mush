@@ -26,6 +26,7 @@ type Job = {
   message: string;
   created_at: number;
   updated_at: number;
+  started_at: number;
 };
 
 type Agent = {
@@ -160,6 +161,7 @@ type Dashboard = {
     uploaded_bytes: number;
   };
   job: Job | null;
+  cycle_starts?: Array<{ cycle: number; started_at: number }> | null;
   target_counts: Record<string, number>;
   logs: Array<{ id: number; at: number; level: string; message: string }>;
   rotation: {
@@ -225,6 +227,29 @@ function formatTime(value: number) {
     month: "2-digit", day: "2-digit", hour: "2-digit",
     minute: "2-digit", second: "2-digit", hour12: false, timeZone:'Asia/Taipei',
   }).format(new Date(value));
+}
+
+const cycleTimeFormat = new Intl.DateTimeFormat("sv-SE", {
+  year: "numeric", month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit",
+  hourCycle: "h23", timeZone: "Asia/Taipei",
+});
+const cycleNumbers = ["一", "二", "三", "四", "五", "六", "七", "八", "九"];
+
+function CycleStarts({ job, starts }: { job: Job; starts: Dashboard["cycle_starts"] }) {
+  const byCycle = new Map(starts?.map(({cycle, started_at}) => [cycle, started_at]));
+  return <ul className={styles.cycleStarts} aria-label="各輪起始時間（台北時間）">
+    {Array.from({ length: job.cycle + 1 }, (_, cycle) => {
+      const startedAt = cycle === 0 ? job.started_at : byCycle.get(cycle);
+      const title = `第${cycleNumbers[cycle] ?? cycle + 1}輪`;
+      if (startedAt && startedAt > 0) {
+        const date = new Date(startedAt);
+        return <li key={cycle}>{title}開始於 <time dateTime={date.toISOString()}>{cycleTimeFormat.format(date)}</time></li>;
+      }
+      const status = cycle === 0 && job.status === "queued" ? "尚未開始"
+        : cycle > 0 && starts === null ? "開始時間暫時無法讀取" : "開始時間尚無紀錄";
+      return <li key={cycle}>{title}{status}</li>;
+    })}
+  </ul>;
 }
 
 export default function AdminClient({
@@ -677,6 +702,7 @@ export default function AdminClient({
             <div>
               <span>工作 #{job.id}・第 {job.cycle + 1} 輪</span>
               <strong>{job.current_index.toLocaleString()} / {job.total_points.toLocaleString()} 點</strong>
+              <CycleStarts job={job} starts={dashboard?.cycle_starts} />
             </div>
             <div className={styles.actions}>
               {job.status === "running" || job.status === "queued"

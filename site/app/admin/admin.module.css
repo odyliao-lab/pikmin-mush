@@ -267,6 +267,15 @@
 .progressTop > div:first-child { display: grid; gap: 4px; }
 .progressTop span { color: #778175; font-size: 12px; font-weight: 800; }
 .progressTop strong { font-size: 18px; }
+.cycleStarts {
+  list-style: none;
+  padding: 0;
+  margin: 4px 0 0;
+  color: var(--admin-muted);
+  font-size: 14px;
+  line-height: 1.5;
+}
+.cycleStarts time { font-variant-numeric: tabular-nums; white-space: nowrap; }
 .progressTrack { margin-top: 14px; height: 8px; border-radius: 99px; background: #e7eadf; overflow: hidden; }
 .progressTrack i { display: block; height: 100%; border-radius: inherit; background: linear-gradient(90deg, #62a655, #e1a93e); }
 

@@ -34,7 +34,7 @@ export type ScanConfig = {
   /** Scheduled fleet only: evenly sample this many grid points per city each cycle. */
   rotationSamplesPerCity?: number;
   rotationCitySampling?: { policy: 'berlin-3x-v1'; donorCountries: string[] };
-  rotationCoverageTrial?: 'kansas-city-4km';
+  rotationCoverageTrial?: 'kansas-city-4km' | 'bangkok-outer-20261121';
   custom?: {
     latMin: number;
     latMax: number;
@@ -836,6 +836,10 @@ export function normalizeScanConfig(input: unknown): ScanConfig {
       config.rotationSamplesPerCity && body.rotationCoverageTrial === 'kansas-city-4km') {
     config.rotationCoverageTrial = 'kansas-city-4km';
   }
+  if (mode === 'auto' && scanProfile === 'global' && config.rotationSamplesPerCity &&
+      body.rotationCoverageTrial === 'bangkok-outer-20261121') {
+    config.rotationCoverageTrial = 'bangkok-outer-20261121';
+  }
   return config;
 }
 
@@ -986,12 +990,34 @@ export function buildScanPlan(
     // 疊加的安全邊際沒有實測依據，改成直接用 cooldownS，跨城市時間可以真的
     // 固定在使用者設定的秒數（例如 10 秒），不會被遠距離城市拉長。
     const travelCooldown = previous ? config.cooldownS : 0;
-    const fullGrid = grids[regionIndex];
+    let fullGrid = grids[regionIndex];
     const sampleLimit = limits[regionIndex];
-    const selectedIndices = fullGrid.length <= sampleLimit
+    let selectedIndices = fullGrid.length <= sampleLimit
       ? fullGrid.map((_, index) => index)
       : Array.from({ length: sampleLimit }, (_, index) =>
         (Math.floor(index * fullGrid.length / sampleLimit) + cycle * sampleLimit) % fullGrid.length);
+    if (cycle === 0 && config.rotationCoverageTrial === 'bangkok-outer-20261121' &&
+        region.country === '泰國' && region.name === '曼谷 Bangkok' && config.radiusKm < 10) {
+      const wider = centerRegion(region.name, region.country, regionCenter.lat, regionCenter.lng,
+        Math.min(10, config.radiusKm + 1));
+      const perimeter = grid(wider, config.gridStepM, phase).filter(point => {
+        const lat = Number(point.lat.toFixed(7));
+        const lng = Number(point.lng.toFixed(7));
+        const outside = lat < region.latMin - 1e-7 || lat > region.latMax + 1e-7 ||
+          lng < region.lngMin - 1e-7 || lng > region.lngMax + 1e-7;
+        return outside && cityLandAllows(region.country, region.name, lat, lng);
+      });
+      const count = Math.min(4, Math.floor(sampleLimit / 4), perimeter.length);
+      if (count > 0) {
+        const evenlySpaced = (length: number) => Array.from({ length: count }, (_, index) =>
+          Math.floor((index + 0.5) * length / count));
+        const displaced = new Set(evenlySpaced(selectedIndices.length));
+        selectedIndices = selectedIndices.filter((_, index) => !displaced.has(index))
+          .concat(evenlySpaced(perimeter.length).map(index => fullGrid.length + index));
+        fullGrid = [...fullGrid, ...perimeter];
+        regions[regionIndex] = wider;
+      }
+    }
     selectedIndices.forEach((pointIndex, sampleIndex) => {
       const point = fullGrid[pointIndex];
       targets.push({
