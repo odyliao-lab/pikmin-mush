@@ -17,13 +17,13 @@ test('pending venues remain searchable records without fake map or GPS coordinat
  assert.equal(out.EVENT_SPOT_SEED.length,91);
  assert.equal(new Set([...out.EVENT_SPOT_SEED,...notices].map(s=>s.id)).size,95);
  const pending=notices.filter(s=>!located(s));
- assert.equal(pending.length,2);
+ assert.equal(pending.length,1);
  for(const s of pending){
   assert.equal(s.lat,null);assert.equal(s.lng,null);
   assert.equal(located(s),false);assert.equal(gps(s),'座標待確認');
   assert.match(s.source_url,/^https:\/\/(www\.)?pikminbloom\.com\//);
  }
- assert.equal([...out.EVENT_SPOT_SEED,...notices].filter(located).length,93);
+ assert.equal([...out.EVENT_SPOT_SEED,...notices].filter(located).length,94);
  assert.equal(located({lat:0,lng:null}),false);
  assert.equal(located({lat:'37.5',lng:'127.1'}),false);
 });
@@ -75,7 +75,7 @@ test('shared GPS updates preserve IDs, official periods and separate Nintendo po
  assert.ok(CATALOGUE_REVISION>2026111202);
 });
 
-test('pending periods preserve published CET boundaries and unpublished Singapore activation time',()=>{
+test('event periods preserve published CET boundaries and unpublished Singapore activation time',()=>{
  const paris=notices.find(s=>s.country==='法國');
  assert.equal(paris.start_at,Date.parse('2026-11-13T17:00:00+08:00')/1000);
  assert.equal(paris.end_at,Date.parse('2027-01-05T04:00:00+08:00')/1000);
@@ -85,6 +85,20 @@ test('pending periods preserve published CET boundaries and unpublished Singapor
  for(const s of notices.filter(s=>s.country==='新加坡')){assert.equal(s.start_at,null);assert.match(s.eligibility_note,/未公布/);}
  const zone=new Function('return '+html.match(/const zone=(.*?);const fmt=/)[1])();
  assert.equal(zone({country:'韓國'}),'Asia/Seoul');assert.equal(zone({country:'法國'}),'Europe/Paris');assert.equal(zone({country:'荷蘭'}),'Europe/Amsterdam');assert.equal(zone({country:'新加坡'}),'Asia/Singapore');
+});
+
+test('Dutch Comic Con uses the existing card and keeps reported badge and coordinate provenance',()=>{
+ const id='nl-dutch-comic-con-2026-nintendo';
+ const dutch=notices.find(s=>s.id===id);
+ assert.equal([...out.EVENT_SPOT_SEED,...notices].filter(s=>s.id===id).length,1);
+ assert.equal(gps(dutch),'52.0835137,5.1041178');
+ assert.equal(dutch.verification_status,'community');
+ assert.match(dutch.name,/Heroes Dutch Comic Con/);
+ assert.match(dutch.reward_summary,/紅色照片鈕扣徽章金色花苗/);
+ assert.match(dutch.cooldown_note,/限領1株/);
+ assert.match(dutch.period_note,/11\/21、11\/22 各17:00–翌日01:00/);
+ assert.match(dutch.eligibility_note,/社群回報另有 1 枚活動布章，獎勵與領取方式待確認/);
+ assert.match(dutch.coordinate_note,/座標由使用者提供/);
 });
 
 test('Paris fills its existing card without duplicating venues or shifting the CET closing instant',()=>{
