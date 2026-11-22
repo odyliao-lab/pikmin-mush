@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import {readFileSync} from 'node:fs';
 import {Script} from 'node:vm';
 import ts from 'typescript';
+import {MAX_PARALLEL_DISPATCHES} from '../lib/dispatch-coordination.mjs';
 import {qualifiedForSlot} from '../lib/fleet-policy.mjs';
 
 test('worker discovery is authenticated, read-only, excludes protection and incompatible route, exposes safe fields',async()=>{
@@ -25,13 +26,14 @@ test('worker discovery is authenticated, read-only, excludes protection and inco
    if(name.endsWith('/scans'))return {activeJob:async()=>({id:1,status:jobStatus})};
    if(name.endsWith('/metrics'))return {agentHealth:r=>({status:r.mockHealth,compatibility:{status:r.id==='unknown-version'?'unknown':'compatible'}})};
    if(name.endsWith('/fleet-policy.mjs'))return {qualifiedForSlot};
+   if(name.endsWith('/dispatch-coordination.mjs'))return {MAX_PARALLEL_DISPATCHES};
    if(name.endsWith('/rotation-plan.mjs'))return {rotationWindow:()=>({slot:'asia'})};
    throw new Error('unexpected import');
   },
  });
  assert.equal((await exports.GET(new Request('https://test'))).status,401);assert.equal(queries,0);
  authorized=true;const body=await (await exports.GET(new Request('https://test'))).json();
- assert.equal(body.parallel_contract,1);assert.equal(body.max_parallel,3);
+ assert.equal(body.parallel_contract,1);assert.equal(body.max_parallel,4);
  assert.deepEqual(body.workers.filter(w=>w.eligible).map(w=>w.id),['leo','sparse','idle-between-targets']);
  assert.ok(body.workers.find(w=>w.id==='no-object').reasons.includes('stale_object'));
  assert.ok(body.workers.find(w=>w.id==='unknown-version').reasons.includes('health'));

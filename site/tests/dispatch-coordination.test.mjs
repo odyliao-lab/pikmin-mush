@@ -39,17 +39,19 @@ function second(f,id,batch){
  f.sql.prepare('INSERT INTO scan_agents(id,enabled,paused,last_seen,current_lat,current_lng) VALUES(?,1,0,100000,1,2)').run(id);
  return {agent:{...f.agent,id},input:{...f.input,batch,agentId:id,parallel:true,candidates:[{id:batch,lat:3,lng:4}]}};
 }
-test('parallel mode permits three distinct agents under one owner; legacy remains exclusive',async()=>{
+test('parallel mode permits four distinct agents under one owner; legacy remains exclusive',async()=>{
  const f=fixture();await ensureDispatchSchema(f.db);const first={...f.input,parallel:true};
  assert.equal((await admitDispatch(f.db,first,f.agent,f.job,100000)).http,200);
- const two=second(f,'aries','parallel-two'),three=second(f,'libra','parallel-three'),four=second(f,'gemini','parallel-four');
+ const two=second(f,'aries','parallel-two'),three=second(f,'libra','parallel-three'),four=second(f,'cancer','parallel-four'),five=second(f,'gemini','parallel-five');
  assert.equal((await admitDispatch(f.db,{...two.input,owner:'foreign'},two.agent,f.job,100000)).http,409);
  assert.equal((await admitDispatch(f.db,{...first,batch:'same-agent'},f.agent,f.job,100000)).http,409);
  assert.equal((await admitDispatch(f.db,{...two.input,parallel:false},two.agent,f.job,100000)).http,409);
  assert.equal((await admitDispatch(f.db,two.input,two.agent,f.job,100000)).http,200);
  assert.equal((await admitDispatch(f.db,three.input,three.agent,f.job,100000)).http,200);
- assert.equal((await admitDispatch(f.db,four.input,four.agent,f.job,100000)).http,409);
- assert.equal(f.sql.prepare("SELECT COUNT(*) n FROM controller_dispatches WHERE state='active'").get().n,3);
+ const competing=await Promise.all([admitDispatch(f.db,four.input,four.agent,f.job,100000),
+                                    admitDispatch(f.db,five.input,five.agent,f.job,100000)]);
+ assert.deepEqual(competing.map(r=>r.http).sort(),[200,409]);
+ assert.equal(f.sql.prepare("SELECT COUNT(*) n FROM controller_dispatches WHERE state='active'").get().n,4);
  assert.equal((await dispatchProof(f.db,first.batch)).parallel,true);f.sql.close();
 });
 test('parallel admission retains old admission, unknown queue and duplicate-location barriers',async()=>{

@@ -2,6 +2,7 @@ import {controllerAuthorized,ensureSchema,noStoreJson,runtime} from '../../../..
 import {activeJob} from '../../../../lib/scans';
 import {agentHealth} from '../../../../lib/metrics';
 import {qualifiedForSlot} from '../../../../lib/fleet-policy.mjs';
+import {MAX_PARALLEL_DISPATCHES} from '../../../../lib/dispatch-coordination.mjs';
 import {rotationWindow} from '../../../../lib/rotation-plan.mjs';
 
 type WorkerRow=Parameters<typeof agentHealth>[0]&{
@@ -44,5 +45,5 @@ export async function GET(request: Request) {
    eligible:reasons.length===0,reasons,
    average_target_ms:Number(timing?.average_ms??20000)};
  });
- return noStoreJson({contract:2,parallel_contract:1,max_parallel:3,checked_at:now,workers});
+ return noStoreJson({contract:2,parallel_contract:1,max_parallel:MAX_PARALLEL_DISPATCHES,checked_at:now,workers});
 }

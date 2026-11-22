@@ -2,7 +2,7 @@
 
 The Taichung notifier remains the only dispatcher, scheduler and sender.
 An opt-in `parallel:true` contract-2 admission uses one durable active claim
-per Agent, up to three claims under the same configured owner. Legacy claims
+per Agent, up to four claims under the same configured owner. Legacy claims
 remain globally exclusive, including their return and resumed-data stages.
 Unknown legacy queues, foreign owners and duplicate active candidate locations
 block admission. Immutable replay and unknown-POST reconciliation are unchanged.
@@ -24,8 +24,11 @@ Normal ACK clears current_job_id between points. This idle state is eligible
 only with a nonempty assigned route, fresh accepted data and the same health,
 qualification and power gates; an explicit different job remains blocked.
 
-The notifier uses bounded 20-candidate waves, two workers normally, a third when
-estimated clearance plus buffer exceeds available time. Candidate membership,
+The four-worker notifier uses bounded 20-candidate waves. It reads the controller
+limit and adds approved, eligible workers when projected work exceeds the remaining
+time. Per-worker throughput and a return allowance shrink near-deadline waves.
+Giants receive capacity for their remaining verification budget, with other slots
+available to large mushrooms. Candidate membership,
 receipt attribution, challenge identity checks, and participant requirements
 remain unchanged. Weekend giant capacity reserves unresolved in-flight
 candidates so parallel work cannot overbook the 30-result publication budget.
