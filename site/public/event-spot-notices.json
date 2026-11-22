@@ -66,9 +66,10 @@
     "id": "nl-dutch-comic-con-2026-nintendo",
     "country": "荷蘭",
     "city": "烏特勒支 Utrecht",
-    "name": "荷蘭英雄動漫展Nintendo攤位（座標待確認）",
-    "lat": null,
-    "lng": null,
+    "name": "荷蘭英雄動漫展 Heroes Dutch Comic Con · Nintendo 攤位",
+    "lat": 52.0835137,
+    "lng": 5.1041178,
+    "coordinate_decimals": 7,
     "spot_kind": "limited",
     "reward_kind": "gold_seedling",
     "reward_summary": "紅色照片鈕扣徽章金色花苗",
@@ -76,11 +77,11 @@
     "end_at": 1795366800,
     "period_note": "2026/11/21、11/22 各17:00–翌日01:00（台灣時間）",
     "cooldown_note": "整場活動每位玩家限領1株；皮克敏固定紅色",
-    "eligibility_note": "Jaarbeurs Utrecht，Nintendo攤位附近特殊地點；當地11/21–22各10:00–18:00 CET。會場入場與門票依主辦單位公告；11/16開始的全球Party Walk為另一活動，獎勵是明信片。",
-    "coordinate_note": "精確GPS待社群確認，目前提供官方場地與活動資訊。",
-    "verification_status": "official",
-    "source_title": "Pikmin Bloom荷蘭英雄動漫展官方公告",
+    "eligibility_note": "在 Jaarbeurs Utrecht 的 Nintendo 攤位附近下滑特殊地點。當地 11/21、11/22 各 10:00–18:00（CET）。入場與門票依主辦單位公告。社群回報另有 1 枚活動布章，獎勵與領取方式待確認。全球 Party Walk 另有活動限定明信片。",
+    "coordinate_note": "座標由使用者提供，實際互動位置以遊戲內特殊地點為準。",
+    "verification_status": "community",
+    "source_title": "Pikmin Bloom 荷蘭英雄動漫展官方公告",
     "source_url": "https://www.pikminbloom.com/zh_hant/news/nov26-dutchcomiccon",
-    "last_verified_at": 1794412800
+    "last_verified_at": 1795276800
   }
 ]
