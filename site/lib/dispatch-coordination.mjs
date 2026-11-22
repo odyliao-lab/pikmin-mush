@@ -2,6 +2,7 @@ import {findEmptyRecovery} from './empty-recovery.mjs';
 import {dispatchCancellation,OPERATOR_CANCELLED} from './dispatch-cancellation.mjs';
 import {readOrdinaryObservationEvidence} from './target-ack-evidence.mjs';
 // Sticky, durable admission. No expiry-based stealing of an unknown batch.
+export const MAX_PARALLEL_DISPATCHES = 4;
 export const DISPATCH_SCHEMA = [
  `CREATE TABLE IF NOT EXISTS controller_dispatches (
  batch TEXT PRIMARY KEY, owner TEXT NOT NULL, payload_sha TEXT NOT NULL,
@@ -208,7 +209,7 @@ export async function admitDispatch(db,input,agent,job,now,admission=crypto.rand
  let seq=Math.min(-1,Number(minimum?.n??0)-input.candidates.length-2);
  const guard=`EXISTS(SELECT 1 FROM controller_dispatches WHERE batch=? AND admission=? AND state='active')`;
  const parallel=input.parallel===true;
- const scope=parallel?`(SELECT COUNT(*) FROM controller_dispatches WHERE state='active')<3
+ const scope=parallel?`(SELECT COUNT(*) FROM controller_dispatches WHERE state='active')<${MAX_PARALLEL_DISPATCHES}
  AND NOT EXISTS(SELECT 1 FROM controller_dispatches WHERE state='active' AND (owner<>? OR parallel_mode=0 OR agent_id=?))
  AND NOT EXISTS(SELECT 1 FROM scan_targets t WHERE verification_batch<>'' AND status IN ('queued','leased')
   AND (required_agent_id=? OR NOT EXISTS(SELECT 1 FROM controller_dispatches d

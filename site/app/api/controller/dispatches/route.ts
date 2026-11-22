@@ -1,5 +1,5 @@
 import {controllerAuthorized,ensureSchema,noStoreJson,readBoundedUtf8,runtime,safeEqual} from '../../../../lib/cloud';
-import {dispatchInventory,dispatchProof,closeDispatch,recoverCancelledReturn} from '../../../../lib/dispatch-coordination.mjs';
+import {dispatchInventory,dispatchProof,closeDispatch,recoverCancelledReturn,MAX_PARALLEL_DISPATCHES} from '../../../../lib/dispatch-coordination.mjs';
 import {cancelStoppedDispatch} from '../../../../lib/dispatch-cancellation.mjs';
 import {activeJob} from '../../../../lib/scans';
 
@@ -15,7 +15,7 @@ export async function GET(request: Request) {
  const cursor=params.get('cursor')??'';
  if(cursor.length>100)return noStoreJson({error:'invalid cursor'},400);
  await ensureSchema();
- return noStoreJson({...await dispatchInventory(runtime().DB,cursor),parallel_contract:1,max_parallel:3,
+ return noStoreJson({...await dispatchInventory(runtime().DB,cursor),parallel_contract:1,max_parallel:MAX_PARALLEL_DISPATCHES,
   operator_cancellation_contract:1,
   coordinated_admission_required:!!runtime().VERIFICATION_DISPATCHER_ID,checked_at:Date.now()});
 }
