@@ -11,7 +11,7 @@ import tempfile
 root = pathlib.Path(__file__).resolve().parents[1]
 source = (root / 'popup-templates.h').read_text(encoding='utf-8')
 groups = {}
-for name, body in re.findall(r'PopupSample (p\d+_\w+)\[\]=\{(.*?)\};', source):
+for name, body in re.findall(r'PopupSample (p\d+_\w+)\[\]=\{(.*?)\};', source, re.DOTALL):
     groups[name] = [tuple(map(int, p)) for p in re.findall(r'\{(\d+),(\d+),(\d+),(\d+),(\d+)\}', body)]
 templates = re.findall(r'\{"(\w+)",(\d+),(\d+),(\d+),(\d+),(p\d+)_frame,', source)
 assert ('danger', '1080', '1920', '540', '1085', 'p26') in templates
@@ -27,6 +27,13 @@ assert all(545 <= x <= 939 and 64 <= y <= 98 for x,y,*_ in groups['p27_text'])
 assert ('restricted', '1080', '2400', '540', '1287', 'p20') in templates
 assert ('danger', '1440', '3120', '720', '1730', 'p21') in templates
 assert ('danger', '1080', '2400', '540', '1288', 'p36') in templates
+assert ('driving', '1440', '3120', '720', '1689', 'p38') in templates
+assert len(groups['p38_frame']) == 48
+assert len(groups['p38_text']) == 128
+assert len(groups['p38_button']) == 80
+for left, right in ((260, 565), (565, 845), (845, 1130)):
+    assert sum(left <= px < right and 1370 <= py < 1428 and max(rgb) < 115
+               for px, py, *rgb in groups['p38_text']) >= 24
 assert len(groups['p36_text']) == 140
 assert sum(480 <= x < 682 and 1044 <= y < 1100 and max(r, g, b) <= 160
            for x, y, r, g, b in groups['p36_text']) == 40
@@ -139,6 +146,13 @@ for kind, sw, sh, sx, sy, prefix in templates:
     for group in ('frame','text'):
         paint(missing_button,w,groups[prefix+'_'+group])
     check(missing_button, 'unknown')
+    if prefix == 'p38':
+        # A similarly shaped dialog or button without the public warning or
+        # the confirmation glyph must not activate the driving action.
+        for rect in ((845, 1370, 1130, 1428), (629, 1645, 807, 1732)):
+            changed_glyph = bytearray(data)
+            paint_rect(changed_glyph, w, rect, (255, 255, 255))
+            check(changed_glyph, 'unknown')
     if prefix == 'p36':
         # A generic confirmation must not match when the hazard wording changes.
         redacted_hazard = bytearray(data)
