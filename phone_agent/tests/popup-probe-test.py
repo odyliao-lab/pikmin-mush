@@ -58,6 +58,12 @@ assert all(165 <= y < 248 for x,y,*_ in groups['p32_text'])
 assert all((x < 100 or x > 1340) and 400 <= y < 1330
            for x,y,*_ in groups['p32_frame'])
 assert ('announcement', '1080', '2160', '105', '1923', 'p24') in templates
+assert ('announcement', '1080', '2160', '105', '1923', 'p37') in templates
+assert len(groups['p37_frame']) == 48 and len(groups['p37_text']) == 192
+assert len(groups['p37_button']) == 64
+assert all((x - 105) ** 2 + (y - 1923) ** 2 <= 1000 for x,y,*_ in groups['p37_button'])
+assert sum(125 <= x < 540 and 1110 <= y < 1165 and max(r, g, b) < 115
+           for x,y,r,g,b in groups['p37_text']) == 56
 assert ('network', '1080', '1920', '540', '1150', 'p30') in templates
 assert len(groups['p30_frame']) >= 48 and len(groups['p30_text']) >= 192
 assert len(groups['p30_button']) >= 96
@@ -139,6 +145,18 @@ for kind, sw, sh, sx, sy, prefix in templates:
     for group in ('frame','text'):
         paint(missing_button,w,groups[prefix+'_'+group])
     check(missing_button, 'unknown')
+    if prefix == 'p37':
+        # A different headline or details label must not authorize the common X.
+        changed_headline = bytearray(data)
+        paint_rect(changed_headline, w, (125, 1110, 540, 1165), (255, 255, 255))
+        check(changed_headline, 'unknown')
+        changed_link = bytearray(data)
+        paint_rect(changed_link, w, (394, 1373, 688, 1430), (255, 255, 255))
+        check(changed_link, 'unknown')
+        other_layout = blank(w, 2400)
+        for group in ('frame', 'text', 'button'):
+            paint(other_layout, w, groups[prefix + '_' + group], 120)
+        check(other_layout, 'unknown')
     if prefix == 'p36':
         # A generic confirmation must not match when the hazard wording changes.
         redacted_hazard = bytearray(data)
