@@ -11,7 +11,7 @@ import tempfile
 root = pathlib.Path(__file__).resolve().parents[1]
 source = (root / 'popup-templates.h').read_text(encoding='utf-8')
 groups = {}
-for name, body in re.findall(r'PopupSample (p\d+_\w+)\[\]=\{(.*?)\};', source):
+for name, body in re.findall(r'PopupSample (p\d+_\w+)\[\]=\{(.*?)\};', source, re.DOTALL):
     groups[name] = [tuple(map(int, p)) for p in re.findall(r'\{(\d+),(\d+),(\d+),(\d+),(\d+)\}', body)]
 templates = re.findall(r'\{"(\w+)",(\d+),(\d+),(\d+),(\d+),(p\d+)_frame,', source)
 assert ('danger', '1080', '1920', '540', '1085', 'p26') in templates
@@ -25,6 +25,13 @@ assert all(545 <= x <= 939 and 64 <= y <= 98 for x,y,*_ in groups['p27_text'])
 # Keep the two observed 156.1 phone glyph variants independently calibrated.
 # They must not be replaced with a generic confirmation-button template.
 assert ('restricted', '1080', '2400', '540', '1287', 'p20') in templates
+assert ('restricted', '1080', '2160', '540', '1147', 'p39') in templates
+assert len(groups['p39_frame']) == 48
+assert len(groups['p39_text']) == 144
+assert len(groups['p39_button']) == 80
+for top, bottom in ((856, 909), (931, 987)):
+    assert sum(top <= py < bottom and max(rgb) < 115
+               for _, py, *rgb in groups['p39_text']) >= 42
 assert ('danger', '1440', '3120', '720', '1730', 'p21') in templates
 assert ('danger', '1080', '2400', '540', '1288', 'p36') in templates
 assert len(groups['p36_text']) == 140
@@ -58,6 +65,12 @@ assert all(165 <= y < 248 for x,y,*_ in groups['p32_text'])
 assert all((x < 100 or x > 1340) and 400 <= y < 1330
            for x,y,*_ in groups['p32_frame'])
 assert ('announcement', '1080', '2160', '105', '1923', 'p24') in templates
+assert ('announcement', '1080', '2160', '105', '1923', 'p37') in templates
+assert len(groups['p37_frame']) == 48 and len(groups['p37_text']) == 192
+assert len(groups['p37_button']) == 64
+assert all((x - 105) ** 2 + (y - 1923) ** 2 <= 1000 for x,y,*_ in groups['p37_button'])
+assert sum(125 <= x < 540 and 1110 <= y < 1165 and max(r, g, b) < 115
+           for x,y,r,g,b in groups['p37_text']) == 56
 assert ('network', '1080', '1920', '540', '1150', 'p30') in templates
 assert len(groups['p30_frame']) >= 48 and len(groups['p30_text']) >= 192
 assert len(groups['p30_button']) >= 96
@@ -139,6 +152,30 @@ for kind, sw, sh, sx, sy, prefix in templates:
     for group in ('frame','text'):
         paint(missing_button,w,groups[prefix+'_'+group])
     check(missing_button, 'unknown')
+    if prefix == 'p37':
+        # A different headline or details label must not authorize the common X.
+        changed_headline = bytearray(data)
+        paint_rect(changed_headline, w, (125, 1110, 540, 1165), (255, 255, 255))
+        check(changed_headline, 'unknown')
+        changed_link = bytearray(data)
+        paint_rect(changed_link, w, (394, 1373, 688, 1430), (255, 255, 255))
+        check(changed_link, 'unknown')
+        other_layout = blank(w, 2400)
+        for group in ('frame', 'text', 'button'):
+            paint(other_layout, w, groups[prefix + '_' + group], 120)
+        check(other_layout, 'unknown')
+    if prefix == 'p39':
+        # The confirmation outline cannot substitute for either warning line
+        # or the text inside the button. The template is height-specific.
+        for rect in ((144, 856, 538, 909), (140, 931, 642, 987),
+                     (397, 1110, 683, 1185)):
+            changed_glyph = bytearray(data)
+            paint_rect(changed_glyph, w, rect, (255, 255, 255))
+            check(changed_glyph, 'unknown')
+        other_layout = blank(w, 2400)
+        for group in ('frame', 'text', 'button'):
+            paint(other_layout, w, groups[prefix + '_' + group], 120)
+        check(other_layout, 'unknown')
     if prefix == 'p36':
         # A generic confirmation must not match when the hazard wording changes.
         redacted_hazard = bytearray(data)
