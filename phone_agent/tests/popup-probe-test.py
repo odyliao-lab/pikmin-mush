@@ -84,6 +84,13 @@ for prefix in ('p20', 'p21'):
     assert len(groups[prefix+'_frame']) >= 48
     assert len(groups[prefix+'_text']) >= 160
     assert len(groups[prefix+'_button']) >= 96
+# Libra 157.0's ordinary speed notice needs both public text rows and the driver button.
+assert ('restricted', '1440', '3120', '720', '1720', 'p34') in templates
+assert len(groups['p34_frame']) == 64 and len(groups['p34_text']) == 256
+assert len(groups['p34_button']) == 160
+assert sum(1335 <= y < 1405 for x,y,*_ in groups['p34_text']) == 128
+assert sum(1430 <= y < 1505 for x,y,*_ in groups['p34_text']) == 128
+assert all(110 <= x < 155 or 1280 <= x < 1320 for x,y,*_ in groups['p34_frame'])
 recovery = (root / 'popup-recovery.sh').read_text(encoding='utf-8')
 allowed = re.search(r'case "\$1" in ([a-z|]+)\) ;; \*\) return 1', recovery)
 assert allowed, 'popup action contract not found'
@@ -163,6 +170,19 @@ for kind, sw, sh, sx, sy, prefix in templates:
             for group in ('frame','text','button'):
                 paint(shifted_height, w, groups[prefix+'_'+group], (other_h-h)//2)
             check(shifted_height, 'unknown')
+    if prefix == 'p34':
+        # Either changed sentence, or another button with the same outline, fails closed.
+        for lower, upper in ((1335, 1405), (1430, 1505)):
+            changed_sentence = bytearray(data)
+            paint(changed_sentence,w,[(px,py,255,255,255)
+                                     for px,py,*_ in groups[prefix+'_text']
+                                     if lower <= py < upper])
+            check(changed_sentence,'unknown')
+        changed_caption = bytearray(data)
+        paint(changed_caption,w,[(px,py,255,255,255)
+                                for px,py,*_ in groups[prefix+'_button']
+                                if 525 <= px < 925 and 1675 <= py < 1740])
+        check(changed_caption,'unknown')
     if prefix == 'p30':
         # Only the observed code0 retry, not a generic server/auth error card.
         changed_code = bytearray(data)
