@@ -50,7 +50,8 @@ int main(int argc, char **argv) {
         const PopupTemplate *t = &popup_templates[i];
         if (t->width != (int)h[0]) continue;
         /* These local variants have only been calibrated at this exact height. */
-        if ((t->text == p26_text || t->text == p27_text || t->text == p36_text) &&
+        if ((t->text == p26_text || t->text == p27_text ||
+             t->text == p36_text || t->text == p40_text) &&
             t->height != (int)h[1]) continue;
         int fixed = !strcmp(t->kind, "dashboard") ||
                     !strcmp(t->kind, "recap") || !strcmp(t->kind, "recapmood") ||

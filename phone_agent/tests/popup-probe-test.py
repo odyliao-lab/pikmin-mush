@@ -11,7 +11,7 @@ import tempfile
 root = pathlib.Path(__file__).resolve().parents[1]
 source = (root / 'popup-templates.h').read_text(encoding='utf-8')
 groups = {}
-for name, body in re.findall(r'PopupSample (p\d+_\w+)\[\]=\{(.*?)\};', source):
+for name, body in re.findall(r'PopupSample (p\d+_\w+)\[\]=\{(.*?)\};', source, re.DOTALL):
     groups[name] = [tuple(map(int, p)) for p in re.findall(r'\{(\d+),(\d+),(\d+),(\d+),(\d+)\}', body)]
 templates = re.findall(r'\{"(\w+)",(\d+),(\d+),(\d+),(\d+),(p\d+)_frame,', source)
 assert ('danger', '1080', '1920', '540', '1085', 'p26') in templates
@@ -27,6 +27,13 @@ assert all(545 <= x <= 939 and 64 <= y <= 98 for x,y,*_ in groups['p27_text'])
 assert ('restricted', '1080', '2400', '540', '1287', 'p20') in templates
 assert ('danger', '1440', '3120', '720', '1730', 'p21') in templates
 assert ('danger', '1080', '2400', '540', '1288', 'p36') in templates
+assert ('speed', '1080', '2400', '540', '1276', 'p40') in templates
+assert len(groups['p40_frame']) == 48
+assert len(groups['p40_text']) == 152
+assert len(groups['p40_button']) == 96
+for top, bottom, min_glyphs in ((982, 1036, 56), (1053, 1109, 64)):
+    assert sum(top <= y < bottom and max(rgb) <= 145
+               for x, y, *rgb in groups['p40_text']) == min_glyphs
 assert len(groups['p36_text']) == 140
 assert sum(480 <= x < 682 and 1044 <= y < 1100 and max(r, g, b) <= 160
            for x, y, r, g, b in groups['p36_text']) == 40
@@ -139,6 +146,18 @@ for kind, sw, sh, sx, sy, prefix in templates:
     for group in ('frame','text'):
         paint(missing_button,w,groups[prefix+'_'+group])
     check(missing_button, 'unknown')
+    if prefix == 'p40':
+        # Either warning line or the confirmation wording may differ.
+        for rect in ((147, 982, 662, 1036), (147, 1053, 662, 1109),
+                     (394, 1243, 676, 1302)):
+            changed = bytearray(data)
+            paint_rect(changed, w, rect, (255, 255, 255))
+            check(changed, 'unknown')
+        for other_h in (1920, 2160):
+            shifted_height = blank(w, other_h)
+            for group in ('frame', 'text', 'button'):
+                paint(shifted_height, w, groups[prefix+'_'+group], (other_h-h)//2)
+            check(shifted_height, 'unknown')
     if prefix == 'p36':
         # A generic confirmation must not match when the hazard wording changes.
         redacted_hazard = bytearray(data)
