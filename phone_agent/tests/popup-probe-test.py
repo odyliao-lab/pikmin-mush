@@ -28,6 +28,7 @@ assert ('restricted', '1080', '2400', '540', '1287', 'p20') in templates
 assert ('danger', '1440', '3120', '720', '1730', 'p21') in templates
 assert ('danger', '1080', '2400', '540', '1288', 'p36') in templates
 assert ('announcement', '1080', '1920', '104', '1816', 'p41') in templates
+assert ('announcement', '1080', '1920', '104', '1816', 'p42') in templates
 assert len(groups['p41_frame']) == 64
 assert len(groups['p41_text']) == 216
 assert len(groups['p41_button']) == 88
@@ -145,6 +146,12 @@ for kind, sw, sh, sx, sy, prefix in templates:
     for group in ('frame','text'):
         paint(missing_button,w,groups[prefix+'_'+group])
     check(missing_button, 'unknown')
+    if prefix == 'p42':
+        # The poster and details link cannot authorize a missing X or changed title.
+        for rect in ((319, 963, 782, 1077), (81, 1789, 130, 1840)):
+            altered = bytearray(data)
+            paint_rect(altered, w, rect, (255, 255, 255))
+            check(altered, 'unknown')
     if prefix == 'p41':
         # Another announcement or a details-only button cannot select the X.
         for rect in ((119, 1037, 526, 1096), (120, 1123, 913, 1180),
