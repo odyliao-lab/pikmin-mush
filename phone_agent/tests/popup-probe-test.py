@@ -11,7 +11,7 @@ import tempfile
 root = pathlib.Path(__file__).resolve().parents[1]
 source = (root / 'popup-templates.h').read_text(encoding='utf-8')
 groups = {}
-for name, body in re.findall(r'PopupSample (p\d+_\w+)\[\]=\{(.*?)\};', source):
+for name, body in re.findall(r'PopupSample (p\d+_\w+)\[\]=\{(.*?)\};', source, re.S):
     groups[name] = [tuple(map(int, p)) for p in re.findall(r'\{(\d+),(\d+),(\d+),(\d+),(\d+)\}', body)]
 templates = re.findall(r'\{"(\w+)",(\d+),(\d+),(\d+),(\d+),(p\d+)_frame,', source)
 assert ('danger', '1080', '1920', '540', '1085', 'p26') in templates
@@ -139,6 +139,14 @@ for kind, sw, sh, sx, sy, prefix in templates:
     for group in ('frame','text'):
         paint(missing_button,w,groups[prefix+'_'+group])
     check(missing_button, 'unknown')
+    if prefix == 'p43':
+        # A different announcement, or a details button without its separate X,
+        # cannot authorize a click.
+        for rect in ((114, 1038, 738, 1090), (664, 1125, 825, 1162),
+                     (79, 1786, 132, 1844)):
+            altered = bytearray(data)
+            paint_rect(altered, w, rect, (255, 255, 255))
+            check(altered, 'unknown')
     if prefix == 'p36':
         # A generic confirmation must not match when the hazard wording changes.
         redacted_hazard = bytearray(data)
